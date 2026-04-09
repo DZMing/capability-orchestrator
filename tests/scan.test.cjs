@@ -8,6 +8,7 @@ const fs = require('fs');
 const {
   extractFrontmatter, getDescription,
   scanSkills, scanAgents, scanCommands, readMcpServers,
+  scanInstalledPlugins, isPluginRoot,
   collectSnapshot, renderSnapshot, truncate,
 } = require('../scripts/scan-environment.cjs');
 
@@ -229,6 +230,13 @@ test('scanInstalledPlugins: bad JSON manifest falls back to dir name', () => {
   // bad-plugin has invalid JSON — should still appear with dir name
   const badPlugin = pluginsSection.items.find(i => i.name === 'bad-plugin');
   assert.ok(badPlugin, 'bad-plugin should appear with fallback name even with bad JSON');
+});
+
+test('scanInstalledPlugins: detects three-level vendor/name/version structure', () => {
+  const plugins = scanInstalledPlugins(USER_DIR);
+  const deep = plugins.find(p => p.name.startsWith('deep-plugin'));
+  assert.ok(deep, 'deep-plugin (three-level: vendor/name/version/) should be detected');
+  assert.ok(deep.skillNames.includes('gamma'), 'gamma skill should be found inside deep-plugin');
 });
 
 test('scanInstalledPlugins: detects nested vendor/name structure', () => {

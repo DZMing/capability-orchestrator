@@ -214,8 +214,23 @@ function isPluginRoot(dirPath, errors) {
   return tryReadDir(path.join(dirPath, 'agents'), true, errors).some(d => d.isFile() && d.name.endsWith('.md'));
 }
 
+// 递归查找插件根目录（遇到插件根停止，最大深度防失控）
+// 真实结构：扁平 cache/<name>/ | 两级 cache/<vendor>/<name>/ | 三级 cache/<vendor>/<name>/<version>/
+function findPluginRoots(dir, maxDepth, errors) {
+  if (maxDepth <= 0) return [];
+  if (isPluginRoot(dir, errors)) return [dir];
+  const roots = [];
+  for (const d of tryReadDir(dir, true, errors)) {
+    if (!d.isDirectory() || d.name.startsWith('.')) continue;
+    const child = path.join(dir, d.name);
+    if (isSymlink(child)) continue;
+    roots.push(...findPluginRoots(child, maxDepth - 1, errors));
+  }
+  return roots;
+}
+
 // 扫描已安装插件（best-effort）
-// 支持扁平结构 cache/<name>/ 和两级结构 cache/<vendor>/<name>/
+// 支持扁平/两级/三级结构，递归查找最大深度 3
 function scanInstalledPlugins(claudeUserDir, errors) {
   const cacheDir = path.join(claudeUserDir, 'plugins', 'cache');
   const results = [];
@@ -225,13 +240,7 @@ function scanInstalledPlugins(claudeUserDir, errors) {
     const candidate = path.join(cacheDir, dirent.name);
     if (isSymlink(candidate)) continue;
 
-    // 如果直接是插件根，直接用；否则往下一层找子目录（vendor/name 结构）
-    const pluginPaths = isPluginRoot(candidate, errors)
-      ? [candidate]
-      : tryReadDir(candidate, true, errors)
-          .filter(d => d.isDirectory() && !d.name.startsWith('.') && !isSymlink(path.join(candidate, d.name)))
-          .map(d => path.join(candidate, d.name))
-          .filter(p => isPluginRoot(p, errors));
+    const pluginPaths = findPluginRoots(candidate, 3, errors);
 
     for (const pluginPath of pluginPaths) {
       const pluginName = path.basename(pluginPath);
@@ -444,6 +453,7 @@ function renderSnapshot(snapshot, mode) {
 module.exports = {
   extractFrontmatter, getDescription, getName, sanitize,
   scanSkills, scanAgents, scanCommands, readMcpServers,
+  scanInstalledPlugins, isPluginRoot,
   collectSnapshot, renderSnapshot, truncate,
 };
 
