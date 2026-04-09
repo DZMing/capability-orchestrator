@@ -45,17 +45,17 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 扫描来源及稳定性
 
-| 来源                   | 路径                       | 稳定性                               |
-| ---------------------- | -------------------------- | ------------------------------------ |
-| 项目级 skills          | `.claude/skills/`          | ✅ 官方正式目录                      |
-| 项目级 agents          | `.claude/agents/`          | ✅ 官方正式目录                      |
-| 项目级 legacy commands | `.claude/commands/`        | ✅ 官方正式目录                      |
-| 用户级 skills          | `~/.claude/skills/`        | ✅ 官方正式目录                      |
-| 用户级 agents          | `~/.claude/agents/`        | ✅ 官方正式目录                      |
-| 用户级 legacy commands | `~/.claude/commands/`      | ✅ 官方正式目录                      |
-| 项目级 MCP 配置        | `.mcp.json`                | ✅ 官方正式格式                      |
-| 用户级 MCP 配置        | `~/.claude/.mcp.json`      | ✅ 官方正式格式                      |
-| 已安装插件             | `~/.claude/plugins/cache/` | ⚠️ best-effort，目录结构未正式文档化 |
+| 来源                   | 路径                       | 稳定性                                |
+| ---------------------- | -------------------------- | ------------------------------------- |
+| 项目级 skills          | `.claude/skills/`          | ✅ 官方正式目录                       |
+| 项目级 agents          | `.claude/agents/`          | ✅ 官方正式目录                       |
+| 项目级 legacy commands | `.claude/commands/`        | ✅ 官方正式目录                       |
+| 用户级 skills          | `~/.claude/skills/`        | ✅ 官方正式目录                       |
+| 用户级 agents          | `~/.claude/agents/`        | ✅ 官方正式目录                       |
+| 用户级 legacy commands | `~/.claude/commands/`      | ✅ 官方正式目录                       |
+| 项目级 MCP 配置        | `.mcp.json`                | ✅ 官方正式格式                       |
+| 用户级 MCP 配置        | `~/.claude/mcp.json`       | ✅ 官方正式格式（兼容旧 `.mcp.json`） |
+| 已安装插件             | `~/.claude/plugins/cache/` | ⚠️ best-effort，目录结构未正式文档化  |
 
 ## Token 预算
 

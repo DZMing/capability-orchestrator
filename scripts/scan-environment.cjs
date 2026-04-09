@@ -79,6 +79,7 @@ function sanitize(str) {
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
     .replace(/<[^>]*>/g, '')      // HTML 标签（防 XSS-like）
+    .replace(/^#{1,6}\s+/g, '')   // Markdown 标题语法（防 prompt injection）
     .trim();
 }
 
@@ -308,7 +309,11 @@ function collectSnapshot(projectDir, userDir) {
   try {
     const mcpItems = [];
     readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s => mcpItems.push({ name: s, desc: '项目级' }));
-    readMcpServers(path.join(claudeUserDir, '.mcp.json'), errors).forEach(s => mcpItems.push({ name: s, desc: '用户级' }));
+    // 用户级 MCP：优先 mcp.json（当前标准），fallback .mcp.json（旧格式）
+    const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
+      ? path.join(claudeUserDir, 'mcp.json')
+      : path.join(claudeUserDir, '.mcp.json');
+    readMcpServers(userMcpFile, errors).forEach(s => mcpItems.push({ name: s, desc: '用户级' }));
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });
   } catch (e) { errors.push(`MCP: ${e.message}`); }
 

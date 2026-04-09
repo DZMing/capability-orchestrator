@@ -8,6 +8,12 @@ BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
 VERSION="1.0.0"
 
+# ── 颜色输出（必须在所有分支之前定义）────────────────────────────────────────
+green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
+red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+
 # 确定用户级 Claude 目录
 CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
 PLUGINS_DIR="$CLAUDE_DIR/plugins/cache"
@@ -52,12 +58,6 @@ UNINSTALL_JS
   green "✓ 卸载完成"
   exit 0
 fi
-
-# ── 颜色输出 ──────────────────────────────────────────────────────────────────
-green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
-red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
-bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 
 bold "=== capability-orchestrator 安装程序 ==="
 echo ""
