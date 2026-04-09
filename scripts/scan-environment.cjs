@@ -73,6 +73,16 @@ function truncate(str, max) {
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
 }
 
+// 注入到 Claude 上下文前的净化：去除换行、反引号、HTML 标签等 prompt injection 载体
+function sanitize(str) {
+  if (!str) return '';
+  return str
+    .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
+    .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
+    .replace(/<[^>]*>/g, '')      // HTML 标签（防 XSS-like）
+    .trim();
+}
+
 // 从 SKILL.md / agent.md 的 YAML frontmatter 提取指定字段
 // 支持 plain scalar、quoted scalar 和 block scalar（> | >- |-）
 function extractFrontmatter(content) {
@@ -108,19 +118,19 @@ function extractFrontmatter(content) {
 
 function getDescription(content) {
   const fm = extractFrontmatter(content);
-  if (fm.description) return truncate(fm.description, MAX_DESC);
+  if (fm.description) return sanitize(truncate(fm.description, MAX_DESC));
   // fallback：取 frontmatter 后第一个非空、非标题行
   if (!content) return '';
   const afterFm = content.replace(/^---[\s\S]*?\n---\s*\n?/, '');
   const firstPara = afterFm
     .split('\n')
     .find(l => l.trim() && !l.startsWith('#'));
-  return truncate(firstPara || '', MAX_DESC);
+  return sanitize(truncate(firstPara || '', MAX_DESC));
 }
 
 function getName(content, fallback) {
   const fm = extractFrontmatter(content);
-  return (fm.name || fallback || '').trim();
+  return sanitize((fm.name || fallback || '').trim());
 }
 
 // ─── 扫描函数 ────────────────────────────────────────────────────────────────
@@ -197,9 +207,9 @@ function scanInstalledPlugins(claudeUserDir) {
     if (manifestContent) {
       try {
         const manifest = JSON.parse(manifestContent);
-        name = manifest.name || dirent.name;
-        version = manifest.version || '';
-        description = truncate(manifest.description || '', MAX_DESC);
+        name = sanitize(manifest.name || dirent.name);
+        version = sanitize(manifest.version || '');
+        description = sanitize(truncate(manifest.description || '', MAX_DESC));
       } catch { /* 解析失败，使用目录名 */ }
     }
 
