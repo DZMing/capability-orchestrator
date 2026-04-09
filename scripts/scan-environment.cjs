@@ -216,9 +216,26 @@ function scanInstalledPlugins(claudeUserDir) {
 
 // ─── 数据收集（一次扫描）─────────────────────────────────────────────────────
 
+// WSL 下额外探测 Windows %USERPROFILE%\.claude
+function resolveUserDir() {
+  const linuxHome = path.join(os.homedir(), '.claude');
+  if (!process.env.WSL_DISTRO_NAME) return linuxHome;
+  // 优先 Linux home（通常是 ~/.claude symlink 或挂载点）
+  try { if (require('fs').statSync(linuxHome).isDirectory()) return linuxHome; } catch { /**/ }
+  // fallback: 通过 wslpath 获取 Windows %USERPROFILE%
+  try {
+    const winProfile = require('child_process')
+      .execSync('wslpath "$(cmd.exe /C "echo %USERPROFILE%" 2>/dev/null)"', { timeout: 2000 })
+      .toString().trim();
+    const winClaude = path.join(winProfile, '.claude');
+    require('fs').statSync(winClaude); // 确认存在
+    return winClaude;
+  } catch { return linuxHome; }
+}
+
 function collectSnapshot(projectDir, userDir) {
   const cwd = projectDir || process.cwd();
-  const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
+  const claudeUserDir = userDir || resolveUserDir();
   _errors = []; // 重置全局错误收集器（供 tryRead/tryReadDir 使用）
   const errors = _errors;
   // 按优先级排列：项目级 > MCP > 用户级 > 插件 > legacy > 内置
