@@ -28,14 +28,23 @@ const MAX_DESC = 100;
 
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
 
+// errors 收集器，由 collectSnapshot 注入
+let _errors = [];
+
 function tryRead(filePath) {
   try { return fs.readFileSync(filePath, 'utf8'); }
-  catch { return null; }
+  catch (e) {
+    if (e.code !== 'ENOENT') _errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
+    return null;
+  }
 }
 
 function tryReadDir(dirPath) {
   try { return fs.readdirSync(dirPath); }
-  catch { return []; }
+  catch (e) {
+    if (e.code !== 'ENOENT') _errors.push(`列目录 ${path.basename(dirPath)}: ${e.code}`);
+    return [];
+  }
 }
 
 function isDir(p) {
@@ -197,7 +206,8 @@ function scanInstalledPlugins() {
 function collectSnapshot() {
   const cwd = process.cwd();
   const claudeUserDir = path.join(os.homedir(), '.claude');
-  const errors = [];
+  _errors = []; // 重置全局错误收集器（供 tryRead/tryReadDir 使用）
+  const errors = _errors;
   // 按优先级排列：项目级 > MCP > 用户级 > 插件 > legacy > 内置
   const sections = [];
 
