@@ -179,14 +179,16 @@ function scanCommands(dir, errors) {
     .map(d => d.name.replace(/\.md$/, ''));
 }
 
-// 读取 .mcp.json 中的 server 名称
+// 读取 .mcp.json 中的 server 名称和描述，过滤 disabled
 // 容错：先尝试标准 JSON，失败后去除 // 行注释再重试
 function readMcpServers(mcpFile, errors) {
   const content = tryRead(mcpFile, errors);
   if (!content) return [];
   function extractServers(json) {
     const servers = json.mcpServers || json.mcp_servers || {};
-    return Object.keys(servers);
+    return Object.entries(servers)
+      .filter(([, v]) => v && !v.disabled)
+      .map(([name, v]) => ({ name, desc: (v && v.description) || '' }));
   }
   try {
     return extractServers(JSON.parse(content));
@@ -318,12 +320,14 @@ function collectSnapshot(projectDir, userDir) {
   // MCP Servers（结构不同，手动处理）
   try {
     const mcpItems = [];
-    readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s => mcpItems.push({ name: s, desc: '项目级' }));
+    readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s =>
+      mcpItems.push({ name: s.name, desc: s.desc || '项目级' }));
     // 用户级 MCP：优先 mcp.json（当前标准），fallback .mcp.json（旧格式）
     const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
       ? path.join(claudeUserDir, 'mcp.json')
       : path.join(claudeUserDir, '.mcp.json');
-    readMcpServers(userMcpFile, errors).forEach(s => mcpItems.push({ name: s, desc: '用户级' }));
+    readMcpServers(userMcpFile, errors).forEach(s =>
+      mcpItems.push({ name: s.name, desc: s.desc || '用户级' }));
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });
   } catch (e) { errors.push(`MCP: ${e.message}`); }
 

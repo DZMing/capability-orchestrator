@@ -117,9 +117,9 @@ test('scanCommands: returns command names without .md', () => {
 
 // ─── readMcpServers ──────────────────────────────────────────────────────────
 
-test('readMcpServers: reads mcpServers key', () => {
+test('readMcpServers: reads mcpServers key with name and desc', () => {
   const servers = readMcpServers(path.join(PROJECT_DIR, '.mcp.json'));
-  assert.ok(servers.includes('test-server'));
+  assert.ok(servers.some(s => s.name === 'test-server'));
 });
 
 test('readMcpServers: missing file returns []', () => {
@@ -302,10 +302,21 @@ test('renderSnapshot: list mode uses compact builtins', () => {
 // ─── MCP 去重 ────────────────────────────────────────────────────────────────
 
 test('readMcpServers: mcp_servers key also works', () => {
-  const content = JSON.stringify({ mcp_servers: { 'alt-server': {} } });
+  const content = JSON.stringify({ mcp_servers: { 'alt-server': { description: 'alt desc' } } });
   const tmpFile = path.join(require('os').tmpdir(), 'test-mcp.json');
   fs.writeFileSync(tmpFile, content);
   const servers = readMcpServers(tmpFile);
   fs.unlinkSync(tmpFile);
-  assert.ok(servers.includes('alt-server'));
+  assert.ok(servers.some(s => s.name === 'alt-server'));
+  assert.equal(servers[0].desc, 'alt desc');
+});
+
+test('readMcpServers: filters disabled servers', () => {
+  const content = JSON.stringify({ mcpServers: { active: {}, off: { disabled: true } } });
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-disabled.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  assert.equal(servers.length, 1);
+  assert.equal(servers[0].name, 'active');
 });
