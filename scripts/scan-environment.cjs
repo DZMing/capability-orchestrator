@@ -173,8 +173,8 @@ function readMcpServers(mcpFile) {
 }
 
 // 扫描已安装插件（best-effort）
-function scanInstalledPlugins() {
-  const cacheDir = path.join(os.homedir(), '.claude', 'plugins', 'cache');
+function scanInstalledPlugins(claudeUserDir) {
+  const cacheDir = path.join(claudeUserDir, 'plugins', 'cache');
   const results = [];
 
   for (const dirent of tryReadDir(cacheDir, true)) {
@@ -216,9 +216,9 @@ function scanInstalledPlugins() {
 
 // ─── 数据收集（一次扫描）─────────────────────────────────────────────────────
 
-function collectSnapshot() {
-  const cwd = process.cwd();
-  const claudeUserDir = path.join(os.homedir(), '.claude');
+function collectSnapshot(projectDir, userDir) {
+  const cwd = projectDir || process.cwd();
+  const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
   _errors = []; // 重置全局错误收集器（供 tryRead/tryReadDir 使用）
   const errors = _errors;
   // 按优先级排列：项目级 > MCP > 用户级 > 插件 > legacy > 内置
@@ -247,7 +247,7 @@ function collectSnapshot() {
 
   // 已安装插件
   try {
-    const plugins = scanInstalledPlugins();
+    const plugins = scanInstalledPlugins(claudeUserDir);
     if (plugins.length > 0) {
       const items = plugins.map(p => ({
         name: `${p.name}${p.version ? ' (v' + p.version + ')' : ''}`,
@@ -366,9 +366,14 @@ function renderSnapshot(snapshot, mode) {
 // ─── 入口 ────────────────────────────────────────────────────────────────────
 
 try {
-  const modeArg = process.argv.find(a => a.startsWith('--mode='));
-  const mode = modeArg ? modeArg.split('=')[1] : 'route';
-  process.stdout.write(renderSnapshot(collectSnapshot(), mode) + '\n');
+  function getArg(name) {
+    const a = process.argv.find(x => x.startsWith(`--${name}=`));
+    return a ? a.split('=')[1] : undefined;
+  }
+  const mode = getArg('mode') || 'route';
+  const projectDir = getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;
+  const userDir = getArg('user-dir') || process.env.CAPABILITY_USER_DIR;
+  process.stdout.write(renderSnapshot(collectSnapshot(projectDir, userDir), mode) + '\n');
 } catch (err) {
   process.stderr.write(`致命错误: ${err.message}\n${err.stack}\n`);
   process.stdout.write('[扫描失败，详见 stderr]\n');
