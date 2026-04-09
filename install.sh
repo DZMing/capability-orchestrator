@@ -6,6 +6,13 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
+VERSION="1.0.0"
+
+# --version 支持
+if [ "${1:-}" = "--version" ]; then
+  echo "$PLUGIN_NAME $VERSION"
+  exit 0
+fi
 
 # 确定用户级 Claude 目录
 CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
@@ -55,13 +62,19 @@ elif [ "$USE_GIT" -eq 1 ]; then
   git clone --depth=1 --branch "$BRANCH" \
     "https://github.com/$REPO.git" "$INSTALL_DIR"
 else
+  if ! command -v unzip >/dev/null 2>&1; then
+    red "错误：curl 下载方式需要 unzip，请先安装或改用 git"
+    exit 1
+  fi
   yellow "正在下载（无 git，使用 curl）..."
   TMP_ZIP=$(mktemp /tmp/cap-orch-XXXXXX.zip)
-  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.zip" -o "$TMP_ZIP"
   TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TMP_ZIP" "$TMP_DIR"' EXIT
+  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.zip" -o "$TMP_ZIP"
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
   mv "$TMP_DIR/${PLUGIN_NAME}-${BRANCH}" "$INSTALL_DIR"
   rm -rf "$TMP_ZIP" "$TMP_DIR"
+  trap - EXIT
 fi
 
 # 确保脚本可执行
