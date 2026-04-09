@@ -186,28 +186,48 @@ function readMcpServers(mcpFile) {
   }
 }
 
+// 判断一个目录是否是有效插件根（有 manifest 或 skills/agents）
+function isPluginRoot(dirPath) {
+  return tryRead(path.join(dirPath, '.claude-plugin', 'plugin.json')) !== null
+    || tryRead(path.join(dirPath, 'plugin.json')) !== null
+    || tryReadDir(path.join(dirPath, 'skills'), true).some(d => d.isDirectory())
+    || tryReadDir(path.join(dirPath, 'agents'), true).some(d => d.isFile() && d.name.endsWith('.md'));
+}
+
 // 扫描已安装插件（best-effort）
+// 支持扁平结构 cache/<name>/ 和两级结构 cache/<vendor>/<name>/
 function scanInstalledPlugins(claudeUserDir) {
   const cacheDir = path.join(claudeUserDir, 'plugins', 'cache');
   const results = [];
 
   for (const dirent of tryReadDir(cacheDir, true)) {
     if (!dirent.isDirectory()) continue;
-    const pluginPath = path.join(cacheDir, dirent.name);
+    const candidate = path.join(cacheDir, dirent.name);
+
+    // 如果直接是插件根，直接用；否则往下一层找子目录（vendor/name 结构）
+    const pluginPaths = isPluginRoot(candidate)
+      ? [candidate]
+      : tryReadDir(candidate, true)
+          .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+          .map(d => path.join(candidate, d.name))
+          .filter(isPluginRoot);
+
+    for (const pluginPath of pluginPaths) {
+    const pluginName = path.basename(pluginPath);
 
     // 读取 manifest（优先 .claude-plugin/plugin.json，fallback 根目录 plugin.json）
     const manifestContent =
       tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json')) ||
       tryRead(path.join(pluginPath, 'plugin.json'));
 
-    let name = dirent.name;
+    let name = sanitize(pluginName);
     let version = '';
     let description = '';
 
     if (manifestContent) {
       try {
         const manifest = JSON.parse(manifestContent);
-        name = sanitize(manifest.name || dirent.name);
+        name = sanitize(manifest.name || pluginName);
         version = sanitize(manifest.version || '');
         description = sanitize(truncate(manifest.description || '', MAX_DESC));
       } catch { /* 解析失败，使用目录名 */ }
@@ -223,7 +243,8 @@ function scanInstalledPlugins(claudeUserDir) {
       .map(d => d.name.replace(/\.md$/, ''));
 
     results.push({ name, version, description, skillNames, agentNames });
-  }
+    } // end inner for (pluginPaths)
+  } // end outer for (cacheDir entries)
 
   return results;
 }
