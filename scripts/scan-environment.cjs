@@ -39,6 +39,23 @@ function tryRead(filePath) {
   }
 }
 
+// 只读前 2KB，足够提取 frontmatter
+const HEAD_BYTES = 2048;
+function tryReadHead(filePath) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(HEAD_BYTES);
+    const bytesRead = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
+    return buf.toString('utf8', 0, bytesRead);
+  } catch (e) {
+    if (e.code !== 'ENOENT') _errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
 function tryReadDir(dirPath, withTypes) {
   try {
     return withTypes
@@ -113,7 +130,7 @@ function scanSkills(dir) {
   const results = [];
   for (const dirent of tryReadDir(dir, true)) {
     if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
-    const content = tryRead(path.join(dir, dirent.name, 'SKILL.md'));
+    const content = tryReadHead(path.join(dir, dirent.name, 'SKILL.md'));
     if (content === null) continue;
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
@@ -127,7 +144,7 @@ function scanAgents(dir) {
   const results = [];
   for (const dirent of tryReadDir(dir, true)) {
     if (dirent.name.startsWith('.') || !dirent.isFile() || !dirent.name.endsWith('.md')) continue;
-    const content = tryRead(path.join(dir, dirent.name));
+    const content = tryReadHead(path.join(dir, dirent.name));
     if (content === null) continue;
     const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
