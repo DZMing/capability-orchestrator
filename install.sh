@@ -91,7 +91,10 @@ mkdir -p "$PLUGINS_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   yellow "检测到已安装（git），正在更新..."
-  git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
+  git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" || {
+    red "更新失败（可能有本地修改），请手动处理：cd $INSTALL_DIR && git status"
+    exit 1
+  }
 elif [ "$USE_GIT" -eq 1 ]; then
   # 目标目录可能存在（如之前用 curl 安装），先清理
   [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
@@ -111,7 +114,8 @@ else
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
   # 目标目录可能存在（升级场景），先清理再移入
   [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
-  mv "$TMP_DIR/${PLUGIN_NAME}-${BRANCH}" "$INSTALL_DIR"
+  # GitHub zip 内部目录名可能随仓库名变化，用通配符匹配唯一子目录
+  mv "$TMP_DIR"/*/ "$INSTALL_DIR"
   rm -rf "$TMP_ZIP" "$TMP_DIR"
   trap - EXIT
 fi

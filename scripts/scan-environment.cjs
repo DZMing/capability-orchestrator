@@ -79,7 +79,7 @@ function sanitize(str) {
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
     .replace(/<[^>]*>/g, '')      // HTML 标签（防 XSS-like）
-    .replace(/^#{1,6}\s+/g, '')   // Markdown 标题语法（防 prompt injection）
+    .replace(/(?:^|\s)#{1,6}\s+/g, ' ') // Markdown 标题语法（防 prompt injection，含换行转空格后的中间位置）
     .trim();
 }
 
@@ -223,12 +223,13 @@ function scanInstalledPlugins(claudeUserDir, errors) {
   for (const dirent of tryReadDir(cacheDir, true, errors)) {
     if (!dirent.isDirectory()) continue;
     const candidate = path.join(cacheDir, dirent.name);
+    if (isSymlink(candidate)) continue;
 
     // 如果直接是插件根，直接用；否则往下一层找子目录（vendor/name 结构）
     const pluginPaths = isPluginRoot(candidate, errors)
       ? [candidate]
       : tryReadDir(candidate, true, errors)
-          .filter(d => d.isDirectory() && !d.name.startsWith('.'))
+          .filter(d => d.isDirectory() && !d.name.startsWith('.') && !isSymlink(path.join(candidate, d.name)))
           .map(d => path.join(candidate, d.name))
           .filter(p => isPluginRoot(p, errors));
 
@@ -276,14 +277,14 @@ function resolveUserDir() {
   const linuxHome = path.join(os.homedir(), '.claude');
   if (!process.env.WSL_DISTRO_NAME) return linuxHome;
   // 优先 Linux home（通常是 ~/.claude symlink 或挂载点）
-  try { if (require('fs').statSync(linuxHome).isDirectory()) return linuxHome; } catch { /**/ }
+  try { if (fs.statSync(linuxHome).isDirectory()) return linuxHome; } catch { /**/ }
   // fallback: 通过 wslpath 获取 Windows %USERPROFILE%
   try {
-    const winProfile = require('child_process')
-      .execSync('wslpath "$(cmd.exe /C "echo %USERPROFILE%" 2>/dev/null)"', { timeout: 2000 })
+    const { execSync } = require('child_process');
+    const winProfile = execSync('wslpath "$(cmd.exe /C "echo %USERPROFILE%" 2>/dev/null)"', { timeout: 2000 })
       .toString().trim();
     const winClaude = path.join(winProfile, '.claude');
-    require('fs').statSync(winClaude); // 确认存在
+    fs.statSync(winClaude); // 确认存在
     return winClaude;
   } catch { return linuxHome; }
 }

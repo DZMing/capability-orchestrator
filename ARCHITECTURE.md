@@ -63,7 +63,7 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 - skill description 总预算约为上下文窗口的 1%（约 2000 字符/200k 窗口）
 - orchestrate skill 的快照是主要内容，不应占用过多 token
-- 3000 字符约等于 750 tokens（GPT-4 分词估算），对大多数项目足够
+- 3000 字符约等于 750 tokens（通用 BPE 分词估算），对大多数项目足够
 - 超限时自动缩短 description（100→50 字符），优先保留能力名称
 
 ## 安全边界

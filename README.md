@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 ```bash
 # 克隆到插件缓存目录
-git clone https://github.com/DZMing/capability-orchestrator.git \
+git clone --depth=1 https://github.com/DZMing/capability-orchestrator.git \
   ~/.claude/plugins/cache/capability-orchestrator
 
 # 或开发测试（不安装，直接加载）

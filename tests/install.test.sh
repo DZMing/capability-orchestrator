@@ -110,6 +110,20 @@ assert "hook 命令含 --mode=list" \
 assert "scan script 可直接 node 执行" \
   node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=list
 
+# ── 验证卸载 ─────────────────────────────────────────────────────────────────
+CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
+  bash "$REPO_ROOT/install.sh" --uninstall 2>&1 | sed 's/^/  /'
+
+assert "卸载后插件目录已删除" test ! -d "$PLUGIN_DIR"
+
+HOOK_AFTER=$(node -e "
+  const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
+  const hooks = (s.hooks || {}).SessionStart || [];
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  process.stdout.write(String(n));
+")
+assert "卸载后 hook 已移除" [ "$HOOK_AFTER" -eq 0 ]
+
 # ── 结果 ──────────────────────────────────────────────────────────────────────
 echo ""
 echo "结果：$PASS 通过，$FAIL 失败"
