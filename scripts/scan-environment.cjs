@@ -265,16 +265,19 @@ function scanInstalledPlugins(claudeUserDir, errors) {
         } catch { /* 解析失败，使用目录名 */ }
       }
 
-      // 列出该插件的 skills（必须含 SKILL.md）和 agents（必须是 .md）
-      const skillNames = tryReadDir(path.join(pluginPath, 'skills'), true, errors)
+      // 列出该插件的 skills（用 existsSync 检查而非 tryRead，减少不必要 IO）
+      const skillItems = tryReadDir(path.join(pluginPath, 'skills'), true, errors)
         .filter(d => !d.name.startsWith('.') && d.isDirectory()
-          && tryRead(path.join(pluginPath, 'skills', d.name, 'SKILL.md'), errors) !== null)
-        .map(d => sanitize(d.name));
+          && fs.existsSync(path.join(pluginPath, 'skills', d.name, 'SKILL.md')))
+        .map(d => {
+          const head = tryReadHead(path.join(pluginPath, 'skills', d.name, 'SKILL.md'), errors);
+          return { name: sanitize(getName(head, d.name)), desc: head ? getDescription(head) : '' };
+        });
       const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true, errors)
         .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
         .map(d => sanitize(d.name.replace(/\.md$/, '')));
 
-      results.push({ name, version, description, skillNames, agentNames });
+      results.push({ name, version, description, skillItems, agentNames });
     } // end inner for (pluginPaths)
   } // end outer for (cacheDir entries)
 
@@ -342,7 +345,7 @@ function collectSnapshot(projectDir, userDir) {
         name: `${p.name}${p.version ? ' (v' + p.version + ')' : ''}`,
         desc: p.description,
         extra: [
-          p.skillNames.length > 0 ? `skills: ${p.skillNames.join(', ')}` : '',
+          p.skillItems.length > 0 ? `skills: ${p.skillItems.map(s => s.name).join(', ')}` : '',
           p.agentNames.length > 0 ? `agents: ${p.agentNames.join(', ')}` : '',
         ].filter(Boolean).join(' | ')
       }));
