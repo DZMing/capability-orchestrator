@@ -156,14 +156,28 @@ test('renderSnapshot: output never exceeds MAX_TOTAL_CHARS', () => {
     sections: [{ label: '测试 Skills', prefix: '', items }],
     errors: [],
   };
-  const output = renderSnapshot(snap, 'route');
-  assert.ok(output.length <= 3000 + 30, `output ${output.length} should be ≤ 3000`);
+  const { text } = renderSnapshot(snap, 'route');
+  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000`);
 });
 
 test('renderSnapshot: empty snapshot outputs header only', () => {
   const snap = { sections: [], errors: [] };
-  const output = renderSnapshot(snap, 'route');
-  assert.match(output, /当前环境能力摘要/);
+  const { text } = renderSnapshot(snap, 'route');
+  assert.match(text, /当前环境能力摘要/);
+});
+
+test('renderSnapshot: error footer stays within budget', () => {
+  const items = Array.from({ length: 200 }, (_, i) => ({
+    name: `skill-${i}`,
+    desc: 'A'.repeat(100),
+  }));
+  const snap = {
+    sections: [{ label: '测试 Skills', prefix: '', items }],
+    errors: ['EACCES /foo/bar'],
+  };
+  const { text } = renderSnapshot(snap, 'route');
+  assert.ok(text.length <= 3000, `output with error footer ${text.length} should be ≤ 3000`);
+  assert.match(text, /部分扫描失败/);
 });
 
 // ─── truncate ────────────────────────────────────────────────────────────────

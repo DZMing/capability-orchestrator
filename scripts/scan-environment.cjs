@@ -373,15 +373,15 @@ function renderSnapshot(snapshot, mode) {
     output = assemble();
   }
 
-  // 兜底截断
-  if (output.length > MAX_TOTAL_CHARS) {
-    output = output.slice(0, MAX_TOTAL_CHARS - 20) + '\n\n…（已截断）';
+  // error footer（在预算内计算，不追加在截断点之后）
+  const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
+  const budget = MAX_TOTAL_CHARS - FOOTER.length;
+
+  // 兜底截断（在预算内，为 footer 留出空间）
+  if (output.length > budget) {
+    output = output.slice(0, budget - 20) + '\n\n…（已截断）';
   }
-  if (errors.length > 0) {
-    process.stderr.write(`扫描部分失败:\n${errors.map(e => '  ' + e).join('\n')}\n`);
-    output += '\n\n[部分扫描失败，详见 stderr]';
-  }
-  return output;
+  return { text: output + FOOTER, errors };
 }
 
 // ─── 模块导出（供测试使用）───────────────────────────────────────────────────
@@ -403,7 +403,11 @@ else try {
   const mode = getArg('mode') || 'route';
   const projectDir = getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;
   const userDir = getArg('user-dir') || process.env.CAPABILITY_USER_DIR;
-  process.stdout.write(renderSnapshot(collectSnapshot(projectDir, userDir), mode) + '\n');
+  const { text, errors: errs } = renderSnapshot(collectSnapshot(projectDir, userDir), mode);
+  if (errs.length > 0) {
+    process.stderr.write(`扫描部分失败:\n${errs.map(e => '  ' + e).join('\n')}\n`);
+  }
+  process.stdout.write(text + '\n');
 } catch (err) {
   process.stderr.write(`致命错误: ${err.message}\n${err.stack}\n`);
   process.stdout.write('[扫描失败，详见 stderr]\n');
