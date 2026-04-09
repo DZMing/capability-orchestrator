@@ -305,11 +305,12 @@ function renderSection(section, level) {
   return `### ${label}\n${lines.join('\n')}`;
 }
 
-function renderSnapshot(snapshot) {
+// mode: 'route'（保留描述用于路由判断）| 'list'（高密度目录，初始 level 2）
+function renderSnapshot(snapshot, mode) {
   const { sections, errors } = snapshot;
-  // 每个 section 独立 level，初始全部 level 0
-  const levels = sections.map(() => 0);
-  let useCompactBuiltins = false;
+  const initLevel = mode === 'list' ? 2 : 0;
+  const levels = sections.map(() => initLevel);
+  let useCompactBuiltins = mode === 'list';
 
   function assemble() {
     const header = useCompactBuiltins ? BUILTINS_COMPACT : `### 内置命令 [built-in]\n${BUILTINS_FULL}`;
@@ -351,7 +352,9 @@ function renderSnapshot(snapshot) {
 // ─── 入口 ────────────────────────────────────────────────────────────────────
 
 try {
-  process.stdout.write(renderSnapshot(collectSnapshot()) + '\n');
+  const modeArg = process.argv.find(a => a.startsWith('--mode='));
+  const mode = modeArg ? modeArg.split('=')[1] : 'route';
+  process.stdout.write(renderSnapshot(collectSnapshot(), mode) + '\n');
 } catch (err) {
   process.stderr.write(`致命错误: ${err.message}\n${err.stack}\n`);
   process.stdout.write('[扫描失败，详见 stderr]\n');
