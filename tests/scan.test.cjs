@@ -196,3 +196,78 @@ test('truncate: handles null/empty', () => {
   assert.equal(truncate(null, 100), '');
   assert.equal(truncate('', 100), '');
 });
+
+// ─── scanInstalledPlugins ────────────────────────────────────────────────────
+
+test('scanInstalledPlugins: detects flat plugin with manifest', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const pluginsSection = snap.sections.find(s => s.label === '已安装插件');
+  assert.ok(pluginsSection, '已安装插件 section should exist');
+  const goodPlugin = pluginsSection.items.find(i => i.name.startsWith('good-plugin'));
+  assert.ok(goodPlugin, 'good-plugin should be detected');
+  assert.match(goodPlugin.extra || '', /alpha/);
+});
+
+test('scanInstalledPlugins: bad JSON manifest falls back to dir name', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const pluginsSection = snap.sections.find(s => s.label === '已安装插件');
+  assert.ok(pluginsSection, '已安装插件 section should exist');
+  // bad-plugin has invalid JSON — should still appear with dir name
+  const badPlugin = pluginsSection.items.find(i => i.name === 'bad-plugin');
+  assert.ok(badPlugin, 'bad-plugin should appear with fallback name even with bad JSON');
+});
+
+test('scanInstalledPlugins: detects nested vendor/name structure', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const pluginsSection = snap.sections.find(s => s.label === '已安装插件');
+  assert.ok(pluginsSection);
+  const innerPlugin = pluginsSection.items.find(i => i.name.startsWith('inner-plugin'));
+  assert.ok(innerPlugin, 'inner-plugin (nested in vendor-structure/) should be detected');
+  assert.match(innerPlugin.extra || '', /beta/);
+});
+
+// ─── sanitize (via getDescription / getName) ─────────────────────────────────
+
+test('sanitize: strips newlines from description', () => {
+  const content = '---\nname: x\ndescription: "line1\\nline2"\n---\n';
+  const desc = getDescription(content);
+  assert.ok(!desc.includes('\n'), 'description should not contain newlines');
+});
+
+test('sanitize: strips backticks from description', () => {
+  const content = '---\nname: x\ndescription: "use `cmd` syntax"\n---\n';
+  const desc = getDescription(content);
+  assert.ok(!desc.includes('`'), 'description should not contain backticks');
+});
+
+// ─── mode=list ───────────────────────────────────────────────────────────────
+
+test('renderSnapshot: list mode starts at level 2 (names only)', () => {
+  const items = [
+    { name: 'skill-a', desc: 'Long description that would normally show' },
+    { name: 'skill-b', desc: 'Another long description' },
+  ];
+  const snap = { sections: [{ label: '项目级 Skills', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'list');
+  // level 2 = comma-separated names, no descriptions
+  assert.ok(!text.includes('Long description'), 'list mode should not show descriptions');
+  assert.ok(text.includes('skill-a'), 'list mode should include names');
+});
+
+test('renderSnapshot: list mode uses compact builtins', () => {
+  const snap = { sections: [], errors: [] };
+  const { text } = renderSnapshot(snap, 'list');
+  assert.match(text, /内置 24 个/);
+  assert.ok(!text.includes('/clear'), 'list mode should not expand built-in list');
+});
+
+// ─── MCP 去重 ────────────────────────────────────────────────────────────────
+
+test('readMcpServers: mcp_servers key also works', () => {
+  const content = JSON.stringify({ mcp_servers: { 'alt-server': {} } });
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  assert.ok(servers.includes('alt-server'));
+});

@@ -1,0 +1,5 @@
+{
+  "name": "inner-plugin",
+  "version": "2.0.0",
+  "description": "Nested vendor plugin"
+}
