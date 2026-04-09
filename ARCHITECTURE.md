@@ -31,7 +31,17 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 - 零常驻进程（没有 daemon / hub / server）
 - 零数据库（没有 SQLite 或任何持久化存储）
 - 零索引文件（没有预生成缓存，每次实时扫描）
-- 跨平台（纯 Node.js 标准库，macOS / Linux / WSL 通用）
+- 跨平台（纯 Node.js 标准库）
+
+## 平台兼容矩阵
+
+| 平台           | 支持状态  | 用户目录                                                              | 已知限制                                            |
+| -------------- | --------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| macOS          | ✅ 完整   | `~/.claude/`                                                          | 无                                                  |
+| Linux          | ✅ 完整   | `~/.claude/`                                                          | 无                                                  |
+| WSL (Windows)  | ✅ 实验   | Linux `~/.claude/` 优先；不存在时尝试 Windows `%USERPROFILE%\.claude` | 需要 `wslpath` + `cmd.exe` 可访问；超时 2s fallback |
+| Windows (原生) | ❌ 不支持 | —                                                                     | Claude Code 目前不支持 Windows 原生运行             |
+| CI / Docker    | ✅ 部分   | 通过 `--user-dir` 或环境变量指定                                      | 插件缓存目录通常为空，MCP 配置需手动挂载            |
 
 ## 扫描来源及稳定性
 

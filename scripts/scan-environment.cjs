@@ -169,7 +169,11 @@ function readMcpServers(mcpFile) {
     // 支持 mcpServers 和 mcp_servers 两种键名
     const servers = json.mcpServers || json.mcp_servers || {};
     return Object.keys(servers);
-  } catch { return []; }
+  } catch {
+    // 可能是 JSON5/带注释的文件，输出警告而非静默丢弃
+    _errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
+    return [];
+  }
 }
 
 // 扫描已安装插件（best-effort）
