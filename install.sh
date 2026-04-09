@@ -37,7 +37,8 @@ const fs = require('fs');
 const settingsFile = process.argv[2];
 try {
   const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-  const hooks = (settings.hooks || {}).SessionStart || [];
+  if (!settings.hooks) settings.hooks = {};
+  const hooks = settings.hooks.SessionStart || [];
   settings.hooks.SessionStart = hooks.filter(entry =>
     !(entry.hooks && entry.hooks.some(h => h.command && h.command.includes('capability-orchestrator')))
   );

@@ -98,12 +98,19 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 
 ```json
 {
-  "hooks": [
-    {
-      "type": "command",
-      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list"
-    }
-  ]
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 

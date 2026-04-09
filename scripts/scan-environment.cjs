@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scan-environment.sh — capability-orchestrator 核心扫描脚本
+// scan-environment.cjs — capability-orchestrator 核心扫描脚本
 //
 // 稳定来源（官方目录结构，随 Claude Code 版本稳定）：
 //   .claude/skills/           项目级 skills
@@ -14,7 +14,7 @@
 // best-effort 来源（结构未正式文档化，可能随版本变化）：
 //   ~/.claude/plugins/cache/  已安装插件缓存目录
 //
-// 运行方式: node scripts/scan-environment.sh
+// 运行方式: node scripts/scan-environment.cjs
 // 依赖: 仅 Node.js 标准库 (fs, path, os)
 
 'use strict';
@@ -257,10 +257,10 @@ function scanInstalledPlugins(claudeUserDir, errors) {
       const skillNames = tryReadDir(path.join(pluginPath, 'skills'), true, errors)
         .filter(d => !d.name.startsWith('.') && d.isDirectory()
           && tryRead(path.join(pluginPath, 'skills', d.name, 'SKILL.md'), errors) !== null)
-        .map(d => d.name);
+        .map(d => sanitize(d.name));
       const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true, errors)
         .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
-        .map(d => d.name.replace(/\.md$/, ''));
+        .map(d => sanitize(d.name.replace(/\.md$/, '')));
 
       results.push({ name, version, description, skillNames, agentNames });
     } // end inner for (pluginPaths)
@@ -441,7 +441,7 @@ function renderSnapshot(snapshot, mode) {
 // ─── 模块导出（供测试使用）───────────────────────────────────────────────────
 
 module.exports = {
-  extractFrontmatter, getDescription, getName,
+  extractFrontmatter, getDescription, getName, sanitize,
   scanSkills, scanAgents, scanCommands, readMcpServers,
   collectSnapshot, renderSnapshot, truncate,
 };
@@ -451,8 +451,9 @@ module.exports = {
 if (require.main !== module) { /* 被 require 时不执行 */ }
 else try {
   function getArg(name) {
-    const a = process.argv.find(x => x.startsWith(`--${name}=`));
-    return a ? a.split('=')[1] : undefined;
+    const prefix = `--${name}=`;
+    const a = process.argv.find(x => x.startsWith(prefix));
+    return a ? a.slice(prefix.length) : undefined;
   }
   const mode = getArg('mode') || 'route';
   const projectDir = getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;

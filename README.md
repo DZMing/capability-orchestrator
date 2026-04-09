@@ -35,13 +35,19 @@ claude --plugin-dir ./capability-orchestrator
 
 ```json
 {
-  "hooks": [
-    {
-      "type": "command",
-      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
-      "timeout": 10
-    }
-  ]
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
