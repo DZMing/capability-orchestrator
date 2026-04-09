@@ -1,5 +1,7 @@
 # capability-orchestrator
 
+[![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
+
 让 Claude Code 实时感知当前环境里有哪些可用能力（skills / subagents / plugins / MCP servers / commands）。
 
 ## 安装
