@@ -327,7 +327,8 @@ function renderSnapshot(snapshot, mode) {
   const { sections, errors } = snapshot;
   const initLevel = mode === 'list' ? 2 : 0;
   const levels = sections.map(() => initLevel);
-  let useCompactBuiltins = mode === 'list';
+  // 内置命令 Claude 已知，默认压缩，降级时已无需再压
+  let useCompactBuiltins = true;
 
   function assemble() {
     const header = useCompactBuiltins ? BUILTINS_COMPACT : `### 内置命令 [built-in]\n${BUILTINS_FULL}`;
@@ -346,11 +347,7 @@ function renderSnapshot(snapshot, mode) {
       const len = renderSection(sections[i], levels[i]).length;
       if (len > maxLen) { maxLen = len; maxIdx = i; }
     }
-    if (maxIdx === -1) {
-      // 所有 section 已在 level 3，压缩内置命令
-      if (!useCompactBuiltins) { useCompactBuiltins = true; output = assemble(); continue; }
-      break;
-    }
+    if (maxIdx === -1) break;
     levels[maxIdx]++;
     output = assemble();
   }
