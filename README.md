@@ -69,11 +69,8 @@ claude --plugin-dir ./capability-orchestrator
 ## 验证安装
 
 ```bash
-# 语法检查
-claude plugin validate .
-
-# 直接测试扫描脚本
-node capability-orchestrator/scripts/scan-environment.cjs
+# 测试扫描脚本是否正常输出
+node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=list
 ```
 
 ## 架构

@@ -92,10 +92,28 @@ skills/capabilities/ →  ../../scripts/scan-environment.cjs
 skills/refresh/      →  ../../scripts/scan-environment.cjs
 ```
 
+## SessionStart Hook 机制
+
+安装脚本在 `~/.claude/settings.json` 中注册一个 `SessionStart` hook：
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list"
+    }
+  ]
+}
+```
+
+每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要注入到会话上下文。这让 Claude 在第一轮对话前就已知道环境中有什么可用。
+
+选择 `--mode=list`（而非 `--mode=route`）是因为 hook 场景只需提供目录级别的能力列表，不需要完整描述。
+
 ## Future Enhancements（仅文档记录，不实现）
 
 以下是可扩展方向，当前版本不实现，不引入任何复杂性：
 
-1. **SessionStart hook 自动刷新**：在 `hooks/hooks.json` 中配置 `SessionStart` hook，每次会话启动时自动执行扫描并将结果注入 CLAUDE.md
-2. **bundled MCP server 结构化查询**：将扫描结果暴露为 MCP tool，支持按类型过滤、模糊搜索
-3. **能力摘要缓存**：将扫描结果缓存到 `${CLAUDE_PLUGIN_DATA}/capability-cache.json`，减少重复扫描开销（当前实时扫描足够快，无需此优化）
+1. **bundled MCP server 结构化查询**：将扫描结果暴露为 MCP tool，支持按类型过滤、模糊搜索
+2. **能力摘要缓存**：将扫描结果缓存到 `${CLAUDE_PLUGIN_DATA}/capability-cache.json`，减少重复扫描开销（当前实时扫描足够快，无需此优化）
