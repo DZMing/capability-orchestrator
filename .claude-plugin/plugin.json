@@ -11,6 +11,11 @@
     "environment"
   ],
   "author": {
-    "name": "capability-orchestrator"
+    "name": "Zhiming Deng"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DZMing/capability-orchestrator.git"
   }
 }
