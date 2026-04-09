@@ -1,0 +1,7 @@
+---
+name: capabilities
+description: "输出当前环境的全部可用能力摘要（skills/agents/plugins/MCP/commands）。不做路由判断，只展示。安装/升级插件后可用此命令查看最新状态。"
+disable-model-invocation: true
+---
+
+!`node --input-type=commonjs < "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.sh"`
