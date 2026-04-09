@@ -28,20 +28,19 @@ const MAX_DESC = 100;
 
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
 
-// errors 收集器，由 collectSnapshot 注入
-let _errors = [];
+// IO 工具函数，errors 参数可选（传入数组时收集非致命错误）
 
-function tryRead(filePath) {
+function tryRead(filePath, errors) {
   try { return fs.readFileSync(filePath, 'utf8'); }
   catch (e) {
-    if (e.code !== 'ENOENT') _errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
+    if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
     return null;
   }
 }
 
 // 只读前 2KB，足够提取 frontmatter
 const HEAD_BYTES = 2048;
-function tryReadHead(filePath) {
+function tryReadHead(filePath, errors) {
   let fd;
   try {
     fd = fs.openSync(filePath, 'r');
@@ -49,20 +48,20 @@ function tryReadHead(filePath) {
     const bytesRead = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
     return buf.toString('utf8', 0, bytesRead);
   } catch (e) {
-    if (e.code !== 'ENOENT') _errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
+    if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
     return null;
   } finally {
     if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
-function tryReadDir(dirPath, withTypes) {
+function tryReadDir(dirPath, withTypes, errors) {
   try {
     return withTypes
       ? fs.readdirSync(dirPath, { withFileTypes: true })
       : fs.readdirSync(dirPath);
   } catch (e) {
-    if (e.code !== 'ENOENT') _errors.push(`列目录 ${path.basename(dirPath)}: ${e.code}`);
+    if (e.code !== 'ENOENT' && errors) errors.push(`列目录 ${path.basename(dirPath)}: ${e.code}`);
     return [];
   }
 }
@@ -136,11 +135,11 @@ function getName(content, fallback) {
 // ─── 扫描函数 ────────────────────────────────────────────────────────────────
 
 // 扫描 skills 目录（每个子目录为一个 skill，必须含 SKILL.md）
-function scanSkills(dir) {
+function scanSkills(dir, errors) {
   const results = [];
-  for (const dirent of tryReadDir(dir, true)) {
+  for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
-    const content = tryReadHead(path.join(dir, dirent.name, 'SKILL.md'));
+    const content = tryReadHead(path.join(dir, dirent.name, 'SKILL.md'), errors);
     if (content === null) continue;
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
@@ -150,11 +149,11 @@ function scanSkills(dir) {
 }
 
 // 扫描 agents 目录（每个 .md 文件为一个 agent）
-function scanAgents(dir) {
+function scanAgents(dir, errors) {
   const results = [];
-  for (const dirent of tryReadDir(dir, true)) {
+  for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isFile() || !dirent.name.endsWith('.md')) continue;
-    const content = tryReadHead(path.join(dir, dirent.name));
+    const content = tryReadHead(path.join(dir, dirent.name), errors);
     if (content === null) continue;
     const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
@@ -164,15 +163,15 @@ function scanAgents(dir) {
 }
 
 // 扫描 commands 目录（legacy，仅列名称）
-function scanCommands(dir) {
-  return tryReadDir(dir, true)
+function scanCommands(dir, errors) {
+  return tryReadDir(dir, true, errors)
     .filter(d => d.isFile() && d.name.endsWith('.md'))
     .map(d => d.name.replace(/\.md$/, ''));
 }
 
 // 读取 .mcp.json 中的 server 名称
-function readMcpServers(mcpFile) {
-  const content = tryRead(mcpFile);
+function readMcpServers(mcpFile, errors) {
+  const content = tryRead(mcpFile, errors);
   if (!content) return [];
   try {
     const json = JSON.parse(content);
@@ -181,68 +180,72 @@ function readMcpServers(mcpFile) {
     return Object.keys(servers);
   } catch {
     // 可能是 JSON5/带注释的文件，输出警告而非静默丢弃
-    _errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
+    if (errors) errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
     return [];
   }
 }
 
 // 判断一个目录是否是有效插件根（有 manifest 或 skills/agents）
-function isPluginRoot(dirPath) {
-  return tryRead(path.join(dirPath, '.claude-plugin', 'plugin.json')) !== null
-    || tryRead(path.join(dirPath, 'plugin.json')) !== null
-    || tryReadDir(path.join(dirPath, 'skills'), true).some(d => d.isDirectory())
-    || tryReadDir(path.join(dirPath, 'agents'), true).some(d => d.isFile() && d.name.endsWith('.md'));
+// 短路优先检查最常见的 .claude-plugin/plugin.json，避免不必要的 IO
+function isPluginRoot(dirPath, errors) {
+  // 最常见：标准 manifest 位置
+  if (tryRead(path.join(dirPath, '.claude-plugin', 'plugin.json'), errors) !== null) return true;
+  // 次常见：根目录 manifest
+  if (tryRead(path.join(dirPath, 'plugin.json'), errors) !== null) return true;
+  // fallback：有 skills 或 agents 子目录即可
+  if (tryReadDir(path.join(dirPath, 'skills'), true, errors).some(d => d.isDirectory())) return true;
+  return tryReadDir(path.join(dirPath, 'agents'), true, errors).some(d => d.isFile() && d.name.endsWith('.md'));
 }
 
 // 扫描已安装插件（best-effort）
 // 支持扁平结构 cache/<name>/ 和两级结构 cache/<vendor>/<name>/
-function scanInstalledPlugins(claudeUserDir) {
+function scanInstalledPlugins(claudeUserDir, errors) {
   const cacheDir = path.join(claudeUserDir, 'plugins', 'cache');
   const results = [];
 
-  for (const dirent of tryReadDir(cacheDir, true)) {
+  for (const dirent of tryReadDir(cacheDir, true, errors)) {
     if (!dirent.isDirectory()) continue;
     const candidate = path.join(cacheDir, dirent.name);
 
     // 如果直接是插件根，直接用；否则往下一层找子目录（vendor/name 结构）
-    const pluginPaths = isPluginRoot(candidate)
+    const pluginPaths = isPluginRoot(candidate, errors)
       ? [candidate]
-      : tryReadDir(candidate, true)
+      : tryReadDir(candidate, true, errors)
           .filter(d => d.isDirectory() && !d.name.startsWith('.'))
           .map(d => path.join(candidate, d.name))
-          .filter(isPluginRoot);
+          .filter(p => isPluginRoot(p, errors));
 
     for (const pluginPath of pluginPaths) {
-    const pluginName = path.basename(pluginPath);
+      const pluginName = path.basename(pluginPath);
 
-    // 读取 manifest（优先 .claude-plugin/plugin.json，fallback 根目录 plugin.json）
-    const manifestContent =
-      tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json')) ||
-      tryRead(path.join(pluginPath, 'plugin.json'));
+      // 读取 manifest（优先 .claude-plugin/plugin.json，fallback 根目录 plugin.json）
+      const manifestContent =
+        tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json'), errors) ||
+        tryRead(path.join(pluginPath, 'plugin.json'), errors);
 
-    let name = sanitize(pluginName);
-    let version = '';
-    let description = '';
+      let name = sanitize(pluginName);
+      let version = '';
+      let description = '';
 
-    if (manifestContent) {
-      try {
-        const manifest = JSON.parse(manifestContent);
-        name = sanitize(manifest.name || pluginName);
-        version = sanitize(manifest.version || '');
-        description = sanitize(truncate(manifest.description || '', MAX_DESC));
-      } catch { /* 解析失败，使用目录名 */ }
-    }
+      if (manifestContent) {
+        try {
+          const manifest = JSON.parse(manifestContent);
+          name = sanitize(manifest.name || pluginName);
+          version = sanitize(manifest.version || '');
+          description = sanitize(truncate(manifest.description || '', MAX_DESC));
+        } catch { /* 解析失败，使用目录名 */ }
+      }
 
-    // 列出该插件的 skills（必须含 SKILL.md）和 agents（必须是 .md）
-    const skillNames = tryReadDir(path.join(pluginPath, 'skills'), true)
-      .filter(d => !d.name.startsWith('.') && d.isDirectory()
-        && tryRead(path.join(pluginPath, 'skills', d.name, 'SKILL.md')) !== null)
-      .map(d => d.name);
-    const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true)
-      .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
-      .map(d => d.name.replace(/\.md$/, ''));
+      // 列出该插件的 skills（必须含 SKILL.md）和 agents（必须是 .md）
+      const skillNames = tryReadDir(path.join(pluginPath, 'skills'), true, errors)
+        .filter(d => !d.name.startsWith('.') && d.isDirectory()
+          && tryRead(path.join(pluginPath, 'skills', d.name, 'SKILL.md'), errors) !== null)
+        .map(d => d.name);
+      const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true, errors)
+        .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
+        .map(d => d.name.replace(/\.md$/, ''));
 
-    results.push({ name, version, description, skillNames, agentNames });
+      results.push({ name, version, description, skillNames, agentNames });
     } // end inner for (pluginPaths)
   } // end outer for (cacheDir entries)
 
@@ -271,8 +274,7 @@ function resolveUserDir() {
 function collectSnapshot(projectDir, userDir) {
   const cwd = projectDir || process.cwd();
   const claudeUserDir = userDir || resolveUserDir();
-  _errors = []; // 重置全局错误收集器（供 tryRead/tryReadDir 使用）
-  const errors = _errors;
+  const errors = [];
   // 按优先级排列：项目级 > MCP > 用户级 > 插件 > legacy > 内置
   const sections = [];
 
@@ -283,23 +285,23 @@ function collectSnapshot(projectDir, userDir) {
     } catch (e) { errors.push(`${label}: ${e.message}`); }
   }
 
-  tryCollect('项目级 Skills', '', () => scanSkills(path.join(cwd, '.claude', 'skills')));
-  tryCollect('项目级 Subagents', '@', () => scanAgents(path.join(cwd, '.claude', 'agents')));
+  tryCollect('项目级 Skills', '', () => scanSkills(path.join(cwd, '.claude', 'skills'), errors));
+  tryCollect('项目级 Subagents', '@', () => scanAgents(path.join(cwd, '.claude', 'agents'), errors));
 
   // MCP Servers（结构不同，手动处理）
   try {
     const mcpItems = [];
-    readMcpServers(path.join(cwd, '.mcp.json')).forEach(s => mcpItems.push({ name: s, desc: '项目级' }));
-    readMcpServers(path.join(claudeUserDir, '.mcp.json')).forEach(s => mcpItems.push({ name: s, desc: '用户级' }));
+    readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s => mcpItems.push({ name: s, desc: '项目级' }));
+    readMcpServers(path.join(claudeUserDir, '.mcp.json'), errors).forEach(s => mcpItems.push({ name: s, desc: '用户级' }));
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });
   } catch (e) { errors.push(`MCP: ${e.message}`); }
 
-  tryCollect('用户级 Skills', '', () => scanSkills(path.join(claudeUserDir, 'skills')));
-  tryCollect('用户级 Subagents', '@', () => scanAgents(path.join(claudeUserDir, 'agents')));
+  tryCollect('用户级 Skills', '', () => scanSkills(path.join(claudeUserDir, 'skills'), errors));
+  tryCollect('用户级 Subagents', '@', () => scanAgents(path.join(claudeUserDir, 'agents'), errors));
 
   // 已安装插件
   try {
-    const plugins = scanInstalledPlugins(claudeUserDir);
+    const plugins = scanInstalledPlugins(claudeUserDir, errors);
     if (plugins.length > 0) {
       const items = plugins.map(p => ({
         name: `${p.name}${p.version ? ' (v' + p.version + ')' : ''}`,
@@ -315,8 +317,8 @@ function collectSnapshot(projectDir, userDir) {
 
   // Legacy commands
   try {
-    const projCmds = scanCommands(path.join(cwd, '.claude', 'commands'));
-    const userCmds = scanCommands(path.join(claudeUserDir, 'commands'));
+    const projCmds = scanCommands(path.join(cwd, '.claude', 'commands'), errors);
+    const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
     const cmds = [
       ...projCmds.map(c => ({ name: c, desc: 'legacy，建议迁移到 skills/' })),
       ...userCmds.map(c => ({ name: c, desc: 'legacy' })),
