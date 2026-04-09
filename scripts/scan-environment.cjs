@@ -249,6 +249,27 @@ function collectSnapshot() {
     if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
   } catch (e) { errors.push(`commands: ${e.message}`); }
 
+  // 跨级别去重：项目级优先，用户级同名条目移除
+  const projSkillNames = new Set(
+    (sections.find(s => s.label === '项目级 Skills') || { items: [] }).items.map(i => i.name)
+  );
+  const projAgentNames = new Set(
+    (sections.find(s => s.label === '项目级 Subagents') || { items: [] }).items.map(i => i.name)
+  );
+  for (const s of sections) {
+    if (s.label === '用户级 Skills') s.items = s.items.filter(i => !projSkillNames.has(i.name));
+    if (s.label === '用户级 Subagents') s.items = s.items.filter(i => !projAgentNames.has(i.name));
+  }
+  // 去重后可能清空 section，移除空的
+  const nonEmpty = sections.filter(s => s.items.length > 0);
+  sections.length = 0;
+  sections.push(...nonEmpty);
+
+  // 稳定排序：每个 section 内按名称排序，保证跨平台输出一致
+  for (const s of sections) {
+    s.items.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   return { sections, errors };
 }
 
