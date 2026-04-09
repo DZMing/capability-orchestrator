@@ -8,16 +8,50 @@ BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
 VERSION="1.0.0"
 
+# 确定用户级 Claude 目录
+CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
+PLUGINS_DIR="$CLAUDE_DIR/plugins/cache"
+INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
+
 # --version 支持
 if [ "${1:-}" = "--version" ]; then
   echo "$PLUGIN_NAME $VERSION"
   exit 0
 fi
 
-# 确定用户级 Claude 目录
-CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
-PLUGINS_DIR="$CLAUDE_DIR/plugins/cache"
-INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
+# --uninstall 支持
+if [ "${1:-}" = "--uninstall" ]; then
+  bold "=== capability-orchestrator 卸载 ==="
+  echo ""
+  # 清理 settings.json 中的 hook
+  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+  if [ -f "$SETTINGS_FILE" ]; then
+    node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
+const fs = require('fs');
+const settingsFile = process.argv[2];
+try {
+  const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  const hooks = (settings.hooks || {}).SessionStart || [];
+  settings.hooks.SessionStart = hooks.filter(entry =>
+    !(entry.hooks && entry.hooks.some(h => h.command && h.command.includes('capability-orchestrator')))
+  );
+  if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
+  if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+  process.stdout.write('hook 已移除\n');
+} catch (e) { process.stderr.write('清理 hook 失败: ' + e.message + '\n'); }
+UNINSTALL_JS
+  fi
+  # 删除插件目录
+  if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    green "✓ 已删除 $INSTALL_DIR"
+  else
+    yellow "插件目录不存在，跳过"
+  fi
+  green "✓ 卸载完成"
+  exit 0
+fi
 
 # ── 颜色输出 ──────────────────────────────────────────────────────────────────
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }

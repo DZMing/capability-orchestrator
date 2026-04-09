@@ -75,6 +75,14 @@ claude --plugin-dir ./capability-orchestrator
 node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=list
 ```
 
+## 卸载
+
+```bash
+bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
+```
+
+会自动移除插件目录和 `settings.json` 中的 SessionStart hook。
+
 ## 架构
 
 见 [ARCHITECTURE.md](ARCHITECTURE.md)。
