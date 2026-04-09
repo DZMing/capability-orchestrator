@@ -139,7 +139,7 @@ test('collectSnapshot: sections are sorted by name', () => {
   const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
   for (const s of snap.sections) {
     const names = s.items.map(i => i.name);
-    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'en'));
     assert.deepEqual(names, sorted, `${s.label} should be sorted`);
   }
 });

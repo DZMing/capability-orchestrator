@@ -309,9 +309,9 @@ function collectSnapshot(projectDir, userDir) {
   sections.length = 0;
   sections.push(...nonEmpty);
 
-  // 稳定排序：每个 section 内按名称排序，保证跨平台输出一致
+  // 稳定排序：固定 'en' locale，保证跨平台/跨系统输出完全一致
   for (const s of sections) {
-    s.items.sort((a, b) => a.name.localeCompare(b.name));
+    s.items.sort((a, b) => a.name.localeCompare(b.name, 'en'));
   }
 
   return { sections, errors };
