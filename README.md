@@ -25,17 +25,38 @@ claude --plugin-dir ./capability-orchestrator
 
 ## 使用
 
-### 自动触发
+### 会话开始自动注入（推荐）
 
-正常对话即可。当任务复杂或模糊时，Claude 会自动加载 `orchestrate` skill，获取环境快照后选择最优执行路径。
+安装脚本会在 `~/.claude/settings.json` 里注册一个 SessionStart hook，每次新会话开始时自动做一次轻量扫描并将能力摘要注入 Claude 上下文。**无需手动触发，无需 CLAUDE.md 路由规则。**
 
-### 手动查看能力摘要
+如需手动添加 hook，在 `~/.claude/settings.json` 的 `hooks.SessionStart` 数组里加：
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list"
+    }
+  ]
+}
+```
+
+### 手动查看完整能力摘要
 
 ```
 /capability-orchestrator:capabilities
 ```
 
-输出当前环境全部可用能力，不做任何判断。
+输出当前环境全部可用能力，含描述，不做路由判断。
+
+### 路由复杂任务
+
+```
+/capability-orchestrator:orchestrate
+```
+
+扫描当前环境后给出"用哪个 skill/agent 最合适"的建议。
 
 ### 安装新插件后刷新
 
@@ -43,7 +64,7 @@ claude --plugin-dir ./capability-orchestrator
 /capability-orchestrator:refresh
 ```
 
-重新扫描环境，并告知 Claude 哪些能力是新增的、哪些已移除。
+重新扫描环境，对比前后变化，告知 Claude 新增了什么、移除了什么。
 
 ## 验证安装
 

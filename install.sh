@@ -67,12 +67,64 @@ fi
 # 确保脚本可执行
 chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
 
+# ── 注册 SessionStart hook ────────────────────────────────────────────────────
+SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+HOOK_CMD="node \"$INSTALL_DIR/scripts/scan-environment.cjs\" --mode=list"
+
+yellow "正在注册 SessionStart hook..."
+node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
+const fs = require('fs');
+const path = require('path');
+
+const settingsFile = process.argv[2];
+const hookCmd = process.argv[3];
+
+// 读取或初始化 settings.json
+let settings = {};
+if (fs.existsSync(settingsFile)) {
+  try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+}
+
+// 确保 hooks.SessionStart 数组存在
+if (!settings.hooks) settings.hooks = {};
+if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
+
+// 检查是否已注册（避免重复）
+const marker = 'capability-orchestrator';
+const alreadyRegistered = settings.hooks.SessionStart.some(entry =>
+  entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker))
+);
+
+if (alreadyRegistered) {
+  // 更新已有条目的路径（升级场景）
+  for (const entry of settings.hooks.SessionStart) {
+    if (!entry.hooks) continue;
+    for (const h of entry.hooks) {
+      if (h.command && h.command.includes(marker)) {
+        h.command = hookCmd;
+      }
+    }
+  }
+  process.stdout.write('updated\n');
+} else {
+  settings.hooks.SessionStart.push({
+    hooks: [{ type: 'command', command: hookCmd, timeout: 10 }]
+  });
+  process.stdout.write('added\n');
+}
+
+fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+NODEJS
+
 echo ""
 green "✓ 安装完成：$INSTALL_DIR"
+green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
 echo ""
 bold "使用方式："
-echo "  在 Claude Code 中输入 /capabilities  — 查看当前环境能力摘要"
-echo "  在 Claude Code 中输入 /orchestrate   — 路由任务到最合适的 skill"
-echo "  在 Claude Code 中输入 /refresh       — 对比前后能力变化"
+echo "  新会话开始时自动感知环境能力（无需手动触发）"
+echo "  /capability-orchestrator:capabilities — 查看完整能力摘要"
+echo "  /capability-orchestrator:orchestrate  — 路由复杂任务"
+echo "  /capability-orchestrator:refresh      — 对比前后能力变化"
 echo ""
-yellow "提示：重启 Claude Code 后生效（新会话自动加载插件）"
+yellow "提示：重启 Claude Code 开新会话后生效"
