@@ -281,7 +281,13 @@ function scanInstalledPlugins(claudeUserDir, errors) {
     } // end inner for (pluginPaths)
   } // end outer for (cacheDir entries)
 
-  return results;
+  // 同名插件去重（多版本保留有 version 的或后发现的）
+  const seen = new Map();
+  for (const p of results) {
+    const prev = seen.get(p.name);
+    if (!prev || (p.version && (!prev.version || p.version > prev.version))) seen.set(p.name, p);
+  }
+  return [...seen.values()];
 }
 
 // ─── 数据收集（一次扫描）─────────────────────────────────────────────────────
@@ -398,10 +404,16 @@ const BUILTINS_FULL = [
   '/diff', '/context', '/fast', '/effort', '/export', '/copy',
 ].join(' | ');
 
-// level 0: 名称 + 完整 desc | level 1: 名称 + 短 desc | level 2: 仅名称 | level 3: 计数
+// level 0: 名+完整desc | 1: 名+短desc | 2: 仅名 | 3: top-15名+折叠 | 4: 纯计数
 function renderSection(section, level) {
   const { label, prefix, items } = section;
-  if (level >= 3) return `### ${label}\n${items.length} 个`;
+  if (level >= 4) return `### ${label}\n${items.length} 个`;
+  if (level >= 3) {
+    const TOP_N = 15;
+    if (items.length <= TOP_N) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
+    const shown = items.slice(0, TOP_N).map(i => prefix + i.name).join(', ');
+    return `### ${label}\n${shown}, +${items.length - TOP_N} 个`;
+  }
   if (level >= 2) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
   const descMax = level >= 1 ? 50 : MAX_DESC;
   const lines = items.map(i => {
@@ -435,7 +447,7 @@ function renderSnapshot(snapshot, mode) {
     // 找当前渲染最长且 level < 3 的 section
     let maxLen = -1, maxIdx = -1;
     for (let i = 0; i < sections.length; i++) {
-      if (levels[i] >= 3) continue;
+      if (levels[i] >= 4) continue;
       const len = renderSection(sections[i], levels[i]).length;
       if (len > maxLen) { maxLen = len; maxIdx = i; }
     }
