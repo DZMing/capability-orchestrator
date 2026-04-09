@@ -101,13 +101,15 @@ function getName(content, fallback) {
 
 // ─── 扫描函数 ────────────────────────────────────────────────────────────────
 
-// 扫描 skills 目录（每个子目录为一个 skill，包含 SKILL.md）
+// 扫描 skills 目录（每个子目录为一个 skill，必须含 SKILL.md）
 function scanSkills(dir) {
   const results = [];
   for (const entry of tryReadDir(dir)) {
+    if (entry.startsWith('.')) continue;
     const skillDir = path.join(dir, entry);
     if (!isDir(skillDir)) continue;
     const content = tryRead(path.join(skillDir, 'SKILL.md'));
+    if (content === null) continue;
     const name = getName(content, entry);
     const desc = getDescription(content);
     results.push({ name, desc });
@@ -119,8 +121,9 @@ function scanSkills(dir) {
 function scanAgents(dir) {
   const results = [];
   for (const entry of tryReadDir(dir)) {
-    if (!entry.endsWith('.md')) continue;
+    if (entry.startsWith('.') || !entry.endsWith('.md')) continue;
     const content = tryRead(path.join(dir, entry));
+    if (content === null) continue;
     const name = getName(content, entry.replace(/\.md$/, ''));
     const desc = getDescription(content);
     results.push({ name, desc });
@@ -174,11 +177,13 @@ function scanInstalledPlugins() {
       } catch { /* 解析失败，使用目录名 */ }
     }
 
-    // 列出该插件的 skills 和 agents
+    // 列出该插件的 skills（必须含 SKILL.md）和 agents（必须是 .md）
     const skillNames = tryReadDir(path.join(pluginPath, 'skills'))
-      .filter(e => isDir(path.join(pluginPath, 'skills', e)));
+      .filter(e => !e.startsWith('.')
+        && isDir(path.join(pluginPath, 'skills', e))
+        && tryRead(path.join(pluginPath, 'skills', e, 'SKILL.md')) !== null);
     const agentNames = tryReadDir(path.join(pluginPath, 'agents'))
-      .filter(e => e.endsWith('.md'))
+      .filter(e => !e.startsWith('.') && e.endsWith('.md'))
       .map(e => e.replace(/\.md$/, ''));
 
     results.push({ name, version, description, skillNames, agentNames });
