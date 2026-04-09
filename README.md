@@ -38,7 +38,8 @@ claude --plugin-dir ./capability-orchestrator
   "hooks": [
     {
       "type": "command",
-      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list"
+      "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
+      "timeout": 10
     }
   ]
 }

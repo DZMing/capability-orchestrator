@@ -89,9 +89,11 @@ fi
 mkdir -p "$PLUGINS_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  yellow "检测到已安装，正在更新..."
+  yellow "检测到已安装（git），正在更新..."
   git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
 elif [ "$USE_GIT" -eq 1 ]; then
+  # 目标目录可能存在（如之前用 curl 安装），先清理
+  [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
   yellow "正在克隆到 $INSTALL_DIR ..."
   git clone --depth=1 --branch "$BRANCH" \
     "https://github.com/$REPO.git" "$INSTALL_DIR"
@@ -106,6 +108,8 @@ else
   trap 'rm -rf "$TMP_ZIP" "$TMP_DIR"' EXIT
   curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.zip" -o "$TMP_ZIP"
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
+  # 目标目录可能存在（升级场景），先清理再移入
+  [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
   mv "$TMP_DIR/${PLUGIN_NAME}-${BRANCH}" "$INSTALL_DIR"
   rm -rf "$TMP_ZIP" "$TMP_DIR"
   trap - EXIT
