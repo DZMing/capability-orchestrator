@@ -50,28 +50,47 @@ function truncate(str, max) {
 }
 
 // 从 SKILL.md / agent.md 的 YAML frontmatter 提取指定字段
+// 支持 plain scalar、quoted scalar 和 block scalar（> | >- |-）
 function extractFrontmatter(content) {
   if (!content) return {};
+  // 移除 UTF-8 BOM
+  content = content.replace(/^\uFEFF/, '');
   const match = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return {};
-  const fm = match[1];
+  const lines = match[1].split('\n');
   const result = {};
-  // 匹配 key: value（支持带引号或不带引号的值）
-  for (const line of fm.split('\n')) {
-    const m = line.match(/^(\w[\w-]*):\s*["']?(.*?)["']?\s*$/);
-    if (m) result[m[1]] = m[2].trim();
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\w[\w-]*):\s*(.*?)\s*$/);
+    if (!m) continue;
+    const key = m[1];
+    const rawVal = m[2];
+    // block scalar: > | >- |- 等指示符
+    if (/^[>|][-+]?$/.test(rawVal)) {
+      const blockLines = [];
+      while (i + 1 < lines.length && /^\s+/.test(lines[i + 1])) {
+        blockLines.push(lines[++i].trimStart());
+      }
+      // > 折叠换行为空格，| 保留换行
+      result[key] = rawVal.startsWith('>')
+        ? blockLines.join(' ').trim()
+        : blockLines.join('\n').trim();
+    } else {
+      // 移除首尾引号
+      result[key] = rawVal.replace(/^["']|["']$/g, '').trim();
+    }
   }
   return result;
 }
 
-function getDescription(content, entryName) {
+function getDescription(content) {
   const fm = extractFrontmatter(content);
   if (fm.description) return truncate(fm.description, MAX_DESC);
-  // fallback：取第一个非空、非标题行
+  // fallback：取 frontmatter 后第一个非空、非标题行
   if (!content) return '';
-  const firstPara = content
+  const afterFm = content.replace(/^---[\s\S]*?\n---\s*\n?/, '');
+  const firstPara = afterFm
     .split('\n')
-    .find(l => l.trim() && !l.startsWith('#') && !l.startsWith('---') && !l.includes(':'));
+    .find(l => l.trim() && !l.startsWith('#'));
   return truncate(firstPara || '', MAX_DESC);
 }
 
@@ -90,7 +109,7 @@ function scanSkills(dir) {
     if (!isDir(skillDir)) continue;
     const content = tryRead(path.join(skillDir, 'SKILL.md'));
     const name = getName(content, entry);
-    const desc = getDescription(content, entry);
+    const desc = getDescription(content);
     results.push({ name, desc });
   }
   return results;
@@ -103,7 +122,7 @@ function scanAgents(dir) {
     if (!entry.endsWith('.md')) continue;
     const content = tryRead(path.join(dir, entry));
     const name = getName(content, entry.replace(/\.md$/, ''));
-    const desc = getDescription(content, name);
+    const desc = getDescription(content);
     results.push({ name, desc });
   }
   return results;
