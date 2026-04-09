@@ -93,6 +93,20 @@ test('scanAgents: detects .md agents', () => {
   assert.equal(results[0].name, 'test-agent');
 });
 
+// ─── symlink 防护 ───────────────────────────────────────────────────────────
+
+test('scanSkills: skips symlink directories', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'symlink-test-' + process.pid);
+  fs.mkdirSync(path.join(tmpDir, 'real-skill'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'real-skill', 'SKILL.md'), '---\nname: real\ndescription: test\n---\n');
+  fs.symlinkSync(path.join(tmpDir, 'real-skill'), path.join(tmpDir, 'link-skill'));
+  const results = scanSkills(tmpDir);
+  const names = results.map(r => r.name);
+  assert.ok(names.includes('real'), 'real skill should be found');
+  assert.ok(!names.includes('link-skill'), 'symlink skill should be skipped');
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
 // ─── scanCommands ────────────────────────────────────────────────────────────
 
 test('scanCommands: returns command names without .md', () => {

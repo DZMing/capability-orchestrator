@@ -32,6 +32,7 @@ if [ "\$1" = "clone" ]; then
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
   cp -r "$REPO_ROOT/." "\$TARGET/"
+  rm -rf "\$TARGET/.git"
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
   git -C "\$TARGET" -c user.email=t@t.com -c user.name=T commit -qm init

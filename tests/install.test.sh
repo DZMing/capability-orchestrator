@@ -35,7 +35,9 @@ if [ "\$1" = "clone" ]; then
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
   cp -r "$REPO_ROOT/." "\$TARGET/"
-  # 初始化一个真实的 git repo（供 pull 使用）
+  # 清除源仓库的 .git（防止复制 hooks 等影响测试）
+  rm -rf "\$TARGET/.git"
+  # 初始化一个干净的 git repo（供 pull 使用）
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
   git -C "\$TARGET" -c user.email=t@t.com -c user.name=T commit -qm init
