@@ -4,7 +4,7 @@ description: "强制重新扫描环境能力并报告变化。在安装、卸载
 disable-model-invocation: true
 ---
 
-!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.sh"`
+!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs"`
 
 对比本次扫描结果与你之前对当前环境能力的认知，报告：
 

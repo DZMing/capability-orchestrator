@@ -40,8 +40,8 @@ claude plugin install .
 # 语法检查
 claude plugin validate .
 
-# 直接测试扫描脚本（Node.js v22+ 需用 stdin 方式）
-node --input-type=commonjs < capability-orchestrator/scripts/scan-environment.sh
+# 直接测试扫描脚本
+node capability-orchestrator/scripts/scan-environment.cjs
 ```
 
 ## 架构

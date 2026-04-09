@@ -6,7 +6,7 @@ allowed-tools: Read Grep Glob Bash Agent
 
 ## 当前环境能力快照
 
-!`node --input-type=commonjs < "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.sh"`
+!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs"`
 
 ---
 

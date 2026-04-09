@@ -4,4 +4,4 @@ description: "输出当前环境的全部可用能力摘要（skills/agents/plug
 disable-model-invocation: true
 ---
 
-!`node --input-type=commonjs < "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.sh"`
+!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs"`
