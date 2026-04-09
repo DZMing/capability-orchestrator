@@ -39,17 +39,15 @@ function tryRead(filePath) {
   }
 }
 
-function tryReadDir(dirPath) {
-  try { return fs.readdirSync(dirPath); }
-  catch (e) {
+function tryReadDir(dirPath, withTypes) {
+  try {
+    return withTypes
+      ? fs.readdirSync(dirPath, { withFileTypes: true })
+      : fs.readdirSync(dirPath);
+  } catch (e) {
     if (e.code !== 'ENOENT') _errors.push(`列目录 ${path.basename(dirPath)}: ${e.code}`);
     return [];
   }
-}
-
-function isDir(p) {
-  try { return fs.statSync(p).isDirectory(); }
-  catch { return false; }
 }
 
 function truncate(str, max) {
@@ -113,13 +111,11 @@ function getName(content, fallback) {
 // 扫描 skills 目录（每个子目录为一个 skill，必须含 SKILL.md）
 function scanSkills(dir) {
   const results = [];
-  for (const entry of tryReadDir(dir)) {
-    if (entry.startsWith('.')) continue;
-    const skillDir = path.join(dir, entry);
-    if (!isDir(skillDir)) continue;
-    const content = tryRead(path.join(skillDir, 'SKILL.md'));
+  for (const dirent of tryReadDir(dir, true)) {
+    if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
+    const content = tryRead(path.join(dir, dirent.name, 'SKILL.md'));
     if (content === null) continue;
-    const name = getName(content, entry);
+    const name = getName(content, dirent.name);
     const desc = getDescription(content);
     results.push({ name, desc });
   }
@@ -129,11 +125,11 @@ function scanSkills(dir) {
 // 扫描 agents 目录（每个 .md 文件为一个 agent）
 function scanAgents(dir) {
   const results = [];
-  for (const entry of tryReadDir(dir)) {
-    if (entry.startsWith('.') || !entry.endsWith('.md')) continue;
-    const content = tryRead(path.join(dir, entry));
+  for (const dirent of tryReadDir(dir, true)) {
+    if (dirent.name.startsWith('.') || !dirent.isFile() || !dirent.name.endsWith('.md')) continue;
+    const content = tryRead(path.join(dir, dirent.name));
     if (content === null) continue;
-    const name = getName(content, entry.replace(/\.md$/, ''));
+    const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
     results.push({ name, desc });
   }
@@ -142,9 +138,9 @@ function scanAgents(dir) {
 
 // 扫描 commands 目录（legacy，仅列名称）
 function scanCommands(dir) {
-  return tryReadDir(dir)
-    .filter(e => e.endsWith('.md'))
-    .map(e => e.replace(/\.md$/, ''));
+  return tryReadDir(dir, true)
+    .filter(d => d.isFile() && d.name.endsWith('.md'))
+    .map(d => d.name.replace(/\.md$/, ''));
 }
 
 // 读取 .mcp.json 中的 server 名称
@@ -164,36 +160,36 @@ function scanInstalledPlugins() {
   const cacheDir = path.join(os.homedir(), '.claude', 'plugins', 'cache');
   const results = [];
 
-  for (const entry of tryReadDir(cacheDir)) {
-    const pluginPath = path.join(cacheDir, entry);
-    if (!isDir(pluginPath)) continue;
+  for (const dirent of tryReadDir(cacheDir, true)) {
+    if (!dirent.isDirectory()) continue;
+    const pluginPath = path.join(cacheDir, dirent.name);
 
     // 读取 manifest（优先 .claude-plugin/plugin.json，fallback 根目录 plugin.json）
     const manifestContent =
       tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json')) ||
       tryRead(path.join(pluginPath, 'plugin.json'));
 
-    let name = entry;
+    let name = dirent.name;
     let version = '';
     let description = '';
 
     if (manifestContent) {
       try {
         const manifest = JSON.parse(manifestContent);
-        name = manifest.name || entry;
+        name = manifest.name || dirent.name;
         version = manifest.version || '';
         description = truncate(manifest.description || '', MAX_DESC);
       } catch { /* 解析失败，使用目录名 */ }
     }
 
     // 列出该插件的 skills（必须含 SKILL.md）和 agents（必须是 .md）
-    const skillNames = tryReadDir(path.join(pluginPath, 'skills'))
-      .filter(e => !e.startsWith('.')
-        && isDir(path.join(pluginPath, 'skills', e))
-        && tryRead(path.join(pluginPath, 'skills', e, 'SKILL.md')) !== null);
-    const agentNames = tryReadDir(path.join(pluginPath, 'agents'))
-      .filter(e => !e.startsWith('.') && e.endsWith('.md'))
-      .map(e => e.replace(/\.md$/, ''));
+    const skillNames = tryReadDir(path.join(pluginPath, 'skills'), true)
+      .filter(d => !d.name.startsWith('.') && d.isDirectory()
+        && tryRead(path.join(pluginPath, 'skills', d.name, 'SKILL.md')) !== null)
+      .map(d => d.name);
+    const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true)
+      .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
+      .map(d => d.name.replace(/\.md$/, ''));
 
     results.push({ name, version, description, skillNames, agentNames });
   }
