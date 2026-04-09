@@ -1,13 +1,21 @@
 ---
 name: refresh
 description: "强制重新扫描环境能力并报告变化。在安装、卸载或更新插件后使用，用于确认新能力已就绪。"
-disable-model-invocation: true
+allowed-tools: Bash
 ---
+
+## 当前环境能力快照（实时扫描）
 
 !`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs"`
 
-对比本次扫描结果与你之前对当前环境能力的认知，报告：
+---
 
-- 新增的能力（skills / agents / plugins / MCP servers）
-- 移除的能力
-- 如果没有变化，说明"环境能力无变化"
+## 你的任务
+
+对比上方**本次实时扫描结果**与你在**本次对话中此前掌握的能力清单**，报告：
+
+1. **新增的能力** — 本次扫描出现、之前未见的 skills / agents / plugins / MCP servers
+2. **移除的能力** — 之前可用、本次扫描中消失的条目
+3. **无变化** — 若两次一致，简短说明"环境能力无变化"
+
+如果本次是对话中的首次扫描（没有历史可对比），直接汇总当前能力概览即可。
