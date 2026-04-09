@@ -363,9 +363,18 @@ function renderSnapshot(snapshot, mode) {
   return output;
 }
 
-// ─── 入口 ────────────────────────────────────────────────────────────────────
+// ─── 模块导出（供测试使用）───────────────────────────────────────────────────
 
-try {
+module.exports = {
+  extractFrontmatter, getDescription, getName,
+  scanSkills, scanAgents, scanCommands, readMcpServers,
+  collectSnapshot, renderSnapshot, truncate,
+};
+
+// ─── 入口（CLI 直接运行时执行）──────────────────────────────────────────────
+
+if (require.main !== module) { /* 被 require 时不执行 */ }
+else try {
   function getArg(name) {
     const a = process.argv.find(x => x.startsWith(`--${name}=`));
     return a ? a.split('=')[1] : undefined;
