@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# capability-orchestrator 一键安装脚本
+# 用法：curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/main/install.sh | bash
+set -euo pipefail
+
+REPO="DZMing/capability-orchestrator"
+BRANCH="main"
+PLUGIN_NAME="capability-orchestrator"
+
+# 确定用户级 Claude 目录
+CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
+PLUGINS_DIR="$CLAUDE_DIR/plugins/cache"
+INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
+
+# ── 颜色输出 ──────────────────────────────────────────────────────────────────
+green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
+red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+
+bold "=== capability-orchestrator 安装程序 ==="
+echo ""
+
+# ── 检查依赖 ──────────────────────────────────────────────────────────────────
+if ! command -v node >/dev/null 2>&1; then
+  red "错误：未找到 node，请先安装 Node.js (https://nodejs.org)"
+  exit 1
+fi
+
+NODE_VER=$(node -e "process.stdout.write(process.versions.node)")
+NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
+if [ "$NODE_MAJOR" -lt 18 ]; then
+  red "错误：需要 Node.js 18+，当前版本 $NODE_VER"
+  exit 1
+fi
+
+# ── 下载方式检测 ──────────────────────────────────────────────────────────────
+if command -v git >/dev/null 2>&1; then
+  USE_GIT=1
+elif command -v curl >/dev/null 2>&1; then
+  USE_GIT=0
+else
+  red "错误：需要 git 或 curl 其中之一"
+  exit 1
+fi
+
+# ── 安装/更新 ─────────────────────────────────────────────────────────────────
+mkdir -p "$PLUGINS_DIR"
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+  yellow "检测到已安装，正在更新..."
+  git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
+elif [ "$USE_GIT" -eq 1 ]; then
+  yellow "正在克隆到 $INSTALL_DIR ..."
+  git clone --depth=1 --branch "$BRANCH" \
+    "https://github.com/$REPO.git" "$INSTALL_DIR"
+else
+  yellow "正在下载（无 git，使用 curl）..."
+  TMP_ZIP=$(mktemp /tmp/cap-orch-XXXXXX.zip)
+  curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.zip" -o "$TMP_ZIP"
+  TMP_DIR=$(mktemp -d)
+  unzip -q "$TMP_ZIP" -d "$TMP_DIR"
+  mv "$TMP_DIR/${PLUGIN_NAME}-${BRANCH}" "$INSTALL_DIR"
+  rm -rf "$TMP_ZIP" "$TMP_DIR"
+fi
+
+# 确保脚本可执行
+chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
+
+echo ""
+green "✓ 安装完成：$INSTALL_DIR"
+echo ""
+bold "使用方式："
+echo "  在 Claude Code 中输入 /capabilities  — 查看当前环境能力摘要"
+echo "  在 Claude Code 中输入 /orchestrate   — 路由任务到最合适的 skill"
+echo "  在 Claude Code 中输入 /refresh       — 对比前后能力变化"
+echo ""
+yellow "提示：重启 Claude Code 后生效（新会话自动加载插件）"
