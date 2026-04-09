@@ -134,12 +134,19 @@ function getName(content, fallback) {
 
 // ─── 扫描函数 ────────────────────────────────────────────────────────────────
 
+// symlink 安全检查：跳过符号链接（防止循环引用导致无限递归）
+function isSymlink(filePath) {
+  try { return fs.lstatSync(filePath).isSymbolicLink(); } catch { return false; }
+}
+
 // 扫描 skills 目录（每个子目录为一个 skill，必须含 SKILL.md）
 function scanSkills(dir, errors) {
   const results = [];
   for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
-    const content = tryReadHead(path.join(dir, dirent.name, 'SKILL.md'), errors);
+    const fullPath = path.join(dir, dirent.name);
+    if (isSymlink(fullPath)) continue;
+    const content = tryReadHead(path.join(fullPath, 'SKILL.md'), errors);
     if (content === null) continue;
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
@@ -153,7 +160,9 @@ function scanAgents(dir, errors) {
   const results = [];
   for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isFile() || !dirent.name.endsWith('.md')) continue;
-    const content = tryReadHead(path.join(dir, dirent.name), errors);
+    const fullPath = path.join(dir, dirent.name);
+    if (isSymlink(fullPath)) continue;
+    const content = tryReadHead(fullPath, errors);
     if (content === null) continue;
     const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
@@ -170,18 +179,25 @@ function scanCommands(dir, errors) {
 }
 
 // 读取 .mcp.json 中的 server 名称
+// 容错：先尝试标准 JSON，失败后去除 // 行注释再重试
 function readMcpServers(mcpFile, errors) {
   const content = tryRead(mcpFile, errors);
   if (!content) return [];
-  try {
-    const json = JSON.parse(content);
-    // 支持 mcpServers 和 mcp_servers 两种键名
+  function extractServers(json) {
     const servers = json.mcpServers || json.mcp_servers || {};
     return Object.keys(servers);
+  }
+  try {
+    return extractServers(JSON.parse(content));
   } catch {
-    // 可能是 JSON5/带注释的文件，输出警告而非静默丢弃
-    if (errors) errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
-    return [];
+    // 去除 // 行注释后重试（常见于手动编辑的 .mcp.json）
+    try {
+      const stripped = content.replace(/^\s*\/\/.*$/gm, '');
+      return extractServers(JSON.parse(stripped));
+    } catch {
+      if (errors) errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
+      return [];
+    }
   }
 }
 
