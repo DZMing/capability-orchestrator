@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # capability-orchestrator 一键安装脚本
-# 用法：curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/main/install.sh | bash
+# 用法：curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
 set -euo pipefail
 
 REPO="DZMing/capability-orchestrator"
-BRANCH="main"
+BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
 
 # 确定用户级 Claude 目录

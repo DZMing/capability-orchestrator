@@ -4,12 +4,23 @@
 
 ## 安装
 
-```bash
-# 开发测试（不安装，直接加载）
-claude --plugin-dir ./capability-orchestrator
+**一键安装（推荐）：**
 
-# 正式安装（从当前目录）
-claude plugin install .
+```bash
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
+```
+
+需要 Node.js 18+，有 git 或 curl 即可。
+
+**手动安装：**
+
+```bash
+# 克隆到插件缓存目录
+git clone https://github.com/DZMing/capability-orchestrator.git \
+  ~/.claude/plugins/cache/capability-orchestrator
+
+# 或开发测试（不安装，直接加载）
+claude --plugin-dir ./capability-orchestrator
 ```
 
 ## 使用
