@@ -377,8 +377,14 @@ function collectSnapshot(projectDir, userDir) {
     const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
       ? path.join(claudeUserDir, 'mcp.json')
       : path.join(claudeUserDir, '.mcp.json');
-    readMcpServers(userMcpFile, errors).forEach(s =>
-      mcpItems.push({ name: sanitize(s.name), desc: sanitize(truncate(s.desc, MAX_DESC)) || '用户级' }));
+    // 跨级别去重：项目级优先，用户级同名 server 跳过
+    const projMcpNames = new Set(mcpItems.map(s => s.name));
+    readMcpServers(userMcpFile, errors).forEach(s => {
+      const name = sanitize(s.name);
+      if (!projMcpNames.has(name)) {
+        mcpItems.push({ name, desc: sanitize(truncate(s.desc, MAX_DESC)) || '用户级' });
+      }
+    });
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });
   } catch (e) { errors.push(`MCP: ${e.message}`); }
 
