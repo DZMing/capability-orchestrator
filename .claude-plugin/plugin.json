@@ -1,7 +1,7 @@
 {
   "name": "capability-orchestrator",
-  "description": "能力感知层：实时扫描当前环境所有可用 skills、subagents、plugins 和 MCP servers，在 Claude 需要时注入上下文。零常驻进程、零数据库、零索引文件。",
-  "version": "1.1.0",
+  "description": "能力感知 + 路由引导：实时扫描环境中所有可用 skills、subagents、plugins 和 MCP servers，注入路由策略引导 Claude 自动选择最优执行路径。",
+  "version": "1.2.0",
   "keywords": [
     "capability",
     "orchestration",

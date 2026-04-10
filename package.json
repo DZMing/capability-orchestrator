@@ -1,7 +1,7 @@
 {
   "name": "capability-orchestrator",
-  "version": "1.1.0",
-  "description": "能力感知层：实时扫描 Claude Code 环境中所有可用 skills、subagents、plugins 和 MCP servers",
+  "version": "1.2.0",
+  "description": "能力感知 + 路由引导：实时扫描环境中所有可用 skills、subagents、plugins 和 MCP servers，注入路由策略引导 Claude 自动选择最优执行路径",
   "scripts": {
     "test": "node --test tests/scan.test.cjs tests/skill-contract.test.cjs",
     "test:install": "bash tests/install.test.sh",
