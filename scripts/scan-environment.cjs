@@ -526,19 +526,17 @@ function renderAwareness(snapshot) {
     parts.push(`### Legacy Commands\n${legacyCmds.length} 个\n`);
   }
 
-  // 路由策略提示（核心！让 Claude 从"知道"变成"自动用"）
-  parts.push('### 路由策略');
-  parts.push('收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool (5) 都不匹配→用自身能力完成。不确定时用 ToolSearch 搜索可用能力。');
-
-  let output = parts.join('\n');
-
-  // 兜底：超预算则截断（awareness 模式通常 ~1000 字符，不太可能触发）
+  // 路由策略是 awareness 模式的核心价值，必须保证不被截断
+  const ROUTING = '\n### 路由策略\n收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool (5) 都不匹配→用自身能力完成。不确定时用 ToolSearch 搜索可用能力。';
   const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
-  const budget = MAX_TOTAL_CHARS - FOOTER.length;
-  if (output.length > budget) {
-    output = output.slice(0, budget - 20) + '\n\n…（已截断）';
+  const listBudget = MAX_TOTAL_CHARS - ROUTING.length - FOOTER.length;
+
+  let listOutput = parts.join('\n');
+  // 列表部分超预算时截断列表，路由策略永远保留
+  if (listOutput.length > listBudget) {
+    listOutput = listOutput.slice(0, listBudget - 20) + '\n\n…（已截断）';
   }
-  return { text: output + FOOTER, errors };
+  return { text: listOutput + ROUTING + FOOTER, errors };
 }
 
 // mode: 'route'（保留描述用于路由判断）| 'list'（高密度目录，初始 level 2）| 'awareness'（SessionStart 路由增强）
