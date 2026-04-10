@@ -4,11 +4,14 @@
 
 Claude Code 本身就是路由器——它的 agent loop 已经会根据上下文选工具、选 skill、选 subagent。
 
-造一个路由器来告诉路由器怎么路由，是重复工作。
+但路由器再聪明，**看不到菜单就点不了菜**。
 
-**我们唯一缺的是**：让 Claude 在每次需要时，能快速感知当前环境里到底有哪些可用能力。
+这个插件做两件事：
 
-所以这个插件的定位是 **能力感知层**，不是能力接管层。
+1. **能力感知**：实时扫描环境中所有可用能力（skills / agents / plugins / MCP servers）
+2. **路由策略注入**：在每次会话开始时告诉 Claude "遇到什么类型的任务该用什么"
+
+定位是 **能力感知 + 路由引导层**——不接管 Claude 的决策，但确保它在决策时有完整信息和明确策略。
 
 ## 技术方案
 
@@ -104,7 +107,7 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
+            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
             "timeout": 10
           }
         ]
@@ -114,9 +117,28 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 }
 ```
 
-每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要注入到会话上下文。这让 Claude 在第一轮对话前就已知道环境中有什么可用。
+每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要 + 路由策略注入到会话上下文。
 
-选择 `--mode=list`（而非 `--mode=route`）是因为 hook 场景只需提供目录级别的能力列表，不需要完整描述。
+选择 `--mode=awareness` 是因为它提供了最高的性价比：
+
+- MCP servers 展示完整描述（平台不会自动注入）
+- Subagents 展示 top-15 描述（帮助 Claude 判断何时委派）
+- Skills / Plugins 只展示名称或数量（平台已提供详情）
+- 末尾附加路由策略，引导 Claude 自动选择正确执行路径
+
+## 渲染模式
+
+| 模式      | 参数                   | 用途                    | 输出内容              |
+| --------- | ---------------------- | ----------------------- | --------------------- |
+| route     | `--mode=route`（默认） | orchestrate skill 调用  | 完整描述，供路由决策  |
+| list      | `--mode=list`          | capabilities skill 调用 | 名称列表，纯展示      |
+| awareness | `--mode=awareness`     | SessionStart hook       | 差异化价值 + 路由策略 |
+
+`awareness` 模式的设计原则是**只注入平台不会自动提供的信息**：
+
+- MCP server 描述（平台只暴露 tool 名，不注入 server 级描述）
+- Agent 描述（帮助判断何时委派 vs 自己做）
+- 路由策略（告诉 Claude 遇到什么类型任务该走哪条路）
 
 ## Future Enhancements（仅文档记录，不实现）
 
