@@ -49,7 +49,10 @@ try {
 } catch (e) { process.stderr.write('清理 hook 失败: ' + e.message + '\n'); }
 UNINSTALL_JS
   fi
-  # 删除插件目录
+  # 删除插件目录（sanity check 防止空路径误删）
+  if [ -z "$INSTALL_DIR" ] || [[ "$INSTALL_DIR" != *"capability-orchestrator"* ]]; then
+    red "路径异常（$INSTALL_DIR），拒绝删除"; exit 1
+  fi
   if [ -d "$INSTALL_DIR" ]; then
     rm -rf "$INSTALL_DIR"
     green "✓ 已删除 $INSTALL_DIR"

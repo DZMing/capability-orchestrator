@@ -72,14 +72,31 @@ function truncate(str, max) {
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
 }
 
-// 注入到 Claude 上下文前的净化：去除换行、反引号、HTML 标签等 prompt injection 载体
+// 零依赖 semver 比较：逐段数字比较，避免字符串排序的经典 bug（"9" > "10"）
+function compareSemver(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+// 危险 Unicode 字符：零宽字符、方向覆盖、不可见控制字符（保留 TAB/LF/CR）
+const UNSAFE_UNICODE = /[\u200B\u200C\u200D\uFEFF\u00AD\u2060\u180E\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\u2061-\u2064\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFF9-\uFFFB]/g;
+
+// 注入到 Claude 上下文前的净化：去除换行、反引号、HTML 标签、危险 Unicode 等 prompt injection 载体
 function sanitize(str) {
   if (!str) return '';
   return str
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
+    .replace(UNSAFE_UNICODE, '')  // 零宽/方向覆盖/控制字符（防隐藏文本注入）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
     .replace(/<[^>]*>/g, '')      // HTML 标签（防 XSS-like）
-    .replace(/(?:^|\s)#{1,6}\s+/g, ' ') // Markdown 标题语法（防 prompt injection，含换行转空格后的中间位置）
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // Markdown 图片链接（防数据外泄）
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')  // Markdown 普通链接（防钓鱼）
+    .replace(/(?:^|\s)#{1,6}\s+/g, ' ') // Markdown 标题语法
     .trim();
 }
 
@@ -187,7 +204,7 @@ function readMcpServers(mcpFile, errors) {
   function extractServers(json) {
     const servers = json.mcpServers || json.mcp_servers || {};
     return Object.entries(servers)
-      .filter(([, v]) => v && !v.disabled)
+      .filter(([, v]) => v && v.disabled !== true)
       .map(([name, v]) => ({ name, desc: (v && v.description) || '' }));
   }
   try {
@@ -205,22 +222,22 @@ function readMcpServers(mcpFile, errors) {
 }
 
 // 判断一个目录是否是有效插件根（有 manifest 或 skills/agents）
-// 短路优先检查最常见的 .claude-plugin/plugin.json，避免不必要的 IO
-function isPluginRoot(dirPath, errors) {
+// 短路优先检查最常见的 .claude-plugin/plugin.json，用 existsSync 避免不必要的文件读取
+function isPluginRoot(dirPath) {
   // 最常见：标准 manifest 位置
-  if (tryRead(path.join(dirPath, '.claude-plugin', 'plugin.json'), errors) !== null) return true;
+  if (fs.existsSync(path.join(dirPath, '.claude-plugin', 'plugin.json'))) return true;
   // 次常见：根目录 manifest
-  if (tryRead(path.join(dirPath, 'plugin.json'), errors) !== null) return true;
+  if (fs.existsSync(path.join(dirPath, 'plugin.json'))) return true;
   // fallback：有 skills 或 agents 子目录即可
-  if (tryReadDir(path.join(dirPath, 'skills'), true, errors).some(d => d.isDirectory())) return true;
-  return tryReadDir(path.join(dirPath, 'agents'), true, errors).some(d => d.isFile() && d.name.endsWith('.md'));
+  if (tryReadDir(path.join(dirPath, 'skills'), true).some(d => d.isDirectory())) return true;
+  return tryReadDir(path.join(dirPath, 'agents'), true).some(d => d.isFile() && d.name.endsWith('.md'));
 }
 
 // 递归查找插件根目录（遇到插件根停止，最大深度防失控）
 // 真实结构：扁平 cache/<name>/ | 两级 cache/<vendor>/<name>/ | 三级 cache/<vendor>/<name>/<version>/
 function findPluginRoots(dir, maxDepth, errors) {
   if (maxDepth <= 0) return [];
-  if (isPluginRoot(dir, errors)) return [dir];
+  if (isPluginRoot(dir)) return [dir];
   const roots = [];
   for (const d of tryReadDir(dir, true, errors)) {
     if (!d.isDirectory() || d.name.startsWith('.')) continue;
@@ -285,7 +302,7 @@ function scanInstalledPlugins(claudeUserDir, errors) {
   const seen = new Map();
   for (const p of results) {
     const prev = seen.get(p.name);
-    if (!prev || (p.version && (!prev.version || p.version > prev.version))) seen.set(p.name, p);
+    if (!prev || (p.version && (!prev.version || compareSemver(p.version, prev.version) > 0))) seen.set(p.name, p);
   }
   return [...seen.values()];
 }
@@ -470,7 +487,7 @@ function renderSnapshot(snapshot, mode) {
 // ─── 模块导出（供测试使用）───────────────────────────────────────────────────
 
 module.exports = {
-  extractFrontmatter, getDescription, getName, sanitize,
+  extractFrontmatter, getDescription, getName, sanitize, compareSemver,
   scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot,
   collectSnapshot, renderSnapshot, truncate,
