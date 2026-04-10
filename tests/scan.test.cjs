@@ -94,6 +94,29 @@ test('scanAgents: detects .md agents', () => {
   assert.equal(results[0].name, 'test-agent');
 });
 
+test('scanAgents: nonexistent dir returns []', () => {
+  assert.deepEqual(scanAgents('/nonexistent/agents'), []);
+});
+
+test('scanAgents: empty dir returns []', () => {
+  const tmp = path.join(require('os').tmpdir(), 'empty-agents-' + process.pid);
+  fs.mkdirSync(tmp, { recursive: true });
+  assert.deepEqual(scanAgents(tmp), []);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('scanAgents: skips non-.md and hidden files', () => {
+  const tmp = path.join(require('os').tmpdir(), 'agent-filter-' + process.pid);
+  fs.mkdirSync(tmp, { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'good.md'), '---\nname: good\ndescription: ok\n---\n');
+  fs.writeFileSync(path.join(tmp, 'readme.txt'), 'not an agent');
+  fs.writeFileSync(path.join(tmp, '.hidden.md'), '---\nname: hidden\n---\n');
+  const results = scanAgents(tmp);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].name, 'good');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 // ─── symlink 防护 ───────────────────────────────────────────────────────────
 
 test('scanSkills: skips symlink directories', () => {
@@ -113,6 +136,17 @@ test('scanSkills: skips symlink directories', () => {
 test('scanCommands: returns command names without .md', () => {
   const cmds = scanCommands(path.join(PROJECT_DIR, '.claude', 'commands'));
   assert.ok(cmds.includes('legacy-cmd'));
+});
+
+test('scanCommands: nonexistent dir returns []', () => {
+  assert.deepEqual(scanCommands('/nonexistent/commands'), []);
+});
+
+test('scanCommands: empty dir returns []', () => {
+  const tmp = path.join(require('os').tmpdir(), 'empty-cmds-' + process.pid);
+  fs.mkdirSync(tmp, { recursive: true });
+  assert.deepEqual(scanCommands(tmp), []);
+  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 // ─── readMcpServers ──────────────────────────────────────────────────────────
