@@ -528,7 +528,7 @@ function renderAwareness(snapshot) {
 
   // 路由策略提示（核心！让 Claude 从"知道"变成"自动用"）
   parts.push('### 路由策略');
-  parts.push('收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool。不确定时用 ToolSearch 搜索可用能力。');
+  parts.push('收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool (5) 都不匹配→用自身能力完成。不确定时用 ToolSearch 搜索可用能力。');
 
   let output = parts.join('\n');
 
