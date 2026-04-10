@@ -367,13 +367,13 @@ function collectSnapshot(projectDir, userDir) {
   try {
     const mcpItems = [];
     readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s =>
-      mcpItems.push({ name: s.name, desc: s.desc || '项目级' }));
+      mcpItems.push({ name: sanitize(s.name), desc: sanitize(truncate(s.desc, MAX_DESC)) || '项目级' }));
     // 用户级 MCP：优先 mcp.json（当前标准），fallback .mcp.json（旧格式）
     const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
       ? path.join(claudeUserDir, 'mcp.json')
       : path.join(claudeUserDir, '.mcp.json');
     readMcpServers(userMcpFile, errors).forEach(s =>
-      mcpItems.push({ name: s.name, desc: s.desc || '用户级' }));
+      mcpItems.push({ name: sanitize(s.name), desc: sanitize(truncate(s.desc, MAX_DESC)) || '用户级' }));
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });
   } catch (e) { errors.push(`MCP: ${e.message}`); }
 
