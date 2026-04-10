@@ -48,10 +48,8 @@ function tryReadHead(filePath, errors) {
     const buf = Buffer.alloc(HEAD_BYTES);
     const bytesRead = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
     let str = buf.toString('utf8', 0, bytesRead);
-    // 截断可能切在多字节字符中间，产生末尾 U+FFFD，去掉它
-    if (str.length > 0 && str.charCodeAt(str.length - 1) === 0xFFFD) {
-      str = str.slice(0, -1);
-    }
+    // 截断可能切在多字节字符中间，产生末尾 U+FFFD，去掉所有末尾的
+    str = str.replace(/\uFFFD+$/, '');
     return str;
   } catch (e) {
     if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
@@ -81,8 +79,8 @@ function truncate(str, max) {
 // 零依赖 semver 比较：逐段数字比较，避免字符串排序的经典 bug（"9" > "10"）
 // 注意：不支持 pre-release 标签（如 1.0.0-beta），仅用于插件去重场景
 function compareSemver(a, b) {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
+  const pa = a.replace(/^v/i, '').split('.').map(Number);
+  const pb = b.replace(/^v/i, '').split('.').map(Number);
   for (let i = 0; i < 3; i++) {
     const diff = (pa[i] || 0) - (pb[i] || 0);
     if (diff !== 0) return diff > 0 ? 1 : -1;
@@ -151,7 +149,7 @@ function getDescription(content) {
   if (fm.description) return sanitize(truncate(fm.description, MAX_DESC));
   // fallback：取 frontmatter 后第一个非空、非标题行
   if (!content) return '';
-  const afterFm = content.replace(/^---[\s\S]*?\n---\s*\n?/, '');
+  const afterFm = content.replace(/(?:^|\n)---[\s\S]*?\n---\s*\n?/g, '\n');
   const firstPara = afterFm
     .split('\n')
     .find(l => l.trim() && !l.startsWith('#') && !/^---\s*$/.test(l));
@@ -216,6 +214,7 @@ function readMcpServers(mcpFile, errors) {
   if (!content) return [];
   function extractServers(json) {
     const servers = json.mcpServers || json.mcp_servers || {};
+    if (!servers || typeof servers !== 'object' || Array.isArray(servers)) return [];
     return Object.entries(servers)
       .filter(([, v]) => v && v.disabled !== true)
       .map(([name, v]) => ({ name, desc: (v && v.description) || '' }));
