@@ -90,6 +90,8 @@ function compareSemver(a, b) {
 }
 
 // 危险 Unicode 字符：零宽字符、方向覆盖、不可见控制字符（保留 TAB/LF/CR）
+// 安全性：纯字符类 [...]，无量词/嵌套/回溯 → O(n)，无 ReDoS 风险
+// /g 安全：String.replace 每次调用前重置 lastIndex，多次 sanitize 调用互不影响
 const UNSAFE_UNICODE = /[\u200B\u200C\u200D\uFEFF\u00AD\u2060\u180E\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\u2061-\u2064\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFF9-\uFFFB]/g;
 
 // 注入到 Claude 上下文前的净化：去除换行、反引号、HTML 标签、危险 Unicode 等 prompt injection 载体
@@ -344,6 +346,7 @@ function resolveUserDir() {
   // 优先 Linux home（通常是 ~/.claude symlink 或挂载点）
   try { if (fs.statSync(linuxHome).isDirectory()) return linuxHome; } catch { /**/ }
   // fallback: 两步获取 Windows 路径（避免嵌套 shell 替换）
+  // 安全性：两条 execSync 均为硬编码命令，无外部输入拼接，无注入风险
   try {
     const { execSync } = require('child_process');
     const winRaw = execSync('cmd.exe /C "echo %USERPROFILE%" 2>/dev/null', { timeout: 2000 })
