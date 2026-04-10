@@ -71,7 +71,7 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 安全边界
 
-- 只读扫描：脚本只使用 `fs.readFileSync` 和 `fs.readdirSync`，不写入任何文件
+- 只读扫描：脚本只使用 `fs.readFileSync`、`fs.readdirSync`、`fs.openSync`+`fs.readSync`（tryReadHead）、`fs.existsSync`、`fs.statSync`、`fs.lstatSync`，不写入任何文件
 - 不执行插件代码：只读取 plugin.json manifest，不 `require()` 插件
 - 不联网：零网络调用
 - 不修改权限：不改变任何文件的权限或所有者
