@@ -129,7 +129,8 @@ function extractFrontmatter(content) {
       // block scalar: > | >- |- 等指示符
       if (/^[>|][-+]?$/.test(rawVal)) {
         const blockLines = [];
-        while (i + 1 < lines.length && /^\s+/.test(lines[i + 1])) {
+        // 空行也属于 block scalar（段落分隔），直到遇到非缩进的非空行
+        while (i + 1 < lines.length && (/^\s+/.test(lines[i + 1]) || lines[i + 1].trim() === '')) {
           blockLines.push(lines[++i].trimStart());
         }
         // > 折叠换行为空格，| 保留换行
