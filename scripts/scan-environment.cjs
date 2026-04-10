@@ -33,6 +33,8 @@ const AWARENESS_AGENT_DESC = 60; // awareness 模式 agent description 截断长
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
 
 // IO 工具函数，errors 参数可选（传入数组时收集非致命错误）
+// ENOENT 静默策略：大多数扫描目录默认不存在（如项目无 .claude/agents/），属正常路径
+// 非 ENOENT 错误（EACCES 等）收集到 errors 数组，最终在 footer 中展示
 
 function tryRead(filePath, errors) {
   try { return fs.readFileSync(filePath, 'utf8'); }
