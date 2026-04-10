@@ -50,10 +50,13 @@ try {
 UNINSTALL_JS
   fi
   # 删除插件目录（sanity check 防止空路径误删）
-  if [ -z "$INSTALL_DIR" ] || [[ "$INSTALL_DIR" != *"capability-orchestrator"* ]]; then
+  if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" != *"capability-orchestrator"* ]]; then
     red "路径异常（$INSTALL_DIR），拒绝删除"; exit 1
   fi
-  if [ -d "$INSTALL_DIR" ]; then
+  if [[ -L "$INSTALL_DIR" ]]; then
+    rm "$INSTALL_DIR"
+    green "✓ 已删除符号链接 $INSTALL_DIR"
+  elif [[ -d "$INSTALL_DIR" ]]; then
     rm -rf "$INSTALL_DIR"
     green "✓ 已删除 $INSTALL_DIR"
   else
@@ -92,15 +95,15 @@ fi
 # ── 安装/更新 ─────────────────────────────────────────────────────────────────
 mkdir -p "$PLUGINS_DIR"
 
-if [ -d "$INSTALL_DIR/.git" ]; then
+if [[ -d "$INSTALL_DIR/.git" ]]; then
   yellow "检测到已安装（git），正在更新..."
   git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" || {
     red "更新失败（可能有本地修改），请手动处理：cd $INSTALL_DIR && git status"
     exit 1
   }
-elif [ "$USE_GIT" -eq 1 ]; then
-  # 目标目录可能存在（如之前用 curl 安装），先清理
-  [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
+elif [[ "$USE_GIT" -eq 1 ]]; then
+  # 目标目录可能存在（如之前用 curl 安装），先清理（符号链接安全处理）
+  [[ -L "$INSTALL_DIR" ]] && rm "$INSTALL_DIR" || [[ -d "$INSTALL_DIR" ]] && rm -rf "$INSTALL_DIR"
   yellow "正在克隆到 $INSTALL_DIR ..."
   git clone --depth=1 --branch "$BRANCH" \
     "https://github.com/$REPO.git" "$INSTALL_DIR"
@@ -115,8 +118,8 @@ else
   trap 'rm -rf "$TMP_ZIP" "$TMP_DIR"' EXIT
   curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.zip" -o "$TMP_ZIP"
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
-  # 目标目录可能存在（升级场景），先清理再移入
-  [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
+  # 目标目录可能存在（升级场景），先清理再移入（符号链接安全处理）
+  [[ -L "$INSTALL_DIR" ]] && rm "$INSTALL_DIR" || [[ -d "$INSTALL_DIR" ]] && rm -rf "$INSTALL_DIR"
   # GitHub zip 内部目录名可能随仓库名变化，取第一个子目录（安全写法）
   EXTRACTED=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
   mv "$EXTRACTED" "$INSTALL_DIR"
