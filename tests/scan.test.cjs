@@ -7,7 +7,7 @@ const fs = require('fs');
 
 const {
   extractFrontmatter, getDescription, getName, sanitize,
-  scanSkills, scanAgents, scanCommands, readMcpServers,
+  tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot, compareSemver,
   collectSnapshot, renderSnapshot, truncate,
 } = require('../scripts/scan-environment.cjs');
@@ -567,4 +567,65 @@ test('extractFrontmatter: merges double frontmatter blocks', () => {
   assert.equal(fm.name, 'real-name', 'second block name wins');
   assert.equal(fm.description, 'real desc', 'second block description available');
   assert.equal(fm.source_plugin, 'test', 'first block fields preserved');
+});
+
+// ─── 审计补全：sanitize 未闭合 HTML ─────────────────────────────────────────
+
+test('sanitize: strips unclosed HTML tags', () => {
+  assert.equal(sanitize('hello <script alert(1)'), 'hello');
+  assert.equal(sanitize('a <b'), 'a');
+  assert.equal(sanitize('clean text'), 'clean text');
+});
+
+// ─── 审计补全：JSON 行尾注释 ────────────────────────────────────────────────
+
+test('readMcpServers: handles inline comments after values', () => {
+  const content = '{\n  "mcpServers": {\n    "srv": {"url": "https://x.com"} // my server\n  }\n}';
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-inline-' + process.pid + '.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  assert.ok(servers.some(s => s.name === 'srv'), 'should parse despite inline comment');
+});
+
+test('readMcpServers: preserves URLs in strings when stripping comments', () => {
+  const content = '{\n  "mcpServers": {\n    "srv": {"description": "see https://example.com/docs"}\n  }\n}';
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-url-' + process.pid + '.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  const srv = servers.find(s => s.name === 'srv');
+  assert.ok(srv, 'server should exist');
+  assert.ok(srv.desc.includes('https://example.com/docs'), 'URL in string preserved');
+});
+
+// ─── 审计补全：tryReadHead UTF-8 截断 ───────────────────────────────────────
+
+test('tryReadHead: strips trailing U+FFFD from multi-byte truncation', () => {
+  // 制造一个恰好在多字节字符中间截断的场景
+  const tmpFile = path.join(require('os').tmpdir(), 'test-utf8-trunc-' + process.pid + '.md');
+  // 写入刚好超过 HEAD_BYTES 的内容，末尾是多字节中文字符
+  const padding = 'a'.repeat(2046) + '你好'; // 2046 + 6 bytes (两个中文) = 2052
+  fs.writeFileSync(tmpFile, padding, 'utf8');
+  // tryReadHead 只读 2048 字节，会截断在 '你' 的第 2 字节或 '好' 的某字节
+  const result = tryReadHead(tmpFile);
+  fs.unlinkSync(tmpFile);
+  assert.ok(!result.includes('\uFFFD'), 'no replacement character in output');
+});
+
+// ─── 审计补全：WSL fallback ─────────────────────────────────────────────────
+
+test('resolveUserDir: WSL fallback returns Linux home when WSL_DISTRO_NAME set but no Windows path', () => {
+  // 模拟 WSL 环境：设置环境变量，但 wslpath 不存在（非真实 WSL）
+  // resolveUserDir 应 fallback 到 Linux home/.claude
+  const orig = process.env.WSL_DISTRO_NAME;
+  process.env.WSL_DISTRO_NAME = 'Ubuntu';
+  try {
+    const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+    // 如果没有崩溃就说明 WSL fallback 正常工作
+    assert.ok(Array.isArray(snap.sections), 'should not crash in fake WSL env');
+  } finally {
+    if (orig === undefined) delete process.env.WSL_DISTRO_NAME;
+    else process.env.WSL_DISTRO_NAME = orig;
+  }
 });

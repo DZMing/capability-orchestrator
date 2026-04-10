@@ -39,6 +39,7 @@ function tryRead(filePath, errors) {
 }
 
 // 只读前 2KB，足够提取 frontmatter
+// 处理 UTF-8 多字节截断：移除末尾可能的 U+FFFD 替换字符
 const HEAD_BYTES = 2048;
 function tryReadHead(filePath, errors) {
   let fd;
@@ -46,7 +47,12 @@ function tryReadHead(filePath, errors) {
     fd = fs.openSync(filePath, 'r');
     const buf = Buffer.alloc(HEAD_BYTES);
     const bytesRead = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
-    return buf.toString('utf8', 0, bytesRead);
+    let str = buf.toString('utf8', 0, bytesRead);
+    // 截断可能切在多字节字符中间，产生末尾 U+FFFD，去掉它
+    if (str.length > 0 && str.charCodeAt(str.length - 1) === 0xFFFD) {
+      str = str.slice(0, -1);
+    }
+    return str;
   } catch (e) {
     if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
     return null;
@@ -94,7 +100,8 @@ function sanitize(str) {
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
     .replace(UNSAFE_UNICODE, '')  // 零宽/方向覆盖/控制字符（防隐藏文本注入）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
-    .replace(/<[^>]*>/g, '')      // HTML 标签（防 XSS-like）
+    .replace(/<[^>]*>/g, '')      // HTML 闭合标签（防 XSS-like）
+    .replace(/<[^>]*$/g, '')       // HTML 未闭合标签（如 <script alert(1)）
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // Markdown 图片链接（防数据外泄）
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')  // Markdown 普通链接（防钓鱼）
     .replace(/(?:^|\s)#{1,6}\s+/g, ' ') // Markdown 标题语法
@@ -215,9 +222,17 @@ function readMcpServers(mcpFile, errors) {
   try {
     return extractServers(JSON.parse(content));
   } catch {
-    // 去除 // 行注释后重试（常见于手动编辑的 .mcp.json）
+    // 去除 // 注释后重试（整行 + 行尾，安全跳过字符串内的 //）
     try {
-      const stripped = content.replace(/^\s*\/\/.*$/gm, '');
+      const stripped = content.split('\n').map(line => {
+        // 逐字符查找字符串外的 //
+        let inStr = false;
+        for (let i = 0; i < line.length - 1; i++) {
+          if (line[i] === '"' && (i === 0 || line[i - 1] !== '\\')) inStr = !inStr;
+          if (!inStr && line[i] === '/' && line[i + 1] === '/') return line.slice(0, i).trimEnd();
+        }
+        return line;
+      }).join('\n');
       return extractServers(JSON.parse(stripped));
     } catch {
       if (errors) errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
@@ -572,7 +587,7 @@ function renderSnapshot(snapshot, mode) {
 
 module.exports = {
   extractFrontmatter, getDescription, getName, sanitize, compareSemver,
-  scanSkills, scanAgents, scanCommands, readMcpServers,
+  tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot,
   collectSnapshot, renderSnapshot, truncate,
 };
