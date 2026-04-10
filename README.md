@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
-让 Claude Code 实时感知当前环境里有哪些可用能力（skills / subagents / plugins / MCP servers / commands）。
+让 Claude Code 实时感知当前环境的全部可用能力（skills / subagents / plugins / MCP servers / commands），并通过路由策略引导 Claude 自动选择最优执行路径。
 
 ## 安装
 
@@ -29,7 +29,14 @@ claude --plugin-dir ./capability-orchestrator
 
 ### 会话开始自动注入（推荐）
 
-安装脚本会在 `~/.claude/settings.json` 里注册一个 SessionStart hook，每次新会话开始时自动做一次轻量扫描并将能力摘要注入 Claude 上下文。**无需手动触发，无需 CLAUDE.md 路由规则。**
+安装脚本会在 `~/.claude/settings.json` 里注册一个 SessionStart hook，每次新会话开始时自动执行 `--mode=awareness` 扫描，注入：
+
+- **MCP server 描述**（平台只暴露 tool 名，不注入 server 级说明）
+- **Subagent 描述**（帮助 Claude 判断何时委派 vs 自己做）
+- **Skills / Plugins 名称或计数**（平台已提供详情，不重复）
+- **路由策略**（告诉 Claude 遇到什么类型任务该走哪条路）
+
+**无需手动触发，无需 CLAUDE.md 路由规则。**
 
 如需手动添加 hook，在 `~/.claude/settings.json` 的 `hooks.SessionStart` 数组里加：
 
@@ -41,7 +48,7 @@ claude --plugin-dir ./capability-orchestrator
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=list",
+            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
             "timeout": 10
           }
         ]
@@ -79,7 +86,7 @@ claude --plugin-dir ./capability-orchestrator
 
 ```bash
 # 测试扫描脚本是否正常输出
-node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=list
+node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness
 ```
 
 ## 卸载
