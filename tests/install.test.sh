@@ -105,12 +105,12 @@ HOOK_CMD=$(node -e "
 ")
 assert "hook 命令含 scan-environment.cjs" \
   node -e "process.exit('$HOOK_CMD'.includes('scan-environment.cjs')?0:1)"
-assert "hook 命令含 --mode=list" \
-  node -e "process.exit('$HOOK_CMD'.includes('--mode=list')?0:1)"
+assert "hook 命令含 --mode=awareness" \
+  node -e "process.exit('$HOOK_CMD'.includes('--mode=awareness')?0:1)"
 
 # ── 验证安装后脚本能运行 ──────────────────────────────────────────────────────
 assert "scan script 可直接 node 执行" \
-  node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=list
+  node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=awareness
 
 # ── 验证卸载 ─────────────────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
