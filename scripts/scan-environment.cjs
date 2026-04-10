@@ -98,11 +98,11 @@ function sanitize(str) {
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
     .replace(UNSAFE_UNICODE, '')  // 零宽/方向覆盖/控制字符（防隐藏文本注入）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
-    .replace(/<[^>]*>/g, '')      // HTML 闭合标签（防 XSS-like）
-    .replace(/<[^>]*$/g, '')       // HTML 未闭合标签（如 <script alert(1)）
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') // 先解码 HTML entities 再过滤
+    .replace(/<[^>]*>?/g, '')     // HTML 标签（含未闭合，如 <script alert(1)）
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // Markdown 图片链接（防数据外泄）
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')  // Markdown 普通链接（防钓鱼）
-    .replace(/(?:^|\s)#{1,6}\s+/g, ' ') // Markdown 标题语法
+    .replace(/(^| )#{1,6} /g, '$1') // Markdown 标题语法（精确匹配：行首或空格后跟 # 和空格）
     .trim();
 }
 
