@@ -520,3 +520,51 @@ test('sanitize: kitchen sink — multiple injection vectors combined', () => {
   assert.ok(!clean.includes('`'), 'no backtick');
   assert.ok(!clean.includes('\n'), 'no newline');
 });
+
+// ─── awareness 模式 ─────────────────────────────────────────────────────────
+
+test('renderSnapshot awareness: output within budget', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.length <= 3000, `awareness output ${text.length} should be ≤ 3000`);
+});
+
+test('renderSnapshot awareness: contains routing strategy', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('路由策略'), 'should include routing strategy section');
+  assert.ok(text.includes('Skill tool'), 'should mention Skill tool');
+  assert.ok(text.includes('ToolSearch'), 'should mention ToolSearch');
+});
+
+test('renderSnapshot awareness: MCP servers have descriptions', () => {
+  const items = [{ name: 'test-mcp', desc: 'does stuff' }];
+  const snap = { sections: [{ label: 'MCP Servers', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('test-mcp: does stuff'), 'MCP should show description');
+});
+
+test('renderSnapshot awareness: shows capability counts', () => {
+  const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.match(text, /\d+ skills/, 'should show skill count');
+});
+
+test('renderSnapshot awareness: subagents show descriptions', () => {
+  const items = [
+    { name: 'my-agent', desc: 'helps debug' },
+    { name: 'other-agent', desc: '' },
+  ];
+  const snap = { sections: [{ label: '用户级 Subagents', prefix: '@', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('my-agent: helps debug'), 'agent with desc should show it');
+  assert.ok(text.includes('other-agent'), 'agent without desc still listed');
+});
+
+test('extractFrontmatter: merges double frontmatter blocks', () => {
+  const content = '---\nsource_plugin: test\n---\n\n---\nname: real-name\ndescription: real desc\n---\n';
+  const fm = extractFrontmatter(content);
+  assert.equal(fm.name, 'real-name', 'second block name wins');
+  assert.equal(fm.description, 'real desc', 'second block description available');
+  assert.equal(fm.source_plugin, 'test', 'first block fields preserved');
+});

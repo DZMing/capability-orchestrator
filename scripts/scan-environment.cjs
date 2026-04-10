@@ -103,32 +103,36 @@ function sanitize(str) {
 
 // 从 SKILL.md / agent.md 的 YAML frontmatter 提取指定字段
 // 支持 plain scalar、quoted scalar 和 block scalar（> | >- |-）
+// 合并所有 frontmatter 块（某些 agent 文件有两个：metadata + 实际描述）
 function extractFrontmatter(content) {
   if (!content) return {};
   // 移除 UTF-8 BOM
   content = content.replace(/^\uFEFF/, '');
-  const match = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return {};
-  const lines = match[1].split(/\r?\n/);
   const result = {};
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^(\w[\w-]*):\s*(.*?)\s*$/);
-    if (!m) continue;
-    const key = m[1];
-    const rawVal = m[2];
-    // block scalar: > | >- |- 等指示符
-    if (/^[>|][-+]?$/.test(rawVal)) {
-      const blockLines = [];
-      while (i + 1 < lines.length && /^\s+/.test(lines[i + 1])) {
-        blockLines.push(lines[++i].trimStart());
+  // 匹配所有 --- 块（插件注册的 agent 可能有 metadata 块 + 正文块）
+  const blockRe = /(?:^|\n)---[ \t]*\r?\n([\s\S]*?)\r?\n---/g;
+  let blockMatch;
+  while ((blockMatch = blockRe.exec(content)) !== null) {
+    const lines = blockMatch[1].split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^(\w[\w-]*):\s*(.*?)\s*$/);
+      if (!m) continue;
+      const key = m[1];
+      const rawVal = m[2];
+      // block scalar: > | >- |- 等指示符
+      if (/^[>|][-+]?$/.test(rawVal)) {
+        const blockLines = [];
+        while (i + 1 < lines.length && /^\s+/.test(lines[i + 1])) {
+          blockLines.push(lines[++i].trimStart());
+        }
+        // > 折叠换行为空格，| 保留换行
+        // 后出现的块覆盖先出现的（正文块优先于 metadata 块）
+        result[key] = rawVal.startsWith('>')
+          ? blockLines.join(' ').trim()
+          : blockLines.join('\n').trim();
+      } else {
+        result[key] = rawVal.replace(/^["']|["']$/g, '').trim();
       }
-      // > 折叠换行为空格，| 保留换行
-      result[key] = rawVal.startsWith('>')
-        ? blockLines.join(' ').trim()
-        : blockLines.join('\n').trim();
-    } else {
-      // 移除首尾引号
-      result[key] = rawVal.replace(/^["']|["']$/g, '').trim();
     }
   }
   return result;
@@ -142,7 +146,7 @@ function getDescription(content) {
   const afterFm = content.replace(/^---[\s\S]*?\n---\s*\n?/, '');
   const firstPara = afterFm
     .split('\n')
-    .find(l => l.trim() && !l.startsWith('#'));
+    .find(l => l.trim() && !l.startsWith('#') && !/^---\s*$/.test(l));
   return sanitize(truncate(firstPara || '', MAX_DESC));
 }
 
@@ -444,8 +448,87 @@ function renderSection(section, level) {
   return `### ${label}\n${lines.join('\n')}`;
 }
 
-// mode: 'route'（保留描述用于路由判断）| 'list'（高密度目录，初始 level 2）
+// mode: 'awareness'（SessionStart 用，差异化路由增强）
+function renderAwareness(snapshot) {
+  const { sections, errors } = snapshot;
+  const find = label => (sections.find(s => s.label === label) || { items: [] }).items;
+
+  // 统计各类能力总数
+  const skillCount = find('项目级 Skills').length + find('用户级 Skills').length;
+  const agentCount = find('项目级 Subagents').length + find('用户级 Subagents').length;
+  const mcpItems = find('MCP Servers');
+  const plugins = find('已安装插件');
+  const legacyCmds = find('Legacy Commands');
+
+  const parts = ['## 环境能力感知\n'];
+
+  // 总览行
+  const counts = [];
+  if (skillCount > 0) counts.push(`${skillCount} skills`);
+  if (agentCount > 0) counts.push(`${agentCount} subagents`);
+  if (plugins.length > 0) counts.push(`${plugins.length} plugins`);
+  if (mcpItems.length > 0) counts.push(`${mcpItems.length} MCP servers`);
+  if (counts.length > 0) parts.push(counts.join('、') + '。\n');
+
+  // MCP Servers：带完整描述（差异化价值最高，平台不展示详情）
+  if (mcpItems.length > 0) {
+    parts.push('### MCP Servers');
+    for (const s of mcpItems) {
+      parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, 80)}` : `- ${s.name}`);
+    }
+    parts.push('');
+  }
+
+  // Subagents：带描述的 top-N（帮 Claude 匹配任务到 agent）
+  const allAgents = [...find('项目级 Subagents'), ...find('用户级 Subagents')];
+  if (allAgents.length > 0) {
+    const TOP_AGENTS = 15;
+    parts.push('### Subagents');
+    const shown = allAgents.slice(0, TOP_AGENTS);
+    for (const a of shown) {
+      parts.push(a.desc ? `- ${a.name}: ${truncate(a.desc, 60)}` : `- ${a.name}`);
+    }
+    if (allAgents.length > TOP_AGENTS) parts.push(`+${allAgents.length - TOP_AGENTS} 个`);
+    parts.push('');
+  }
+
+  // Skills：仅总数 + top-15 名字（平台 Skill tool 已有描述，不重复）
+  const allSkills = [...find('项目级 Skills'), ...find('用户级 Skills')];
+  if (allSkills.length > 0) {
+    const TOP_SKILLS = 15;
+    const shown = allSkills.slice(0, TOP_SKILLS).map(s => s.name).join(', ');
+    const fold = allSkills.length > TOP_SKILLS ? `, +${allSkills.length - TOP_SKILLS} 个` : '';
+    parts.push(`### Skills\n${shown}${fold}\n`);
+  }
+
+  // 插件：仅总数
+  if (plugins.length > 0) {
+    parts.push(`### 已安装插件\n${plugins.length} 个\n`);
+  }
+
+  // Legacy commands：仅总数
+  if (legacyCmds.length > 0) {
+    parts.push(`### Legacy Commands\n${legacyCmds.length} 个\n`);
+  }
+
+  // 路由策略提示（核心！让 Claude 从"知道"变成"自动用"）
+  parts.push('### 路由策略');
+  parts.push('收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool。不确定时用 ToolSearch 搜索可用能力。');
+
+  let output = parts.join('\n');
+
+  // 兜底：超预算则截断（awareness 模式通常 ~1000 字符，不太可能触发）
+  const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
+  const budget = MAX_TOTAL_CHARS - FOOTER.length;
+  if (output.length > budget) {
+    output = output.slice(0, budget - 20) + '\n\n…（已截断）';
+  }
+  return { text: output + FOOTER, errors };
+}
+
+// mode: 'route'（保留描述用于路由判断）| 'list'（高密度目录，初始 level 2）| 'awareness'（SessionStart 路由增强）
 function renderSnapshot(snapshot, mode) {
+  if (mode === 'awareness') return renderAwareness(snapshot);
   const { sections, errors } = snapshot;
   const initLevel = mode === 'list' ? 2 : 0;
   const levels = sections.map(() => initLevel);

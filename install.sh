@@ -129,7 +129,7 @@ chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
 
 # ── 注册 SessionStart hook ────────────────────────────────────────────────────
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-HOOK_CMD="node \"$INSTALL_DIR/scripts/scan-environment.cjs\" --mode=list"
+HOOK_CMD="node \"$INSTALL_DIR/scripts/scan-environment.cjs\" --mode=awareness"
 
 yellow "正在注册 SessionStart hook..."
 node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
