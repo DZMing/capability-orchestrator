@@ -435,6 +435,33 @@ test('isPluginRoot: directory with .claude-plugin/plugin.json returns true', () 
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+test('isPluginRoot: root plugin.json returns true', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'root-pj-' + process.pid);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'plugin.json'), '{}');
+  assert.equal(isPluginRoot(tmpDir), true);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('isPluginRoot: skills subdir with skill dir returns true', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'skills-pr-' + process.pid);
+  fs.mkdirSync(path.join(tmpDir, 'skills', 'my-skill'), { recursive: true });
+  assert.equal(isPluginRoot(tmpDir), true);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('isPluginRoot: agents subdir with .md returns true', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'agents-pr-' + process.pid);
+  fs.mkdirSync(path.join(tmpDir, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'agents', 'helper.md'), '---\nname: helper\n---\n');
+  assert.equal(isPluginRoot(tmpDir), true);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('isPluginRoot: nonexistent path returns false (no crash)', () => {
+  assert.equal(isPluginRoot('/nonexistent/path/' + process.pid), false);
+});
+
 // ─── sanitize Unicode + Markdown ────────────────────────────────────────────
 
 test('sanitize: strips zero-width and direction override characters', () => {
