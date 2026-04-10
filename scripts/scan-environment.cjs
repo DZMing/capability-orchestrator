@@ -81,7 +81,8 @@ function truncate(str, max) {
 function compareSemver(a, b) {
   const pa = a.replace(/^v/i, '').split('.').map(Number);
   const pb = b.replace(/^v/i, '').split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
+  const len = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < len; i++) {
     const diff = (pa[i] || 0) - (pb[i] || 0);
     if (diff !== 0) return diff > 0 ? 1 : -1;
   }
@@ -611,7 +612,12 @@ else try {
     const a = process.argv.find(x => x.startsWith(prefix));
     return a ? a.slice(prefix.length) : undefined;
   }
+  const VALID_MODES = ['route', 'list', 'awareness'];
   const mode = getArg('mode') || 'route';
+  if (!VALID_MODES.includes(mode)) {
+    process.stderr.write(`无效模式: ${mode}，支持: ${VALID_MODES.join('/')}\n`);
+    process.exit(1);
+  }
   const projectDir = getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;
   const userDir = getArg('user-dir') || process.env.CAPABILITY_USER_DIR;
   const { text, errors: errs } = renderSnapshot(collectSnapshot(projectDir, userDir), mode);
