@@ -27,5 +27,5 @@
 - SessionStart hook 自动注入
 - 多级降级渲染（route / list 模式）
 - sanitize 防 prompt injection
-- 61 项测试（单元 + 安装冒烟 + 幂等性）
-- GitHub Actions CI（Node 18/22, ubuntu/macOS）
+- 56 项测试（单元 + 安装冒烟 + 幂等性）
+- GitHub Actions CI（Node 18/20/22, ubuntu/macOS）

@@ -68,11 +68,12 @@ function tryReadDir(dirPath, withTypes, errors) {
 
 function truncate(str, max) {
   if (!str) return '';
-  str = str.replace(/\r?\n/g, ' ').trim();
+  str = String(str).replace(/\r?\n/g, ' ').trim();
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
 }
 
 // 零依赖 semver 比较：逐段数字比较，避免字符串排序的经典 bug（"9" > "10"）
+// 注意：不支持 pre-release 标签（如 1.0.0-beta），仅用于插件去重场景
 function compareSemver(a, b) {
   const pa = a.split('.').map(Number);
   const pb = b.split('.').map(Number);
@@ -89,7 +90,7 @@ const UNSAFE_UNICODE = /[\u200B\u200C\u200D\uFEFF\u00AD\u2060\u180E\u200E\u200F\
 // 注入到 Claude 上下文前的净化：去除换行、反引号、HTML 标签、危险 Unicode 等 prompt injection 载体
 function sanitize(str) {
   if (!str) return '';
-  return str
+  return String(str)
     .replace(/\r?\n|\r/g, ' ')   // 换行 → 空格（防跳出列表项）
     .replace(UNSAFE_UNICODE, '')  // 零宽/方向覆盖/控制字符（防隐藏文本注入）
     .replace(/`/g, "'")           // 反引号 → 单引号（防 !command 注入）
@@ -108,7 +109,7 @@ function extractFrontmatter(content) {
   content = content.replace(/^\uFEFF/, '');
   const match = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return {};
-  const lines = match[1].split('\n');
+  const lines = match[1].split(/\r?\n/);
   const result = {};
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/^(\w[\w-]*):\s*(.*?)\s*$/);

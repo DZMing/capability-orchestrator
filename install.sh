@@ -117,8 +117,9 @@ else
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
   # 目标目录可能存在（升级场景），先清理再移入
   [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
-  # GitHub zip 内部目录名可能随仓库名变化，用通配符匹配唯一子目录
-  mv "$TMP_DIR"/*/ "$INSTALL_DIR"
+  # GitHub zip 内部目录名可能随仓库名变化，取第一个子目录（安全写法）
+  EXTRACTED=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+  mv "$EXTRACTED" "$INSTALL_DIR"
   rm -rf "$TMP_ZIP" "$TMP_DIR"
   trap - EXIT
 fi
