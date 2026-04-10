@@ -225,10 +225,15 @@ function readMcpServers(mcpFile, errors) {
     // 去除 // 注释后重试（整行 + 行尾，安全跳过字符串内的 //）
     try {
       const stripped = content.split('\n').map(line => {
-        // 逐字符查找字符串外的 //
+        // 逐字符查找字符串外的 //（正确处理 \\" 等连续转义）
         let inStr = false;
         for (let i = 0; i < line.length - 1; i++) {
-          if (line[i] === '"' && (i === 0 || line[i - 1] !== '\\')) inStr = !inStr;
+          if (line[i] === '"') {
+            // 数引号前连续反斜杠：偶数个 = 引号未被转义
+            let bs = 0;
+            for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) bs++;
+            if (bs % 2 === 0) inStr = !inStr;
+          }
           if (!inStr && line[i] === '/' && line[i + 1] === '/') return line.slice(0, i).trimEnd();
         }
         return line;
