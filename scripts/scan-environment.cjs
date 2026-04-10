@@ -166,8 +166,9 @@ function getName(content, fallback) {
 // ─── 扫描函数 ────────────────────────────────────────────────────────────────
 
 // symlink 安全检查：跳过符号链接（防止循环引用导致无限递归）
+// fail-safe：异常时返回 true（宁可跳过也不冒循环风险）
 function isSymlink(filePath) {
-  try { return fs.lstatSync(filePath).isSymbolicLink(); } catch { return false; }
+  try { return fs.lstatSync(filePath).isSymbolicLink(); } catch { return true; }
 }
 
 // 扫描 skills 目录（每个子目录为一个 skill，必须含 SKILL.md）
@@ -342,10 +343,12 @@ function resolveUserDir() {
   if (!process.env.WSL_DISTRO_NAME) return linuxHome;
   // 优先 Linux home（通常是 ~/.claude symlink 或挂载点）
   try { if (fs.statSync(linuxHome).isDirectory()) return linuxHome; } catch { /**/ }
-  // fallback: 通过 wslpath 获取 Windows %USERPROFILE%
+  // fallback: 两步获取 Windows 路径（避免嵌套 shell 替换）
   try {
     const { execSync } = require('child_process');
-    const winProfile = execSync('wslpath "$(cmd.exe /C "echo %USERPROFILE%" 2>/dev/null)"', { timeout: 2000 })
+    const winRaw = execSync('cmd.exe /C "echo %USERPROFILE%" 2>/dev/null', { timeout: 2000 })
+      .toString().trim().replace(/\r/g, '');
+    const winProfile = execSync(`wslpath "${winRaw}"`, { timeout: 2000 })
       .toString().trim();
     const winClaude = path.join(winProfile, '.claude');
     fs.statSync(winClaude); // 确认存在
