@@ -608,7 +608,7 @@ function renderSnapshot(snapshot, mode) {
 module.exports = {
   extractFrontmatter, getDescription, getName, sanitize, compareSemver,
   tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
-  scanInstalledPlugins, isPluginRoot,
+  scanInstalledPlugins, isPluginRoot, renderSection,
   collectSnapshot, renderSnapshot, truncate,
 };
 

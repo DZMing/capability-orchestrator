@@ -8,7 +8,7 @@ const fs = require('fs');
 const {
   extractFrontmatter, getDescription, getName, sanitize,
   tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
-  scanInstalledPlugins, isPluginRoot, compareSemver,
+  scanInstalledPlugins, isPluginRoot, compareSemver, renderSection,
   collectSnapshot, renderSnapshot, truncate,
 } = require('../scripts/scan-environment.cjs');
 
@@ -767,4 +767,42 @@ test('CLI: --mode=invalid 应 exit 1', () => {
   } catch (e) {
     assert.ok(e.status === 1, 'exit code should be 1');
   }
+});
+
+// ─── renderSection 各级别输出 ───────────────────────────────────────────────
+
+test('renderSection level 0: 名+完整描述', () => {
+  const section = { label: 'Test', prefix: '', items: [{ name: 'a', desc: 'desc-a' }] };
+  const out = renderSection(section, 0);
+  assert.ok(out.includes('- a: desc-a'), 'level 0 should show name + full desc');
+});
+
+test('renderSection level 1: 名+短描述', () => {
+  const section = { label: 'Test', prefix: '@', items: [{ name: 'b', desc: 'D'.repeat(80) }] };
+  const out = renderSection(section, 1);
+  assert.ok(out.includes('@b:'), 'level 1 should show prefix+name');
+  assert.ok(out.length < renderSection(section, 0).length, 'level 1 shorter than level 0');
+});
+
+test('renderSection level 2: 仅名逗号分隔', () => {
+  const section = { label: 'Test', prefix: '', items: [{ name: 'x', desc: 'ignored' }, { name: 'y', desc: 'also ignored' }] };
+  const out = renderSection(section, 2);
+  assert.ok(out.includes('x, y'), 'level 2 should be comma-separated names');
+  assert.ok(!out.includes('ignored'), 'level 2 should not show desc');
+});
+
+test('renderSection level 3: top-15 折叠', () => {
+  const items = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, desc: '' }));
+  const section = { label: 'Test', prefix: '', items };
+  const out = renderSection(section, 3);
+  assert.ok(out.includes('+5 个'), 'level 3 should fold excess items');
+  assert.ok(out.includes('s0'), 'level 3 should show first item');
+});
+
+test('renderSection level 4: 纯计数', () => {
+  const items = Array.from({ length: 42 }, (_, i) => ({ name: `s${i}`, desc: '' }));
+  const section = { label: 'Test', prefix: '', items };
+  const out = renderSection(section, 4);
+  assert.ok(out.includes('42 个'), 'level 4 should show pure count');
+  assert.ok(!out.includes('s0'), 'level 4 should not show any names');
 });
