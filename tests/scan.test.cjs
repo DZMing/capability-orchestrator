@@ -8,7 +8,7 @@ const fs = require('fs');
 const {
   extractFrontmatter, getDescription,
   scanSkills, scanAgents, scanCommands, readMcpServers,
-  scanInstalledPlugins, isPluginRoot,
+  scanInstalledPlugins, isPluginRoot, compareSemver,
   collectSnapshot, renderSnapshot, truncate,
 } = require('../scripts/scan-environment.cjs');
 
@@ -319,4 +319,147 @@ test('readMcpServers: filters disabled servers', () => {
   fs.unlinkSync(tmpFile);
   assert.equal(servers.length, 1);
   assert.equal(servers[0].name, 'active');
+});
+
+test('readMcpServers: disabled strict equality — only true filters', () => {
+  const content = JSON.stringify({ mcpServers: {
+    a: { disabled: true }, b: { disabled: false }, c: { disabled: 0 },
+    d: { disabled: '' }, e: { disabled: null }, f: {},
+  }});
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-strict.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  const names = servers.map(s => s.name);
+  assert.ok(!names.includes('a'), 'disabled:true should be filtered');
+  assert.ok(names.includes('b'), 'disabled:false should pass');
+  assert.ok(names.includes('c'), 'disabled:0 should pass (strict)');
+  assert.ok(names.includes('f'), 'no disabled field should pass');
+});
+
+test('readMcpServers: collects error on invalid JSON', () => {
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-bad.json');
+  fs.writeFileSync(tmpFile, '{bad json!!!}');
+  const errors = [];
+  const servers = readMcpServers(tmpFile, errors);
+  fs.unlinkSync(tmpFile);
+  assert.deepEqual(servers, []);
+  assert.ok(errors.length > 0, 'should report parse error');
+});
+
+test('readMcpServers: handles JSON with line comments', () => {
+  const content = '// comment\n{"mcpServers":{"srv":{}}}\n';
+  const tmpFile = path.join(require('os').tmpdir(), 'test-mcp-comment.json');
+  fs.writeFileSync(tmpFile, content);
+  const servers = readMcpServers(tmpFile);
+  fs.unlinkSync(tmpFile);
+  assert.ok(servers.some(s => s.name === 'srv'));
+});
+
+// ─── compareSemver ──────────────────────────────────────────────────────────
+
+test('compareSemver: numeric comparison (not string)', () => {
+  assert.equal(compareSemver('1.10.0', '1.9.0'), 1, '1.10 > 1.9');
+  assert.equal(compareSemver('9.0.0', '10.0.0'), -1, '9 < 10');
+  assert.equal(compareSemver('2.0.0', '2.0.0'), 0, 'equal');
+  assert.equal(compareSemver('1.0', '1.0.0'), 0, 'short version');
+});
+
+// ─── scanInstalledPlugins 去重 ──────────────────────────────────────────────
+
+test('scanInstalledPlugins: dedup keeps highest version (semver)', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'dedup-test-' + process.pid);
+  // 直接在 cache 下建两个 vendor 目录（真实目录，不能用 symlink —— scanInstalledPlugins 跳过 symlink）
+  const cacheDir = path.join(tmpDir, 'plugins', 'cache');
+  const v1 = path.join(cacheDir, 'vendor-a', 'myplugin', '.claude-plugin');
+  const v2 = path.join(cacheDir, 'vendor-b', 'myplugin', '.claude-plugin');
+  fs.mkdirSync(v1, { recursive: true });
+  fs.mkdirSync(v2, { recursive: true });
+  fs.writeFileSync(path.join(v1, 'plugin.json'), '{"name":"myplugin","version":"1.9.0"}');
+  fs.writeFileSync(path.join(v2, 'plugin.json'), '{"name":"myplugin","version":"1.10.0"}');
+  const plugins = scanInstalledPlugins(tmpDir);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  const myplugin = plugins.find(p => p.name === 'myplugin');
+  assert.ok(myplugin, 'myplugin should exist');
+  assert.equal(myplugin.version, '1.10.0', 'should keep 1.10.0 not 1.9.0');
+});
+
+// ─── isPluginRoot ───────────────────────────────────────────────────────────
+
+test('isPluginRoot: empty directory returns false', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'empty-plugin-' + process.pid);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  assert.equal(isPluginRoot(tmpDir), false);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test('isPluginRoot: directory with .claude-plugin/plugin.json returns true', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'real-plugin-' + process.pid);
+  fs.mkdirSync(path.join(tmpDir, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, '.claude-plugin', 'plugin.json'), '{}');
+  assert.equal(isPluginRoot(tmpDir), true);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// ─── sanitize Unicode + Markdown ────────────────────────────────────────────
+
+test('sanitize: strips zero-width and direction override characters', () => {
+  const { sanitize } = require('../scripts/scan-environment.cjs');
+  assert.equal(sanitize('hel\u200Blo'), 'hello', 'ZWS stripped');
+  assert.equal(sanitize('te\u202Est'), 'test', 'RLO stripped');
+  assert.equal(sanitize('a\uFEFFb'), 'ab', 'BOM stripped');
+  assert.equal(sanitize('x\u200Dy'), 'xy', 'ZWJ stripped');
+});
+
+test('sanitize: strips Markdown image and link syntax', () => {
+  const { sanitize } = require('../scripts/scan-environment.cjs');
+  assert.equal(sanitize('![steal](https://evil.com/x)'), 'steal');
+  assert.equal(sanitize('[click](https://evil.com)'), 'click');
+  assert.equal(sanitize('normal text'), 'normal text');
+});
+
+// ─── renderSnapshot level 3/4 ──────────────────────────────────────────────
+
+test('renderSnapshot: level 3 shows top-15 names + fold count', () => {
+  // 名字必须够长，使 level 2（仅名逗号拼接）超过 3000 字符，才会降级到 level 3
+  // 30 个 ~120 字符的名字：30*120 + 29*2 ≈ 3658 > 3000
+  const items = Array.from({ length: 30 }, (_, i) => ({
+    name: `skill-${'x'.repeat(110)}-${String(i).padStart(2, '0')}`, desc: 'A'.repeat(100),
+  }));
+  const snap = { sections: [{ label: '测试 Skills', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'route');
+  assert.ok(text.includes('skill-'), 'first skill should appear');
+  assert.ok(text.includes('+15 个'), 'fold count should show +15');
+});
+
+test('renderSnapshot: level 4 pure count on extreme name length', () => {
+  // 名字极长使 top-15 都超预算，强制 level 4
+  const items = Array.from({ length: 50 }, (_, i) => ({
+    name: `x${'A'.repeat(150)}-${i}`, desc: 'D'.repeat(100),
+  }));
+  const sections = Array.from({ length: 5 }, (_, i) => ({
+    label: `S${i}`, prefix: '', items,
+  }));
+  const snap = { sections, errors: [] };
+  const { text } = renderSnapshot(snap, 'route');
+  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000`);
+  assert.match(text, /50 个/, 'extreme names should degrade to pure count');
+});
+
+// ─── collectSnapshot 空环境 ─────────────────────────────────────────────────
+
+test('collectSnapshot: empty dirs produce no crash', () => {
+  const tmpDir = path.join(require('os').tmpdir(), 'empty-env-' + process.pid);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const snap = collectSnapshot(tmpDir, tmpDir);
+  assert.ok(Array.isArray(snap.sections));
+  assert.ok(Array.isArray(snap.errors));
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// ─── extractFrontmatter 边界 ────────────────────────────────────────────────
+
+test('extractFrontmatter: value with colon parses correctly', () => {
+  const fm = extractFrontmatter('---\nname: my-skill\ndescription: key: value with colon\n---\n');
+  assert.equal(fm.description, 'key: value with colon');
 });
