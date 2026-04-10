@@ -25,6 +25,10 @@ const os = require('os');
 
 const MAX_TOTAL_CHARS = 3000;
 const MAX_DESC = 100;
+const TOP_N = 15;                // awareness/renderSection top-N 折叠阈值
+const MAX_PLUGIN_DEPTH = 3;      // findPluginRoots 最大递归深度
+const AWARENESS_MCP_DESC = 80;   // awareness 模式 MCP description 截断长度
+const AWARENESS_AGENT_DESC = 60; // awareness 模式 agent description 截断长度
 
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
 
@@ -289,7 +293,7 @@ function scanInstalledPlugins(claudeUserDir, errors) {
     const candidate = path.join(cacheDir, dirent.name);
     if (isSymlink(candidate)) continue;
 
-    const pluginPaths = findPluginRoots(candidate, 3, errors);
+    const pluginPaths = findPluginRoots(candidate, MAX_PLUGIN_DEPTH, errors);
 
     for (const pluginPath of pluginPaths) {
       const pluginName = path.basename(pluginPath);
@@ -465,7 +469,6 @@ function renderSection(section, level) {
   const { label, prefix, items } = section;
   if (level >= 4) return `### ${label}\n${items.length} 个`;
   if (level >= 3) {
-    const TOP_N = 15;
     if (items.length <= TOP_N) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
     const shown = items.slice(0, TOP_N).map(i => prefix + i.name).join(', ');
     return `### ${label}\n${shown}, +${items.length - TOP_N} 个`;
@@ -508,7 +511,7 @@ function renderAwareness(snapshot) {
   if (mcpItems.length > 0) {
     parts.push('### MCP Servers');
     for (const s of mcpItems) {
-      parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, 80)}` : `- ${s.name}`);
+      parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_MCP_DESC)}` : `- ${s.name}`);
     }
     parts.push('');
   }
@@ -516,22 +519,20 @@ function renderAwareness(snapshot) {
   // Subagents：带描述的 top-N（帮 Claude 匹配任务到 agent）
   const allAgents = [...find('项目级 Subagents'), ...find('用户级 Subagents')];
   if (allAgents.length > 0) {
-    const TOP_AGENTS = 15;
     parts.push('### Subagents');
-    const shown = allAgents.slice(0, TOP_AGENTS);
+    const shown = allAgents.slice(0, TOP_N);
     for (const a of shown) {
-      parts.push(a.desc ? `- ${a.name}: ${truncate(a.desc, 60)}` : `- ${a.name}`);
+      parts.push(a.desc ? `- ${a.name}: ${truncate(a.desc, AWARENESS_AGENT_DESC)}` : `- ${a.name}`);
     }
-    if (allAgents.length > TOP_AGENTS) parts.push(`+${allAgents.length - TOP_AGENTS} 个`);
+    if (allAgents.length > TOP_N) parts.push(`+${allAgents.length - TOP_N} 个`);
     parts.push('');
   }
 
   // Skills：仅总数 + top-15 名字（平台 Skill tool 已有描述，不重复）
   const allSkills = [...find('项目级 Skills'), ...find('用户级 Skills')];
   if (allSkills.length > 0) {
-    const TOP_SKILLS = 15;
-    const shown = allSkills.slice(0, TOP_SKILLS).map(s => s.name).join(', ');
-    const fold = allSkills.length > TOP_SKILLS ? `, +${allSkills.length - TOP_SKILLS} 个` : '';
+    const shown = allSkills.slice(0, TOP_N).map(s => s.name).join(', ');
+    const fold = allSkills.length > TOP_N ? `, +${allSkills.length - TOP_N} 个` : '';
     parts.push(`### Skills\n${shown}${fold}\n`);
   }
 
