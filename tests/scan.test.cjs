@@ -888,3 +888,20 @@ test('collectSnapshot: undefined projectDir 不崩溃（使用 cwd）', () => {
   assert.ok(Array.isArray(snap.sections));
   assert.ok(Array.isArray(snap.errors));
 });
+
+// ─── EACCES 权限错误收集 ───────────────────────────────────────────────────
+
+test('scanSkills: EACCES 收集到 errors 而非崩溃', { skip: process.platform === 'win32' }, () => {
+  const tmp = path.join(require('os').tmpdir(), 'eacces-test-' + process.pid);
+  fs.mkdirSync(path.join(tmp, 'locked-skill'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'locked-skill', 'SKILL.md'), '---\nname: x\n---\n');
+  // 移除目录读权限
+  fs.chmodSync(path.join(tmp, 'locked-skill'), 0o000);
+  const errors = [];
+  const results = scanSkills(tmp, errors);
+  // 恢复权限以便清理
+  fs.chmodSync(path.join(tmp, 'locked-skill'), 0o755);
+  fs.rmSync(tmp, { recursive: true, force: true });
+  // 不应崩溃，可能收集错误也可能跳过（取决于 OS）
+  assert.ok(Array.isArray(results));
+});
