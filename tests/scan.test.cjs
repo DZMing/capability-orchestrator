@@ -867,3 +867,24 @@ test('renderSection level 4: 纯计数', () => {
   assert.ok(out.includes('42 个'), 'level 4 should show pure count');
   assert.ok(!out.includes('s0'), 'level 4 should not show any names');
 });
+
+// ─── awareness 边界 + collectSnapshot 健壮性 ────────────────────────────────
+
+test('awareness 空快照仍包含路由策略', () => {
+  const snap = { sections: [], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('路由策略'), 'empty awareness should still have routing');
+});
+
+test('awareness 有错误时 footer 保留', () => {
+  const snap = { sections: [], errors: ['EACCES /foo'] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('路由策略'), 'routing should survive with errors');
+  assert.ok(text.includes('部分扫描失败'), 'error footer should appear');
+});
+
+test('collectSnapshot: undefined projectDir 不崩溃（使用 cwd）', () => {
+  const snap = collectSnapshot(undefined, USER_DIR);
+  assert.ok(Array.isArray(snap.sections));
+  assert.ok(Array.isArray(snap.errors));
+});
