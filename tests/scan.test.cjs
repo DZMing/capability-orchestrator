@@ -705,3 +705,66 @@ test('P1: MCP 跨级别去重（项目级优先）', () => {
   assert.equal(names.filter(n => n === 'dup').length, 1, 'dup should appear exactly once');
   fs.rmSync(tmp, { recursive: true });
 });
+
+// ─── 边界打磨测试 ───────────────────────────────────────────────────────────
+
+test('tryReadHead: 空文件返回空字符串', () => {
+  const tmp = path.join(FIXTURES, '_test_empty.md');
+  fs.writeFileSync(tmp, '');
+  try {
+    const result = tryReadHead(tmp);
+    assert.equal(result, '');
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('readMcpServers: mcpServers 为 null 不崩溃', () => {
+  const tmp = path.join(FIXTURES, '_test_null_mcp.json');
+  fs.writeFileSync(tmp, '{"mcpServers": null}');
+  try {
+    const servers = readMcpServers(tmp);
+    assert.deepEqual(servers, []);
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('readMcpServers: mcpServers 为数组不崩溃', () => {
+  const tmp = path.join(FIXTURES, '_test_arr_mcp.json');
+  fs.writeFileSync(tmp, '{"mcpServers": ["not", "an", "object"]}');
+  try {
+    const servers = readMcpServers(tmp);
+    assert.deepEqual(servers, []);
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('sanitize: C# language 不被误伤', () => {
+  assert.ok(sanitize('C# language').includes('C#'), 'C# should survive');
+});
+
+test('sanitize: HTML entities 被解码后过滤', () => {
+  const result = sanitize('&lt;script&gt;alert(1)&lt;/script&gt;');
+  assert.ok(!result.includes('<'), 'no angle brackets');
+  assert.ok(!result.includes('script'), 'script tag stripped');
+  assert.equal(result, 'alert(1)');
+});
+
+test('compareSemver: 4 段版本号正确比较', () => {
+  assert.equal(compareSemver('1.0.0.1', '1.0.0.0'), 1);
+  assert.equal(compareSemver('1.0.0', '1.0.0.1'), -1);
+});
+
+test('extractFrontmatter: block scalar >（折叠）含空行', () => {
+  const content = '---\ndescription: >\n  First line.\n\n  Second line.\n---\n';
+  const fm = extractFrontmatter(content);
+  // > 折叠模式：换行变空格
+  assert.ok(fm.description.includes('First line.'), 'first line');
+  assert.ok(fm.description.includes('Second line.'), 'second line after empty');
+});
+
+test('CLI: --mode=invalid 应 exit 1', () => {
+  const { execSync } = require('child_process');
+  try {
+    execSync('node scripts/scan-environment.cjs --mode=invalid 2>&1', { timeout: 5000 });
+    assert.fail('should have exited with error');
+  } catch (e) {
+    assert.ok(e.status === 1, 'exit code should be 1');
+  }
+});
