@@ -149,7 +149,8 @@ function getDescription(content) {
   if (fm.description) return sanitize(truncate(fm.description, MAX_DESC));
   // fallback：取 frontmatter 后第一个非空、非标题行
   if (!content) return '';
-  const afterFm = content.replace(/(?:^|\n)---[\s\S]*?\n---\s*\n?/g, '\n');
+  // 与 extractFrontmatter 相同的精确正则，不贪婪消费尾部空白
+  const afterFm = content.replace(/(?:^|\n)---[ \t]*\r?\n[\s\S]*?\r?\n---/g, '');
   const firstPara = afterFm
     .split('\n')
     .find(l => l.trim() && !l.startsWith('#') && !/^---\s*$/.test(l));

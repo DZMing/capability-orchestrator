@@ -629,3 +629,79 @@ test('resolveUserDir: WSL fallback returns Linux home when WSL_DISTRO_NAME set b
     else process.env.WSL_DISTRO_NAME = orig;
   }
 });
+
+// ─── 双方审查发现的 bug 回归测试 ───────────────────────────────────────────
+
+test('P0: awareness 路由策略在内容极长时仍保留', () => {
+  // 构造大量 sections 让列表部分很长
+  const sections = [];
+  for (let i = 0; i < 100; i++) {
+    sections.push({ label: `Test ${i}`, prefix: '', items: [
+      { name: `long-name-item-${i}-${'x'.repeat(50)}`, desc: 'desc '.repeat(10) }
+    ]});
+  }
+  const snap = { sections, errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('路由策略'), 'routing strategy must survive truncation');
+  assert.ok(text.length <= 3000, `total ${text.length} within budget`);
+});
+
+test('P0: JSON 注释剥离正确处理 \\\\"（转义反斜杠后的引号）', () => {
+  const tmp = path.join(FIXTURES, '_test_escaped_bs.json');
+  // "path\\" 中 \\ 是转义的反斜杠，后面的 " 是真正的字符串结尾
+  fs.writeFileSync(tmp, '{"mcpServers":{"s":{"command":"node","args":["path\\\\"]}}}\n// comment\n');
+  try {
+    const servers = readMcpServers(tmp);
+    assert.equal(servers.length, 1, 'should parse one server');
+    assert.equal(servers[0].name, 's');
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('P0: block scalar 含空行不截断', () => {
+  const content = '---\ndescription: |\n  First paragraph.\n\n  Second paragraph.\n---\n';
+  const fm = extractFrontmatter(content);
+  assert.ok(fm.description.includes('Second paragraph'), 'should include content after empty line');
+});
+
+test('P1: compareSemver 处理 v 前缀', () => {
+  assert.equal(compareSemver('v1.2.3', '1.2.3'), 0);
+  assert.equal(compareSemver('v2.0.0', 'v1.0.0'), 1);
+  assert.equal(compareSemver('1.0.0', 'V1.0.1'), -1);
+});
+
+test('P1: extractServers 对非 object 值不崩溃', () => {
+  const tmp = path.join(FIXTURES, '_test_bad_mcp.json');
+  // mcpServers 值为字符串而非对象
+  fs.writeFileSync(tmp, '{"mcpServers":"not-an-object"}');
+  try {
+    const servers = readMcpServers(tmp);
+    assert.deepEqual(servers, [], 'should return empty for non-object mcpServers');
+  } finally { fs.unlinkSync(tmp); }
+});
+
+test('P1: getDescription fallback 跳过所有 frontmatter 块', () => {
+  // 模拟双 frontmatter（metadata + content），无 description 字段
+  const content = '---\nsource_plugin: test\n---\n\n---\nname: my-agent\n---\n\nThis is the real body.';
+  const desc = getDescription(content);
+  assert.ok(desc.includes('real body'), `should find body not YAML fields, got: ${desc}`);
+});
+
+test('P1: MCP 跨级别去重（项目级优先）', () => {
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mcp-dedup-'));
+  const projDir = path.join(tmp, 'proj');
+  const userDir = path.join(tmp, 'user');
+  fs.mkdirSync(path.join(projDir, '.claude'), { recursive: true });
+  fs.mkdirSync(userDir, { recursive: true });
+  // 项目级和用户级都有同名 server "dup"
+  fs.writeFileSync(path.join(projDir, '.mcp.json'), JSON.stringify({ mcpServers: { dup: { command: 'a' }, projOnly: { command: 'b' } } }));
+  fs.writeFileSync(path.join(userDir, '.mcp.json'), JSON.stringify({ mcpServers: { dup: { command: 'c' }, userOnly: { command: 'd' } } }));
+  const snap = collectSnapshot(projDir, userDir);
+  const mcpSection = snap.sections.find(s => s.label === 'MCP Servers');
+  const names = mcpSection ? mcpSection.items.map(i => i.name) : [];
+  assert.ok(names.includes('dup'), 'dup should exist');
+  assert.ok(names.includes('projOnly'), 'projOnly should exist');
+  assert.ok(names.includes('userOnly'), 'userOnly should exist');
+  // dup 应该只出现一次
+  assert.equal(names.filter(n => n === 'dup').length, 1, 'dup should appear exactly once');
+  fs.rmSync(tmp, { recursive: true });
+});
