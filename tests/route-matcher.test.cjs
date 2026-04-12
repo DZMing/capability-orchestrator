@@ -7,7 +7,7 @@ const path = require('path');
 
 const {
   extractPrompt, extractKeywords, isEscaped, findBestMatch,
-  STOP_WORDS, ESCAPE_PATTERNS,
+  collectAllSkills, STOP_WORDS, ESCAPE_PATTERNS,
 } = require('../scripts/route-matcher.cjs');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'route-matcher.cjs');
@@ -270,6 +270,37 @@ test('createOutput: sanitizes skill description to prevent injection', () => {
   } finally {
     process.stdout.write = origWrite;
   }
+});
+
+// ─── collectAllSkills 插件 skill 路由 ───────────────────────────────────────
+
+const FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'project');
+const FIXTURE_USER = path.join(__dirname, 'fixtures', 'user');
+
+test('collectAllSkills: includes plugin skills', () => {
+  const skills = collectAllSkills(FIXTURE_PROJECT, FIXTURE_USER);
+  const names = skills.map(s => s.name);
+  assert.ok(names.includes('alpha'), 'should include good-plugin alpha skill');
+  assert.ok(names.includes('beta'), 'should include vendor-structure beta skill');
+  assert.ok(names.includes('gamma-skill'), 'should include three-level gamma-skill');
+});
+
+test('collectAllSkills: project skills take priority over plugin skills', () => {
+  const skills = collectAllSkills(FIXTURE_PROJECT, FIXTURE_USER);
+  const names = skills.map(s => s.name);
+  assert.ok(names.includes('valid-skill'), 'project skill should be present');
+  const validSkill = skills.find(s => s.name === 'valid-skill');
+  assert.ok(validSkill.desc.includes('valid test skill'), 'should have project-level desc');
+});
+
+test('findBestMatch: matches plugin-provided skill', () => {
+  const skills = [
+    { name: 'alpha', desc: 'Alpha skill for data analysis and reports' },
+    { name: 'beta', desc: 'Beta skill for testing frameworks' },
+  ];
+  const match = findBestMatch('run data analysis and generate reports', skills);
+  assert.ok(match);
+  assert.equal(match.name, 'alpha');
 });
 
 // ─── 端到端子进程测试 ──────────────────────────────────────────────────────
