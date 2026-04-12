@@ -479,6 +479,32 @@ test('sanitize: strips Markdown image and link syntax', () => {
   assert.equal(sanitize('normal text'), 'normal text');
 });
 
+// ─── Bug 3: sanitize Markdown regex backtracking ────────────────────────────
+
+test('sanitize: no regex backtracking on pathological Markdown link input', () => {
+  const payload = '[' + 'a'.repeat(10000) + '(';
+  const start = performance.now();
+  const result = sanitize(payload);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 50, `should complete in <50ms, took ${elapsed.toFixed(1)}ms`);
+  assert.ok(typeof result === 'string');
+});
+
+test('sanitize: no regex backtracking on pathological Markdown image input', () => {
+  const payload = '![' + 'b'.repeat(10000) + '(';
+  const start = performance.now();
+  const result = sanitize(payload);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 50, `should complete in <50ms, took ${elapsed.toFixed(1)}ms`);
+  assert.ok(typeof result === 'string');
+});
+
+test('sanitize: normal Markdown links still stripped after regex fix', () => {
+  assert.equal(sanitize('[text](http://example.com)'), 'text');
+  assert.equal(sanitize('![alt](http://img.png)'), 'alt');
+  assert.equal(sanitize('before [link](url) after'), 'before link after');
+});
+
 // ─── renderSnapshot level 3/4 ──────────────────────────────────────────────
 
 test('renderSnapshot: level 3 shows top-15 names + fold count', () => {
