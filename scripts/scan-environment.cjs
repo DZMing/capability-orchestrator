@@ -29,6 +29,7 @@ const TOP_N = 15;                // awareness/renderSection top-N 折叠阈值
 const MAX_PLUGIN_DEPTH = 3;      // findPluginRoots 最大递归深度
 const AWARENESS_MCP_DESC = 80;   // awareness 模式 MCP description 截断长度
 const AWARENESS_AGENT_DESC = 60; // awareness 模式 agent description 截断长度
+const AWARENESS_SKILL_DESC = 40; // awareness 模式 skill description 截断长度
 
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
 
@@ -530,12 +531,15 @@ function renderAwareness(snapshot) {
     parts.push('');
   }
 
-  // Skills：仅总数 + top-15 名字（平台 Skill tool 已有描述，不重复）
+  // Skills：名字 + 描述（供路由匹配使用）
   const allSkills = [...find('项目级 Skills'), ...find('用户级 Skills')];
   if (allSkills.length > 0) {
-    const shown = allSkills.slice(0, TOP_N).map(s => s.name).join(', ');
-    const fold = allSkills.length > TOP_N ? `, +${allSkills.length - TOP_N} 个` : '';
-    parts.push(`### Skills\n${shown}${fold}\n`);
+    parts.push('### Skills');
+    for (const s of allSkills.slice(0, TOP_N)) {
+      parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_SKILL_DESC)}` : `- ${s.name}`);
+    }
+    if (allSkills.length > TOP_N) parts.push(`+${allSkills.length - TOP_N} 个`);
+    parts.push('');
   }
 
   // 插件：仅总数
@@ -548,8 +552,8 @@ function renderAwareness(snapshot) {
     parts.push(`### Legacy Commands\n${legacyCmds.length} 个\n`);
   }
 
-  // 路由策略是 awareness 模式的核心价值，必须保证不被截断
-  const ROUTING = '\n### 路由策略\n收到任务时按优先级自动匹配：(1) 简单任务→直接做 (2) 有匹配 skill→Skill tool 调用 (3) 需专业化/隔离→委派 subagent (4) 涉及外部服务→MCP tool (5) 都不匹配→用自身能力完成。不确定时用 ToolSearch 搜索可用能力。';
+  // 路由规则是 awareness 模式的核心价值，必须保证不被截断
+  const ROUTING = '\n### 路由规则\n<MANDATORY>\n有匹配 skill 时必须用 Skill tool 调用，不得跳过直接做。\n匹配依据：skill description 与用户任务的语义重叠。\n逃逸条件：用户明确说"直接做/skip"，或纯问答无需执行动作。\n不确定时用 ToolSearch 搜索可用能力。\n</MANDATORY>';
   const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
   const listBudget = MAX_TOTAL_CHARS - ROUTING.length - FOOTER.length;
 

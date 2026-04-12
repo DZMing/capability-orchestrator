@@ -590,10 +590,11 @@ test('renderSnapshot awareness: output within budget', () => {
   assert.ok(text.length <= 3000, `awareness output ${text.length} should be ≤ 3000`);
 });
 
-test('renderSnapshot awareness: contains routing strategy', () => {
+test('renderSnapshot awareness: contains mandatory routing rules', () => {
   const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.includes('路由策略'), 'should include routing strategy section');
+  assert.ok(text.includes('路由规则'), 'should include routing rules section');
+  assert.ok(text.includes('MANDATORY'), 'should include MANDATORY directive');
   assert.ok(text.includes('Skill tool'), 'should mention Skill tool');
   assert.ok(text.includes('ToolSearch'), 'should mention ToolSearch');
 });
@@ -620,6 +621,18 @@ test('renderSnapshot awareness: subagents show descriptions', () => {
   const { text } = renderSnapshot(snap, 'awareness');
   assert.ok(text.includes('my-agent: helps debug'), 'agent with desc should show it');
   assert.ok(text.includes('other-agent'), 'agent without desc still listed');
+});
+
+test('renderSnapshot awareness: skills show descriptions', () => {
+  const items = [
+    { name: 'my-skill', desc: 'handles complex routing' },
+    { name: 'bare-skill', desc: '' },
+  ];
+  const snap = { sections: [{ label: '项目级 Skills', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('my-skill: handles complex routing'), 'skill with desc should show it');
+  assert.ok(text.includes('bare-skill'), 'skill without desc still listed');
+  assert.ok(!text.includes('bare-skill:'), 'skill without desc has no colon');
 });
 
 test('extractFrontmatter: merges double frontmatter blocks', () => {
@@ -703,7 +716,7 @@ test('P0: awareness 路由策略在内容极长时仍保留', () => {
   }
   const snap = { sections, errors: [] };
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.includes('路由策略'), 'routing strategy must survive truncation');
+  assert.ok(text.includes('路由规则'), 'routing rules must survive truncation');
   assert.ok(text.length <= 3000, `total ${text.length} within budget`);
 });
 
@@ -870,16 +883,16 @@ test('renderSection level 4: 纯计数', () => {
 
 // ─── awareness 边界 + collectSnapshot 健壮性 ────────────────────────────────
 
-test('awareness 空快照仍包含路由策略', () => {
+test('awareness 空快照仍包含路由规则', () => {
   const snap = { sections: [], errors: [] };
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.includes('路由策略'), 'empty awareness should still have routing');
+  assert.ok(text.includes('路由规则'), 'empty awareness should still have routing');
 });
 
 test('awareness 有错误时 footer 保留', () => {
   const snap = { sections: [], errors: ['EACCES /foo'] };
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.includes('路由策略'), 'routing should survive with errors');
+  assert.ok(text.includes('路由规则'), 'routing should survive with errors');
   assert.ok(text.includes('部分扫描失败'), 'error footer should appear');
 });
 
