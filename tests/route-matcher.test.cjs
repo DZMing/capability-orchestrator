@@ -47,6 +47,23 @@ test('extractPrompt: prompt field takes priority', () => {
   assert.equal(extractPrompt(input), 'primary');
 });
 
+// ─── extractCwd ────────────────────────────────────────────────────────────
+
+test('extractCwd: extracts cwd field', () => {
+  const { extractCwd } = require('../scripts/route-matcher.cjs');
+  assert.equal(extractCwd(JSON.stringify({ cwd: '/foo/bar', prompt: 'hi' })), '/foo/bar');
+});
+
+test('extractCwd: returns empty for missing cwd', () => {
+  const { extractCwd } = require('../scripts/route-matcher.cjs');
+  assert.equal(extractCwd(JSON.stringify({ prompt: 'hi' })), '');
+});
+
+test('extractCwd: returns empty for invalid JSON', () => {
+  const { extractCwd } = require('../scripts/route-matcher.cjs');
+  assert.equal(extractCwd('not json'), '');
+});
+
 // ─── extractKeywords ────────────────────────────────────────────────────────
 
 test('extractKeywords: splits English text', () => {
@@ -309,4 +326,19 @@ test('e2e: exit 0 on normal input', () => {
   assert.ok(raw.length > 0, 'should produce output');
   const output = JSON.parse(raw.trim());
   assert.equal(output.continue, true);
+});
+
+test('e2e: uses cwd from stdin for skill scanning', () => {
+  const fixtureProject = path.join(__dirname, 'fixtures', 'project');
+  const raw = execFileSync(NODE, [SCRIPT], {
+    input: JSON.stringify({ prompt: 'I need a valid test skill for this task', cwd: fixtureProject }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.continue, true);
+  if (output.hookSpecificOutput) {
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('valid-skill'),
+      'should route to valid-skill from fixture project');
+  }
 });
