@@ -153,7 +153,8 @@ function findBestMatch(prompt, skills) {
       }
     }
   }
-  return best;
+  if (!best) return null;
+  return { ...best, confidence: bestScore / Math.max(promptKw.length, 1) };
 }
 
 function createOutput(match) {
