@@ -14,7 +14,7 @@
 
 const path = require('path');
 const os = require('os');
-const { scanSkills, sanitize } = require('./scan-environment.cjs');
+const { scanSkills, sanitize, scanInstalledPlugins } = require('./scan-environment.cjs');
 
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
@@ -186,9 +186,15 @@ function collectAllSkills(projectDir, userDir) {
   );
   const projSkills = scanSkills(path.join(projectDir, '.claude', 'skills'), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
+  const pluginSkills = [];
+  try {
+    for (const p of scanInstalledPlugins(claudeUserDir, [])) {
+      for (const s of (p.skillItems || [])) pluginSkills.push(s);
+    }
+  } catch { /* fault-open */ }
   const seen = new Set();
   const deduped = [];
-  for (const s of [...projSkills, ...userSkills]) {
+  for (const s of [...projSkills, ...userSkills, ...pluginSkills]) {
     if (!seen.has(s.name)) {
       seen.add(s.name);
       deduped.push(s);
