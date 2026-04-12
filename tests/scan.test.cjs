@@ -918,3 +918,17 @@ test('scanSkills: EACCES 收集到 errors 而非崩溃', { skip: process.platfor
   // 不应崩溃，可能收集错误也可能跳过（取决于 OS）
   assert.ok(Array.isArray(results));
 });
+
+// ─── stdin CWD 解析（SessionStart hook）────────────────────────────────────
+
+test('awareness mode: uses cwd from stdin JSON', () => {
+  const { execFileSync } = require('child_process');
+  const fixtureProject = path.join(__dirname, 'fixtures', 'project');
+  const script = path.join(__dirname, '..', 'scripts', 'scan-environment.cjs');
+  const raw = execFileSync(process.execPath, [script, '--mode=awareness'], {
+    input: JSON.stringify({ cwd: fixtureProject }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  });
+  assert.ok(raw.includes('valid-skill'), 'should detect fixture project skill via stdin cwd');
+});
