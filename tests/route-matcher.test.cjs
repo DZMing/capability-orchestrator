@@ -333,6 +333,39 @@ test('findBestMatch: matches plugin-provided skill', () => {
   assert.equal(match.name, 'alpha');
 });
 
+// ─── Bug 1: Unicode NFC/NFD 归一化 ──────────────────────────────────────────
+
+test('extractKeywords: NFC and NFD produce identical results', () => {
+  const nfc = 'caf\u00e9';       // café (NFC: é = U+00E9)
+  const nfd = 'cafe\u0301';      // café (NFD: e + combining acute)
+  const kwNfc = extractKeywords(nfc);
+  const kwNfd = extractKeywords(nfd);
+  assert.deepEqual(kwNfc, kwNfd, `NFC ${JSON.stringify(kwNfc)} !== NFD ${JSON.stringify(kwNfd)}`);
+});
+
+test('findBestMatch: NFC prompt matches NFD skill description', () => {
+  const skills = [{ name: 'cafe-tool', desc: 'cafe\u0301 helper for re\u0301sume\u0301' }];
+  const match = findBestMatch('I need the caf\u00e9 helper for my r\u00e9sum\u00e9 today', skills);
+  assert.ok(match, 'NFC prompt should match NFD description');
+  assert.equal(match.name, 'cafe-tool');
+});
+
+// ─── Bug 2: CJK Extensions B-G ─────────────────────────────────────────────
+
+test('extractKeywords: CJK Extension B characters treated as CJK', () => {
+  // U+20000 (𠀀) and U+20001 (𠀁) are CJK Extension B characters
+  const kw = extractKeywords('\u{20000}\u{20001}测试');
+  assert.ok(kw.includes('测'), 'basic CJK char should be extracted');
+  assert.ok(kw.includes('试'), 'basic CJK char should be extracted');
+  assert.ok(kw.includes('\u{20000}'), 'Extension B char should be extracted as CJK');
+  assert.ok(kw.includes('\u{20001}'), 'Extension B char should be extracted as CJK');
+});
+
+test('extractKeywords: CJK Extension B bigrams', () => {
+  const kw = extractKeywords('\u{20000}\u{20001}');
+  assert.ok(kw.includes('\u{20000}\u{20001}'), 'should produce bigram from Extension B chars');
+});
+
 // ─── 端到端子进程测试 ──────────────────────────────────────────────────────
 
 test('e2e: passThrough for short prompt', () => {
