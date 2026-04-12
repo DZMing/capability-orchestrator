@@ -140,21 +140,35 @@ function findBestMatch(prompt, skills) {
 
   let best = null;
   let bestScore = 0;
+  let bestOverlap = 0;
   for (const skill of skills) {
     const descKw = extractKeywords(skill.desc);
     const nameKw = extractKeywords(skill.name);
-    const skillKw = [...new Set([...descKw, ...nameKw])];
-    const overlap = promptKw.filter(k => skillKw.includes(k)).length;
-    if (overlap >= MIN_KEYWORD_OVERLAP ||
-        (overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN)) {
-      if (overlap > bestScore) {
-        bestScore = overlap;
-        best = skill;
-      }
+    const skillKwSet = new Set([...descKw, ...nameKw]);
+    const nameKwSet = new Set(nameKw);
+    const matched = promptKw.filter(k => skillKwSet.has(k));
+    const overlap = matched.length;
+    if (overlap < MIN_KEYWORD_OVERLAP &&
+        !(overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN)) continue;
+
+    let weighted = 0;
+    for (const k of matched) {
+      let w = 1;
+      if (k.length >= 2 && CJK_RANGE.test(k)) w = 2;
+      if (nameKwSet.has(k)) w *= 2;
+      weighted += w;
+    }
+    const union = new Set([...promptKw, ...skillKwSet]).size;
+    const score = weighted / Math.max(union, 1);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestOverlap = overlap;
+      best = skill;
     }
   }
   if (!best) return null;
-  return { ...best, confidence: bestScore / Math.max(promptKw.length, 1) };
+  return { ...best, confidence: bestOverlap / Math.max(promptKw.length, 1) };
 }
 
 function createOutput(match) {

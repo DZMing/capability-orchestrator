@@ -333,6 +333,38 @@ test('findBestMatch: matches plugin-provided skill', () => {
   assert.equal(match.name, 'alpha');
 });
 
+// ─── 匹配精度：长描述不应靠通用词碰撞赢过精确匹配 ────────────────────────
+
+test('findBestMatch: specific keyword match beats generic overlap from long desc', () => {
+  const skills = [
+    { name: 'auth-quick', desc: '5 分钟认证集成：Supabase Auth 或 Clerk，含 Google OAuth' },
+    { name: 'feedback-loop', desc: '用户反馈系统：嵌入式反馈按钮 + 自动分类（Bug/功能请求/好评）+ 邮件通知，15 分钟集成完成' },
+  ];
+  const match = findBestMatch('写一个用户认证功能', skills);
+  assert.ok(match, 'should match something');
+  assert.equal(match.name, 'auth-quick', '"认证" is more specific than "用户"/"功能" in feedback-loop');
+});
+
+test('findBestMatch: does not match on incidental word in long description', () => {
+  const skills = [
+    { name: 'deploy-tool', desc: 'deploy code to staging and production servers' },
+    { name: 'design-html', desc: 'Design finalization: generates production-quality HTML/CSS' },
+  ];
+  const match = findBestMatch('I need to deploy this to production', skills);
+  assert.ok(match, 'should match');
+  assert.equal(match.name, 'deploy-tool', '"deploy" + "production" should beat incidental "production" in design desc');
+});
+
+test('findBestMatch: bigram match weighs more than single-char matches', () => {
+  const skills = [
+    { name: 'code-review', desc: '代码审查工具' },
+    { name: 'code-gen', desc: '代码生成器，自动生成代码模板' },
+  ];
+  const match = findBestMatch('帮我做代码审查', skills);
+  assert.ok(match);
+  assert.equal(match.name, 'code-review', '"代码审查" bigram match should win');
+});
+
 // ─── Bug 1: Unicode NFC/NFD 归一化 ──────────────────────────────────────────
 
 test('extractKeywords: NFC and NFD produce identical results', () => {
