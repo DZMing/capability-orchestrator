@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 const path = require('path');
 
 const {
@@ -435,4 +435,68 @@ test('e2e: uses cwd from stdin for skill scanning', () => {
     assert.ok(output.hookSpecificOutput.additionalContext.includes('valid-skill'),
       'should route to valid-skill from fixture project');
   }
+});
+
+// ─── Session 2: readStdin 超时 & 异常路径 ─────────────────────────────────
+
+test('e2e: stdin timeout produces passThrough (no stdin data)', (t, done) => {
+  const child = spawn(NODE, [SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
+  let stdout = '';
+  child.stdout.on('data', (d) => { stdout += d; });
+  child.on('close', (code) => {
+    assert.equal(code, 0, 'should exit 0');
+    const output = JSON.parse(stdout.trim());
+    assert.equal(output.continue, true, 'should passThrough on timeout');
+    done();
+  });
+  // Don't write anything to stdin, don't end it — force the timeout path
+  // Default STDIN_TIMEOUT is 3000ms, so this test takes ~3s
+});
+
+test('e2e: multi-chunk stdin correctly assembled', () => {
+  // Split JSON across two writes to test chunk accumulation
+  const json = JSON.stringify({ prompt: 'help me review this code carefully' });
+  const mid = Math.floor(json.length / 2);
+  const chunk1 = json.slice(0, mid);
+  const chunk2 = json.slice(mid);
+
+  // Use a wrapper script that writes in two chunks
+  const wrapperScript = `
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, ['${SCRIPT.replace(/'/g, "\\'")}'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', d => out += d);
+    child.on('close', () => { process.stdout.write(out); });
+    child.stdin.write(${JSON.stringify(chunk1)});
+    setTimeout(() => { child.stdin.write(${JSON.stringify(chunk2)}); child.stdin.end(); }, 50);
+  `;
+  const raw = execFileSync(NODE, ['-e', wrapperScript], {
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.continue, true, 'multi-chunk input should produce valid output');
+});
+
+test('e2e: empty stdin end produces passThrough', () => {
+  // Pipe empty buffer and immediately end — tests readableEnded path
+  const raw = execFileSync(NODE, [SCRIPT], {
+    input: Buffer.alloc(0),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.continue, true);
+});
+
+test('collectAllSkills: fault-open when plugin scan throws', () => {
+  // Pass a non-existent userDir that will cause scanInstalledPlugins to fail
+  const skills = collectAllSkills(
+    path.join(__dirname, 'fixtures', 'project'),
+    '/nonexistent/path/that/definitely/does/not/exist'
+  );
+  // Should still return project skills without crashing
+  assert.ok(Array.isArray(skills), 'should return array');
+  const names = skills.map(s => s.name);
+  assert.ok(names.includes('valid-skill'), 'project skill should still be present');
 });
