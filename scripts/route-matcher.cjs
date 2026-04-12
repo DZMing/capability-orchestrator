@@ -162,9 +162,13 @@ function findBestMatch(prompt, skills) {
   let bestScore = 0;
   let bestOverlap = 0;
   for (const { skill, kwSet, nameSet } of skillData) {
-    const overlap = promptKw.filter(k => kwSet.has(k)).length;
-    if (overlap < MIN_KEYWORD_OVERLAP &&
-        !(overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN)) continue;
+    const allMatched = promptKw.filter(k => kwSet.has(k));
+    const overlap = allMatched.length;
+    if (overlap < MIN_KEYWORD_OVERLAP) {
+      if (overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN &&
+          nameSet.has(allMatched[0])) { /* name match — allow */ }
+      else continue;
+    }
 
     const matched = scorablePromptKw.filter(k => kwSet.has(k));
     let score = 0;

@@ -173,7 +173,7 @@ test('isEscaped: null returns false', () => {
 
 test('findBestMatch: matches skill by keyword overlap', () => {
   const skills = [
-    { name: 'debugging', desc: 'fix bugs and debug errors in code' },
+    { name: 'debugging', desc: 'fix bug and debug error in code' },
     { name: 'testing', desc: 'write tests and run test suites' },
   ];
   const match = findBestMatch('there is a bug error in my code', skills);
@@ -225,7 +225,7 @@ test('findBestMatch: matches on skill name keywords too', () => {
 // ─── confidence scoring ────────────────────────────────────────────────────
 
 test('findBestMatch: returns confidence between 0 and 1', () => {
-  const skills = [{ name: 'debugging', desc: 'fix bugs and debug errors in code' }];
+  const skills = [{ name: 'debugging', desc: 'fix bug and debug error in code' }];
   const match = findBestMatch('there is a bug error in my code', skills);
   assert.ok(match);
   assert.ok(typeof match.confidence === 'number', 'should have confidence');
@@ -358,6 +358,27 @@ test('findBestMatch: does not match on incidental word in long description', () 
   const match = findBestMatch('I need to deploy this to production', skills);
   assert.ok(match, 'should match');
   assert.equal(match.name, 'deploy-tool', '"deploy" + "production" should beat incidental "production" in design desc');
+});
+
+test('findBestMatch: single-keyword match on desc only should not route when no skill matches intent', () => {
+  // "production" appears in design-html desc as "production-quality" — not the user's intent
+  // With only 1 keyword overlap and no name match, should return null
+  const skills = [
+    { name: 'design-html', desc: 'Design finalization: generates production-quality HTML/CSS' },
+    { name: 'frontend-design', desc: 'Create production-grade frontend interfaces' },
+  ];
+  const match = findBestMatch('I need to deploy this to production', skills);
+  assert.equal(match, null, 'single keyword "production" not in any skill name — should not match');
+});
+
+test('findBestMatch: single-keyword match on skill name still works', () => {
+  const skills = [
+    { name: 'production-deploy', desc: 'deploy code to servers' },
+    { name: 'design-html', desc: 'Design finalization: generates production-quality HTML/CSS' },
+  ];
+  const match = findBestMatch('I need to deploy this to production', skills);
+  assert.ok(match, 'should match — "production" is in skill name');
+  assert.equal(match.name, 'production-deploy');
 });
 
 test('findBestMatch: bigram match weighs more than single-char matches', () => {
