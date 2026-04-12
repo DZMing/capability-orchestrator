@@ -89,6 +89,13 @@ function extractPrompt(input) {
   }
 }
 
+function extractCwd(input) {
+  try {
+    const data = JSON.parse(input);
+    return (data && data.cwd) ? String(data.cwd) : '';
+  } catch { return ''; }
+}
+
 const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 const CJK_RUN = /[\u4e00-\u9fff\u3400-\u4dbf]+/g;
 const NON_CJK_RUN = /[^\u4e00-\u9fff\u3400-\u4dbf]+/g;
@@ -191,7 +198,7 @@ function collectAllSkills(projectDir, userDir) {
 }
 
 module.exports = {
-  readStdin, extractPrompt, extractKeywords, isEscaped,
+  readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
   findBestMatch, createOutput, passThrough, collectAllSkills,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
@@ -204,7 +211,8 @@ else {
       if (!prompt || prompt.length < MIN_PROMPT_LEN || isEscaped(prompt)) {
         return passThrough();
       }
-      const projectDir = process.env.CAPABILITY_PROJECT_DIR || process.cwd();
+      const stdinCwd = extractCwd(input);
+      const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
       const userDir = process.env.CAPABILITY_USER_DIR;
       const skills = collectAllSkills(projectDir, userDir);
       const match = findBestMatch(prompt, skills);
