@@ -1,0 +1,28 @@
+## 环境能力感知
+
+2 skills、1 subagents、4 plugins、2 MCP servers。
+
+### MCP Servers
+- test-server: 项目级
+- user-server: 用户级
+
+### Subagents
+- test-agent: A test subagent
+
+### Skills
+- valid-skill: A valid test skill
+- user-skill: A user-level skill
+
+### 已安装插件
+4 个
+
+### Legacy Commands
+1 个
+
+### 路由规则
+<MANDATORY>
+有匹配 skill 时必须用 Skill tool 调用，不得跳过直接做。
+匹配依据：skill description 与用户任务的语义重叠。
+逃逸条件：用户明确说"直接做/skip"，或纯问答无需执行动作。
+不确定时用 ToolSearch 搜索可用能力。
+</MANDATORY>
