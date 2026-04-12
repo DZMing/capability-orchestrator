@@ -219,6 +219,24 @@ test('STOP_WORDS: contains common Chinese words', () => {
   assert.ok(STOP_WORDS.has('帮我'));
 });
 
+test('STOP_WORDS: does NOT contain task-critical Chinese words', () => {
+  assert.ok(!STOP_WORDS.has('做'), '"做" should not be a stop word');
+  assert.ok(!STOP_WORDS.has('什么'), '"什么" should not be a stop word');
+  assert.ok(!STOP_WORDS.has('要'), '"要" should not be a stop word');
+});
+
+test('extractKeywords: "做" preserved in task descriptions', () => {
+  const kw = extractKeywords('帮我做数据分析');
+  assert.ok(kw.some(k => k.includes('做')), `"做" should be preserved, got: ${JSON.stringify(kw)}`);
+});
+
+test('findBestMatch: Chinese prompt with "做" matches skill', () => {
+  const skills = [{ name: 'review', desc: '代码审查工具' }];
+  const match = findBestMatch('帮我做一个代码审查', skills);
+  assert.ok(match, 'should match despite "做" in prompt');
+  assert.equal(match.name, 'review');
+});
+
 // ─── createOutput sanitization ──────────────────────────────────────────────
 
 test('createOutput: sanitizes skill description to prevent injection', () => {
