@@ -96,13 +96,13 @@ function extractCwd(input) {
   } catch { return ''; }
 }
 
-const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
-const CJK_RUN = /[\u4e00-\u9fff\u3400-\u4dbf]+/g;
-const NON_CJK_RUN = /[^\u4e00-\u9fff\u3400-\u4dbf]+/g;
+const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]/u;
+const CJK_RUN = /[\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]+/gu;
+const NON_CJK_RUN = /[^\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]+/gu;
 
 function extractKeywords(text) {
   if (!text || typeof text !== 'string') return [];
-  const lower = text.toLowerCase();
+  const lower = text.normalize('NFC').toLowerCase();
   const rawTokens = lower.match(/[\p{L}\p{N}]+/gu) || [];
   const tokens = [];
   for (const t of rawTokens) {
