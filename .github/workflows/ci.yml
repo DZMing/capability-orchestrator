@@ -19,10 +19,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Unit tests
-        run: node --test tests/scan.test.cjs tests/skill-contract.test.cjs tests/route-matcher.test.cjs
+        run: node --test tests/scan.test.cjs tests/skill-contract.test.cjs tests/route-matcher.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs
       - name: Coverage (Node 22 only)
         if: matrix.node-version == 22 && matrix.os == 'ubuntu-latest'
-        run: node --test --experimental-test-coverage tests/scan.test.cjs tests/route-matcher.test.cjs
+        run: node --test --experimental-test-coverage tests/scan.test.cjs tests/route-matcher.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs
       - name: Install smoke test
         run: bash tests/install.test.sh
       - name: Install idempotency test
