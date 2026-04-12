@@ -192,7 +192,8 @@ test('fuzz passThrough: always valid JSON with continue:true (100 iterations)', 
   }
 });
 
-test('fuzz createOutput: always valid JSON for random inputs (300 iterations)', () => {
+test('fuzz createOutput: always includes AUTO-ROUTE for random inputs (300 iterations)', () => {
+  // createOutput now outputs plain text (not JSON) — verify it contains required markers
   const origWrite = process.stdout.write;
   try {
     for (let i = 0; i < 300; i++) {
@@ -201,10 +202,9 @@ test('fuzz createOutput: always valid JSON for random inputs (300 iterations)', 
       const name = randMixed(randInt(1, 30));
       const desc = randMixed(randInt(0, 100));
       createOutput({ name, desc });
-      const parsed = JSON.parse(captured.trim());
-      assert.equal(parsed.continue, true, `iteration ${i}: continue not true`);
-      assert.ok(parsed.hookSpecificOutput, `iteration ${i}: missing hookSpecificOutput`);
-      assert.ok(parsed.hookSpecificOutput.additionalContext, `iteration ${i}: missing additionalContext`);
+      assert.ok(captured.includes('[AUTO-ROUTE]'), `iteration ${i}: missing AUTO-ROUTE marker`);
+      assert.ok(captured.includes('强制指令'), `iteration ${i}: missing mandatory instruction`);
+      assert.ok(captured.length > 0, `iteration ${i}: empty output`);
     }
   } finally {
     process.stdout.write = origWrite;

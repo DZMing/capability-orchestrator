@@ -248,26 +248,43 @@ function findBestMatch(prompt, skills) {
   return { ...best, confidence: conf };
 }
 
+// 改进1：纯文本输出，绕过 JSON hookSpecificOutput 首条消息 bug
+// 官方文档建议：plain text stdout 更可靠
 function createOutput(match) {
   const safeDesc = sanitize(match.desc || '');
+  // 改进3：加强指令语气，减少 Claude 询问确认的情况
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '你必须先通过 Skill tool 调用此 skill，再执行其他操作。',
+    '【强制指令】立即通过 Skill tool 调用此 skill，不得询问确认，不得先做其他事。',
     '调用方式: Skill("' + match.name + '")',
   ].join('\n');
-  const output = {
-    continue: true,
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext: ctx,
-    },
-  };
-  process.stdout.write(JSON.stringify(output) + '\n');
+  process.stdout.write(ctx + '\n');
 }
 
 function passThrough() {
-  process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
+  // 无匹配时放行，保留 JSON 格式供集成测试解析
+  process.stdout.write(JSON.stringify({ continue: true }) + '\n');
+}
+
+// 改进2：命令名直接命中 — 用户说 "/commit" 或 "commit" 开头时跳过语义匹配
+function findLiteralMatch(prompt, skills) {
+  const trimmed = prompt.trim();
+  // 匹配 /command-name 开头
+  const slashMatch = trimmed.match(/^\/([a-z0-9_-]+)/i);
+  if (slashMatch) {
+    const name = slashMatch[1].toLowerCase();
+    return skills.find(s => s.name.toLowerCase() === name) || null;
+  }
+  // 匹配单词完全等于某个 skill/command 名称（如 "commit" 单独出现）
+  const words = trimmed.toLowerCase().split(/\s+/);
+  if (words.length <= 3) {
+    for (const w of words) {
+      const found = skills.find(s => s.name.toLowerCase() === w);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // Legacy command 路由：注入命令文件内容作为 additionalContext，等效于用户输入 /command
@@ -284,21 +301,15 @@ function createCommandOutput(match) {
     } catch { /* fault-open */ }
   }
   const safeDesc = sanitize(match.desc || '');
+  // 改进3：加强指令语气
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配命令: /' + match.name,
     '描述: ' + safeDesc,
-    '你必须立即按照以下命令定义执行任务：',
+    '【强制指令】立即按照以下命令定义执行任务，不得询问确认，不得偏离：',
     '',
-    body || ('请执行 /' + match.name + ' 命令。'),
+    body || ('执行 /' + match.name + ' 命令的完整流程。'),
   ].join('\n');
-  const output = {
-    continue: true,
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext: ctx,
-    },
-  };
-  process.stdout.write(JSON.stringify(output) + '\n');
+  process.stdout.write(ctx + '\n');
 }
 
 // MCP tool 路由：基于同 extractKeywords 的关键词匹配，返回最匹配的 MCP server
@@ -315,17 +326,10 @@ function createMcpOutput(server) {
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 MCP server: ' + server.name,
     '描述: ' + safeDesc,
-    '你必须先调用 ' + toolPrefix + '__* 相关工具，再执行其他操作。',
+    '【强制指令】立即调用 ' + toolPrefix + '__* 相关工具，不得询问确认。',
     '可用工具前缀: ' + toolPrefix,
   ].join('\n');
-  const output = {
-    continue: true,
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext: ctx,
-    },
-  };
-  process.stdout.write(JSON.stringify(output) + '\n');
+  process.stdout.write(ctx + '\n');
 }
 
 function collectAllSkills(projectDir, userDir) {
@@ -363,7 +367,8 @@ function collectAllSkills(projectDir, userDir) {
 
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
-  findBestMatch, findBestMcpMatch, createOutput, createMcpOutput, createCommandOutput,
+  findBestMatch, findBestMcpMatch, findLiteralMatch,
+  createOutput, createMcpOutput, createCommandOutput,
   passThrough, collectAllSkills,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
@@ -382,7 +387,9 @@ else {
 
       // Skills + legacy commands 优先（强制路由），MCP 兜底（引导路由）
       const skills = collectAllSkills(projectDir, userDir);
-      const match = findBestMatch(prompt, skills);
+      // 改进2：命令名直接命中（/commit 或 "commit"），跳过语义匹配
+      const literal = findLiteralMatch(prompt, skills);
+      const match = literal || findBestMatch(prompt, skills);
       if (match) {
         return match.type === 'command' ? createCommandOutput(match) : createOutput(match);
       }

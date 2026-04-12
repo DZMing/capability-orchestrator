@@ -293,13 +293,13 @@ test('createOutput: sanitizes skill description to prevent injection', () => {
   const { createOutput } = require('../scripts/route-matcher.cjs');
   const origWrite = process.stdout.write;
   let captured = '';
-  process.stdout.write = (s) => { captured += s; };
+  process.stdout.write = (s) => { captured += s; return true; };
   try {
     createOutput({ name: 'evil-skill', desc: 'normal <script>alert(1)</script> `rm -rf /`' });
-    const output = JSON.parse(captured.trim());
-    const ctx = output.hookSpecificOutput.additionalContext;
-    assert.ok(!ctx.includes('<script>'), 'HTML tags should be stripped');
-    assert.ok(!ctx.includes('`rm'), 'backticks should be neutralized');
+    // createOutput now outputs plain text (not JSON)
+    assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
+    assert.ok(!captured.includes('<script>'), 'HTML tags should be stripped');
+    assert.ok(!captured.includes('`rm'), 'backticks should be neutralized');
   } finally {
     process.stdout.write = origWrite;
   }
@@ -481,9 +481,10 @@ test('e2e: passThrough for short prompt', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
+  // passThrough outputs JSON {"continue":true}
   const output = JSON.parse(raw);
   assert.equal(output.continue, true);
-  assert.equal(output.suppressOutput, true);
+  assert.ok(!output.hookSpecificOutput, 'short prompt should not have hookSpecificOutput');
 });
 
 test('e2e: passThrough for escaped prompt', () => {
@@ -492,9 +493,10 @@ test('e2e: passThrough for escaped prompt', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
+  // passThrough outputs JSON {"continue":true}
   const output = JSON.parse(raw);
   assert.equal(output.continue, true);
-  assert.equal(output.suppressOutput, true);
+  assert.ok(!output.hookSpecificOutput, 'escaped prompt should not have hookSpecificOutput');
 });
 
 test('e2e: passThrough for empty input', () => {
@@ -507,13 +509,14 @@ test('e2e: passThrough for empty input', () => {
   assert.equal(output.continue, true);
 });
 
-test('e2e: always outputs valid JSON', () => {
+test('e2e: passThrough on invalid input produces valid JSON', () => {
+  // Invalid JSON → extractPrompt returns '' → passThrough → JSON output
   const raw = execFileSync(NODE, [SCRIPT], {
     input: 'invalid json garbage',
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
-  assert.doesNotThrow(() => JSON.parse(raw), 'output must be valid JSON');
+  assert.doesNotThrow(() => JSON.parse(raw), 'passThrough must produce valid JSON');
   const output = JSON.parse(raw);
   assert.equal(output.continue, true);
 });
@@ -525,8 +528,11 @@ test('e2e: exit 0 on normal input', () => {
     timeout: 10000,
   });
   assert.ok(raw.length > 0, 'should produce output');
-  const output = JSON.parse(raw.trim());
-  assert.equal(output.continue, true);
+  // Output is either plain text [AUTO-ROUTE] (match) or JSON passThrough
+  const trimmed = raw.trim();
+  const isMatch = trimmed.startsWith('[AUTO-ROUTE]');
+  const isPassThrough = trimmed.startsWith('{');
+  assert.ok(isMatch || isPassThrough, 'output should be AUTO-ROUTE text or passThrough JSON');
 });
 
 test('e2e: uses cwd from stdin for skill scanning', () => {
@@ -536,12 +542,13 @@ test('e2e: uses cwd from stdin for skill scanning', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
-  const output = JSON.parse(raw);
-  assert.equal(output.continue, true);
-  // verify output is structurally valid (may route to any skill including user-level)
-  if (output.hookSpecificOutput) {
-    assert.ok(output.hookSpecificOutput.additionalContext, 'should have additionalContext');
-    assert.ok(output.hookSpecificOutput.hookEventName === 'UserPromptSubmit');
+  // Output is either plain text AUTO-ROUTE or passThrough JSON
+  const isMatch = raw.startsWith('[AUTO-ROUTE]');
+  const isPassThrough = raw.startsWith('{');
+  assert.ok(isMatch || isPassThrough, 'should produce AUTO-ROUTE or passThrough output');
+  if (isMatch) {
+    assert.ok(raw.includes('[AUTO-ROUTE]'), 'match should include AUTO-ROUTE marker');
+    assert.ok(raw.includes('Skill tool') || raw.includes('命令'), 'should instruct to use skill or command');
   }
 });
 
@@ -582,8 +589,10 @@ test('e2e: multi-chunk stdin correctly assembled', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
-  const output = JSON.parse(raw);
-  assert.equal(output.continue, true, 'multi-chunk input should produce valid output');
+  // Output is either plain text [AUTO-ROUTE] or JSON passThrough
+  const trimmed = raw.trim();
+  assert.ok(trimmed.startsWith('[AUTO-ROUTE]') || trimmed.startsWith('{'),
+    'multi-chunk input should produce AUTO-ROUTE or passThrough output');
 });
 
 test('e2e: empty stdin end produces passThrough', () => {
@@ -651,25 +660,26 @@ test('mutation: 25-char question is escaped (threshold < 30)', () => {
 
 // 4e: MIN_PROMPT_LEN boundary — 5 char prompt processed, 4 char skipped
 test('mutation: MIN_PROMPT_LEN boundary at 5 chars', () => {
-  const skills = [{ name: 'debug', desc: 'debug errors code bugs fix' }];
-  // 4-char prompt should be skipped (passThrough) in CLI — test via e2e
+  // 4-char prompt should be skipped (passThrough → JSON {"continue":true})
   const raw4 = execFileSync(NODE, [SCRIPT], {
     input: JSON.stringify({ prompt: 'abcd' }),
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
   const out4 = JSON.parse(raw4);
-  assert.equal(out4.suppressOutput, true, '4-char prompt should be skipped');
+  assert.equal(out4.continue, true, '4-char prompt should passThrough');
+  assert.ok(!out4.hookSpecificOutput, '4-char prompt should not route');
 
-  // 5-char prompt should be processed (not auto-skipped)
+  // 5-char prompt "debug" matches /debug command (literal match) or no match
+  // Either way it gets processed (not auto-skipped)
   const raw5 = execFileSync(NODE, [SCRIPT], {
     input: JSON.stringify({ prompt: 'debug' }),
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
-  const out5 = JSON.parse(raw5);
-  // 'debug' alone won't match (single keyword, short prompt) but it should be processed
-  assert.equal(out5.continue, true, '5-char prompt should be processed');
+  // Output is either plain text AUTO-ROUTE (literal match to /debug) or JSON passThrough
+  assert.ok(raw5.startsWith('[AUTO-ROUTE]') || raw5.startsWith('{'),
+    '5-char prompt should be processed (not auto-skipped)');
 });
 
 // 4g: compareSemver exact return values
@@ -789,16 +799,16 @@ test('findBestMcpMatch: returns null for empty servers', () => {
   assert.equal(findBestMcpMatch('anything', []), null);
 });
 
-test('createMcpOutput: outputs valid JSON with mcp__ instruction', () => {
+test('createMcpOutput: outputs plain text with mcp__ instruction', () => {
   const origWrite = process.stdout.write.bind(process.stdout);
   let captured = '';
   process.stdout.write = (s) => { captured += s; return true; };
   try {
     createMcpOutput({ name: 'chrome-devtools', desc: '控制浏览器' });
-    const output = JSON.parse(captured.trim());
-    assert.equal(output.continue, true);
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('mcp__chrome-devtools'));
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('[AUTO-ROUTE]'));
+    // createMcpOutput now outputs plain text (not JSON)
+    assert.ok(captured.includes('mcp__chrome-devtools'), 'should include mcp__ prefix');
+    assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
+    assert.ok(captured.includes('强制指令'), 'should include mandatory instruction');
   } finally {
     process.stdout.write = origWrite;
   }
@@ -822,18 +832,17 @@ test('collectAllSkills: skills take priority over same-named legacy commands', (
   if (validSkill) assert.notEqual(validSkill.type, 'command', 'valid-skill should be a skill, not command');
 });
 
-test('createCommandOutput: outputs valid JSON with AUTO-ROUTE marker', () => {
+test('createCommandOutput: outputs plain text with AUTO-ROUTE marker', () => {
   const origWrite = process.stdout.write.bind(process.stdout);
   let captured = '';
   process.stdout.write = (data) => { captured += data; return true; };
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'commit', desc: 'Create well-formatted commits', filePath: null });
-    const output = JSON.parse(captured.trim());
-    assert.equal(output.continue, true);
-    assert.ok(output.hookSpecificOutput, 'should have hookSpecificOutput');
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('[AUTO-ROUTE]'));
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('/commit'));
+    // createCommandOutput now outputs plain text (not JSON)
+    assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
+    assert.ok(captured.includes('/commit'), 'should reference /commit');
+    assert.ok(captured.includes('强制指令'), 'should include mandatory instruction');
   } finally {
     process.stdout.write = origWrite;
   }
@@ -851,10 +860,10 @@ test('createCommandOutput: injects file content when filePath provided', () => {
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'test-cmd', desc: 'test', filePath: tmpFile, type: 'command' });
-    const output = JSON.parse(captured.trim());
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('Do the thing.'),
+    // createCommandOutput outputs plain text
+    assert.ok(captured.includes('Do the thing.'),
       'should inject file content (frontmatter stripped)');
-    assert.ok(!output.hookSpecificOutput.additionalContext.includes('---'),
+    assert.ok(!captured.includes('description: test'),
       'should strip frontmatter');
   } finally {
     process.stdout.write = origWrite;

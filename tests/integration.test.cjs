@@ -86,16 +86,13 @@ test('integration: UserPromptSubmit hook matches skill via stdin', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
-  const output = JSON.parse(raw);
-  assert.equal(output.continue, true);
-  if (output.hookSpecificOutput) {
-    // With synonym/stem expansion, user-level skills may win over fixture skills.
-    // Verify structural correctness rather than a specific skill name.
-    assert.ok(output.hookSpecificOutput.additionalContext, 'should have additionalContext');
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('Skill tool'),
-      'should instruct to use Skill tool');
-    assert.ok(output.hookSpecificOutput.additionalContext.includes('[AUTO-ROUTE]'),
-      'should include AUTO-ROUTE marker');
+  // Output is plain text [AUTO-ROUTE] or JSON passThrough
+  const isMatch = raw.startsWith('[AUTO-ROUTE]');
+  const isPassThrough = raw.startsWith('{');
+  assert.ok(isMatch || isPassThrough, 'should produce AUTO-ROUTE or passThrough output');
+  if (isMatch) {
+    assert.ok(raw.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
+    assert.ok(raw.includes('Skill tool') || raw.includes('命令'), 'should instruct to use skill or command');
   }
 });
 
@@ -105,9 +102,10 @@ test('integration: UserPromptSubmit hook escapes on 直接做', () => {
     encoding: 'utf-8',
     timeout: 10000,
   }).trim();
+  // Escaped prompt → passThrough → JSON {"continue":true}
   const output = JSON.parse(raw);
   assert.equal(output.continue, true);
-  assert.equal(output.suppressOutput, true, 'escaped prompt should suppress');
+  assert.ok(!output.hookSpecificOutput, 'escaped prompt should not route');
 });
 
 test('integration: UserPromptSubmit hook passThrough on no match', () => {
