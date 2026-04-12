@@ -15,6 +15,8 @@
 const path = require('path');
 const os = require('os');
 const { scanSkills, sanitize, scanInstalledPlugins } = require('./scan-environment.cjs');
+const { stemEnglish } = require('./stem-rules.cjs');
+const { expandSynonyms } = require('./synonyms.cjs');
 
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
@@ -101,6 +103,30 @@ const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]/u;
 const CJK_RUN = /[\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]+/gu;
 const NON_CJK_RUN = /[^\u4e00-\u9fff\u3400-\u4dbf\u{20000}-\u{3134f}]+/gu;
 
+// 带词干提取但不扩展同义词 — 用于 findBestMatch 的重叠门槛判断
+// 防止同义词扩展造成 overlap 虚高，但允许 bugs→bug 的形态变化匹配
+function _tokenizeStemmed(text) {
+  if (!text || typeof text !== 'string') return [];
+  const lower = text.normalize('NFC').toLowerCase();
+  const rawTokens = lower.match(/[\p{L}\p{N}]+/gu) || [];
+  const tokens = [];
+  for (const t of rawTokens) {
+    if (CJK_RANGE.test(t)) {
+      const cjkRuns = t.match(CJK_RUN) || [];
+      for (const run of cjkRuns) {
+        const chars = [...run];
+        for (const c of chars) tokens.push(c);
+        for (let i = 0; i < chars.length - 1; i++) tokens.push(chars[i] + chars[i + 1]);
+      }
+    } else {
+      tokens.push(t);
+      const stem = stemEnglish(t);
+      if (stem) tokens.push(stem);
+    }
+  }
+  return [...new Set(tokens.filter(t => !STOP_WORDS.has(t) && (t.length > 1 || CJK_RANGE.test(t))))];
+}
+
 function extractKeywords(text) {
   if (!text || typeof text !== 'string') return [];
   const lower = text.normalize('NFC').toLowerCase();
@@ -121,9 +147,14 @@ function extractKeywords(text) {
       }
     } else {
       tokens.push(t);
+      // 英文词干：追加词干形式（不替换原词，避免信息丢失）
+      const stem = stemEnglish(t);
+      if (stem) tokens.push(stem);
     }
   }
-  return [...new Set(tokens.filter(t => !STOP_WORDS.has(t) && (t.length > 1 || CJK_RANGE.test(t))))];
+  const filtered = tokens.filter(t => !STOP_WORDS.has(t) && (t.length > 1 || CJK_RANGE.test(t)));
+  // 同义词扩展：追加中英互通和近义词（先词干化再展开）
+  return [...new Set(expandSynonyms(filtered))];
 }
 
 function isEscaped(prompt) {
@@ -138,6 +169,9 @@ function findBestMatch(prompt, skills) {
   if (!prompt || !skills || skills.length === 0) return null;
   const promptKw = extractKeywords(prompt);
   if (promptKw.length === 0) return null;
+
+  // 门槛判断用词干化 token（含形态变化，不含同义词扩展），避免扩展后 overlap 虚高
+  const promptRaw = _tokenizeStemmed(prompt);
 
   const promptBigrams = promptKw.filter(k => k.length >= 2 && CJK_RANGE.test(k));
   const scorablePromptKw = promptKw.filter(k => {
@@ -154,7 +188,9 @@ function findBestMatch(prompt, skills) {
     const nameKw = extractKeywords(skill.name);
     const kwSet = new Set([...descKw, ...nameKw]);
     const nameSet = new Set(nameKw);
-    for (const k of kwSet) df.set(k, (df.get(k) || 0) + 1);
+    // IDF 基于词干化但未扩展的词集，保持统计意义
+    const stemmedSet = new Set([..._tokenizeStemmed(skill.name), ..._tokenizeStemmed(skill.desc)]);
+    for (const k of stemmedSet) df.set(k, (df.get(k) || 0) + 1);
     return { skill, kwSet, nameSet };
   });
 
@@ -162,12 +198,27 @@ function findBestMatch(prompt, skills) {
   let bestScore = 0;
   let bestOverlap = 0;
   for (const { skill, kwSet, nameSet } of skillData) {
-    const allMatched = promptKw.filter(k => kwSet.has(k));
-    const overlap = allMatched.length;
+    // 门槛：优先用词干化（无同义词）的 token 判断重叠，防止同义词虚高
+    const stemmedSkillKw = new Set(_tokenizeStemmed(skill.desc + ' ' + skill.name));
+    const stemmedNameKw = new Set(_tokenizeStemmed(skill.name));
+    const stemmedMatched = promptRaw.filter(k => stemmedSkillKw.has(k));
+    let overlap = stemmedMatched.length;
     if (overlap < MIN_KEYWORD_OVERLAP) {
       if (overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN &&
-          nameSet.has(allMatched[0])) { /* name match — allow */ }
-      else continue;
+          stemmedNameKw.has(stemmedMatched[0])) {
+        /* 单关键词命中 skill 名称 — 放行 */
+      } else if (overlap === 0) {
+        // 跨语言兜底：仅当词干化无任何重叠（真正的跨语言）时，
+        // 用完整扩展词检查（中英互通场景），要求至少 2 个扩展词命中
+        const crossMatched = promptKw.filter(k => kwSet.has(k));
+        if (crossMatched.length >= MIN_KEYWORD_OVERLAP) {
+          overlap = crossMatched.length;
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
     }
 
     const matched = scorablePromptKw.filter(k => kwSet.has(k));
@@ -187,7 +238,10 @@ function findBestMatch(prompt, skills) {
     }
   }
   if (!best) return null;
-  return { ...best, confidence: bestOverlap / Math.max(promptKw.length, 1) };
+  // confidence = raw overlap / raw prompt length，保持 0-1 范围
+  const rawPromptLen = Math.max(promptRaw.length, 1);
+  const conf = Math.min(bestOverlap / rawPromptLen, 1);
+  return { ...best, confidence: conf };
 }
 
 function createOutput(match) {
