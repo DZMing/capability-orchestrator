@@ -336,13 +336,18 @@ test('findBestMatch: matches plugin-provided skill', () => {
 // ─── 匹配精度：长描述不应靠通用词碰撞赢过精确匹配 ────────────────────────
 
 test('findBestMatch: specific keyword match beats generic overlap from long desc', () => {
+  // "用户" and "功能" appear in many skills — IDF should reduce their weight
   const skills = [
     { name: 'auth-quick', desc: '5 分钟认证集成：Supabase Auth 或 Clerk，含 Google OAuth' },
     { name: 'feedback-loop', desc: '用户反馈系统：嵌入式反馈按钮 + 自动分类（Bug/功能请求/好评）+ 邮件通知，15 分钟集成完成' },
+    { name: 'user-dashboard', desc: '用户仪表盘：展示用户数据和功能入口' },
+    { name: 'user-profile', desc: '用户资料页面：编辑用户信息和功能设置' },
+    { name: 'feature-flags', desc: '功能开关系统：灰度发布用户功能' },
+    { name: 'analytics', desc: '用户分析工具：追踪用户行为和功能使用' },
   ];
   const match = findBestMatch('写一个用户认证功能', skills);
   assert.ok(match, 'should match something');
-  assert.equal(match.name, 'auth-quick', '"认证" is more specific than "用户"/"功能" in feedback-loop');
+  assert.equal(match.name, 'auth-quick', '"认证" is rare and specific, should outweigh common "用户"/"功能"');
 });
 
 test('findBestMatch: does not match on incidental word in long description', () => {
@@ -363,6 +368,52 @@ test('findBestMatch: bigram match weighs more than single-char matches', () => {
   const match = findBestMatch('帮我做代码审查', skills);
   assert.ok(match);
   assert.equal(match.name, 'code-review', '"代码审查" bigram match should win');
+});
+
+test('findBestMatch: rare bigram beats common single-char noise in large skill set', () => {
+  // Simulates real 90-skill environment where:
+  // - "用户" and "功能" appear in many skills (low IDF)
+  // - "认证" appears in few skills (high IDF)
+  // - Single CJK chars '户' and '功' are noise fragments from bigram decomposition
+  const skills = [
+    { name: 'auth-quick', desc: '5 分钟认证集成：Supabase Auth 或 Clerk，含 Google OAuth' },
+    { name: 'feedback-loop', desc: '用户反馈系统：嵌入式反馈按钮 + 自动分类（Bug/功能请求/好评）+ 邮件通知' },
+    { name: 'user-dashboard', desc: '用户仪表盘：展示用户数据和功能入口' },
+    { name: 'user-profile', desc: '用户资料页面：编辑用户信息和功能设置' },
+    { name: 'feature-flags', desc: '功能开关系统：灰度发布用户功能' },
+    { name: 'analytics', desc: '用户分析工具：追踪用户行为和功能使用' },
+    // Skills that dilute '认' and '证' as single chars
+    { name: 'security-scan', desc: '安全认定扫描：确认代码合规性和证明安全等级' },
+    { name: 'identity-verify', desc: '身份验证服务：证件识别和认可自动化' },
+    { name: 'data-validation', desc: '数据验证工具：认真校验格式和证据链完整性' },
+    { name: 'compliance', desc: '合规认定系统：许可证管理和认可流程自动化' },
+    { name: 'audit-log', desc: '审计日志：确认操作记录和证据保存' },
+    { name: 'permission-mgr', desc: '权限管理：认可授权和证书分发' },
+  ];
+  const match = findBestMatch('写一个用户认证功能', skills);
+  assert.ok(match, 'should match something');
+  assert.equal(match.name, 'auth-quick',
+    '"认证" as a semantic unit should outweigh scattered single-char noise');
+});
+
+test('findBestMatch: single CJK char noise does not inflate score', () => {
+  // When '认' and '证' appear in many skills but '认证' is rare,
+  // auth-quick should win because '认证' as a semantic unit is the key intent.
+  // Single chars '功' and '户' are noise from bigram decomposition.
+  const skills = [
+    { name: 'auth-quick', desc: '认证集成' },
+    { name: 'feedback-loop', desc: '用户反馈功能请求' },
+    { name: 'user-mgr', desc: '用户设置' },
+    { name: 'user-data', desc: '用户数据' },
+    { name: 'verify', desc: '确认验证识别' },
+    { name: 'cert', desc: '证书管理证件' },
+    { name: 'confirm', desc: '认可审核确认' },
+    { name: 'proof', desc: '证明材料证据' },
+  ];
+  const match = findBestMatch('用户认证功能', skills);
+  assert.ok(match, 'should match');
+  assert.equal(match.name, 'auth-quick',
+    '"认证" is specific intent, single-char noise should not inflate competing scores');
 });
 
 // ─── Bug 1: Unicode NFC/NFD 归一化 ──────────────────────────────────────────

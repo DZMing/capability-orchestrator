@@ -39,6 +39,7 @@ const STOP_WORDS = new Set([
   '吗', '个', '们', '中', '来', '里', '后', '能', '对', '把',
   '让', '给', '用', '下', '被', '得', '还', '那', '些', '吧',
   '帮', '帮我', '请', '想',
+  '功能', '系统', '工具', '服务',
 ]);
 
 function readStdin(timeoutMs) {
@@ -138,28 +139,42 @@ function findBestMatch(prompt, skills) {
   const promptKw = extractKeywords(prompt);
   if (promptKw.length === 0) return null;
 
+  const promptBigrams = promptKw.filter(k => k.length >= 2 && CJK_RANGE.test(k));
+  const scorablePromptKw = promptKw.filter(k => {
+    if (k.length === 1 && CJK_RANGE.test(k)) {
+      return !promptBigrams.some(b => b.includes(k));
+    }
+    return true;
+  });
+
+  const N = skills.length || 1;
+  const df = new Map();
+  const skillData = skills.map(skill => {
+    const descKw = extractKeywords(skill.desc);
+    const nameKw = extractKeywords(skill.name);
+    const kwSet = new Set([...descKw, ...nameKw]);
+    const nameSet = new Set(nameKw);
+    for (const k of kwSet) df.set(k, (df.get(k) || 0) + 1);
+    return { skill, kwSet, nameSet };
+  });
+
   let best = null;
   let bestScore = 0;
   let bestOverlap = 0;
-  for (const skill of skills) {
-    const descKw = extractKeywords(skill.desc);
-    const nameKw = extractKeywords(skill.name);
-    const skillKwSet = new Set([...descKw, ...nameKw]);
-    const nameKwSet = new Set(nameKw);
-    const matched = promptKw.filter(k => skillKwSet.has(k));
-    const overlap = matched.length;
+  for (const { skill, kwSet, nameSet } of skillData) {
+    const overlap = promptKw.filter(k => kwSet.has(k)).length;
     if (overlap < MIN_KEYWORD_OVERLAP &&
         !(overlap === 1 && prompt.length > SHORT_SINGLE_KEYWORD_LEN)) continue;
 
-    let weighted = 0;
+    const matched = scorablePromptKw.filter(k => kwSet.has(k));
+    let score = 0;
     for (const k of matched) {
-      let w = 1;
-      if (k.length >= 2 && CJK_RANGE.test(k)) w = 2;
-      if (nameKwSet.has(k)) w *= 2;
-      weighted += w;
+      const idf = Math.log(N / (df.get(k) || 1));
+      let w = Math.max(idf, 0.1);
+      if (k.length >= 2 && CJK_RANGE.test(k)) w *= 2;
+      if (nameSet.has(k)) w *= 2;
+      score += w;
     }
-    const union = new Set([...promptKw, ...skillKwSet]).size;
-    const score = weighted / Math.max(union, 1);
 
     if (score > bestScore) {
       bestScore = score;
