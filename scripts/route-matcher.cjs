@@ -14,7 +14,8 @@
 
 const path = require('path');
 const os = require('os');
-const { scanSkills, sanitize, scanInstalledPlugins } = require('./scan-environment.cjs');
+const fs = require('fs');
+const { scanSkills, sanitize, scanInstalledPlugins, scanCommands } = require('./scan-environment.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
 
@@ -209,10 +210,13 @@ function findBestMatch(prompt, skills) {
         /* 单关键词命中 skill 名称 — 放行 */
       } else if (overlap === 0) {
         // 跨语言兜底：仅当词干化无任何重叠（真正的跨语言）时，
-        // 用完整扩展词检查（中英互通场景），要求至少 2 个扩展词命中
+        // 用完整扩展词检查（中英互通场景），要求至少 2 个扩展词命中；
+        // 或仅 1 个但命中 skill 名称（name-match gate 的跨语言对称版）
         const crossMatched = promptKw.filter(k => kwSet.has(k));
         if (crossMatched.length >= MIN_KEYWORD_OVERLAP) {
           overlap = crossMatched.length;
+        } else if (crossMatched.length === 1 && stemmedNameKw.has(crossMatched[0])) {
+          overlap = 1; // 单词精准命中 skill 名称，放行
         } else {
           continue;
         }
@@ -266,6 +270,37 @@ function passThrough() {
   process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
 }
 
+// Legacy command 路由：注入命令文件内容作为 additionalContext，等效于用户输入 /command
+function createCommandOutput(match) {
+  let body = '';
+  if (match.filePath) {
+    try {
+      let raw = fs.readFileSync(match.filePath, 'utf8');
+      // 剥离 frontmatter
+      raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
+      // 限制长度防止超出 context 预算
+      if (raw.length > 3000) raw = raw.slice(0, 3000) + '\n[...截断]';
+      body = raw.trim();
+    } catch { /* fault-open */ }
+  }
+  const safeDesc = sanitize(match.desc || '');
+  const ctx = [
+    '[AUTO-ROUTE] 检测到任务匹配命令: /' + match.name,
+    '描述: ' + safeDesc,
+    '你必须立即按照以下命令定义执行任务：',
+    '',
+    body || ('请执行 /' + match.name + ' 命令。'),
+  ].join('\n');
+  const output = {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: ctx,
+    },
+  };
+  process.stdout.write(JSON.stringify(output) + '\n');
+}
+
 // MCP tool 路由：基于同 extractKeywords 的关键词匹配，返回最匹配的 MCP server
 function findBestMcpMatch(prompt, servers) {
   if (!prompt || !servers || servers.length === 0) return null;
@@ -294,11 +329,7 @@ function createMcpOutput(server) {
 }
 
 function collectAllSkills(projectDir, userDir) {
-  const claudeUserDir = userDir || (
-    os.platform() === 'win32'
-      ? path.join(os.homedir(), '.claude')
-      : path.join(os.homedir(), '.claude')
-  );
+  const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
   const projSkills = scanSkills(path.join(projectDir, '.claude', 'skills'), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
   const pluginSkills = [];
@@ -307,9 +338,21 @@ function collectAllSkills(projectDir, userDir) {
       for (const s of (p.skillItems || [])) pluginSkills.push(s);
     }
   } catch { /* fault-open */ }
+
+  // Legacy /commands — 有描述才纳入匹配池，优先级低于 skills
+  const legacyCmds = [];
+  try {
+    const projCmds = scanCommands(path.join(projectDir, '.claude', 'commands'), []);
+    const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), []);
+    for (const c of [...projCmds, ...userCmds]) {
+      if (c.desc) legacyCmds.push({ ...c, type: 'command' });
+    }
+  } catch { /* fault-open */ }
+
   const seen = new Set();
   const deduped = [];
-  for (const s of [...projSkills, ...userSkills, ...pluginSkills]) {
+  // Skills 优先，legacy commands 最低优先
+  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...legacyCmds]) {
     if (!seen.has(s.name)) {
       seen.add(s.name);
       deduped.push(s);
@@ -320,7 +363,7 @@ function collectAllSkills(projectDir, userDir) {
 
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
-  findBestMatch, findBestMcpMatch, createOutput, createMcpOutput,
+  findBestMatch, findBestMcpMatch, createOutput, createMcpOutput, createCommandOutput,
   passThrough, collectAllSkills,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
@@ -337,15 +380,16 @@ else {
       const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
       const userDir = process.env.CAPABILITY_USER_DIR;
 
-      // Skills 优先（强制路由），MCP 兜底（引导路由）
+      // Skills + legacy commands 优先（强制路由），MCP 兜底（引导路由）
       const skills = collectAllSkills(projectDir, userDir);
       const match = findBestMatch(prompt, skills);
-      if (match) return createOutput(match);
+      if (match) {
+        return match.type === 'command' ? createCommandOutput(match) : createOutput(match);
+      }
 
-      // 没有 skill 匹配时尝试 MCP server 路由
+      // 没有 skill/command 匹配时尝试 MCP server 路由
       try {
         const { readMcpServers } = require('./scan-environment.cjs');
-        const fs = require('fs');
         const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
         const mcpItems = [];
         const projMcp = path.join(projectDir, '.mcp.json');

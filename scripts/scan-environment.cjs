@@ -216,7 +216,14 @@ function scanAgents(dir, errors) {
 function scanCommands(dir, errors) {
   return tryReadDir(dir, true, errors)
     .filter(d => d.isFile() && d.name.endsWith('.md'))
-    .map(d => d.name.replace(/\.md$/, ''));
+    .map(d => {
+      const name = d.name.replace(/\.md$/, '');
+      const filePath = path.join(dir, d.name);
+      const content = tryReadHead(filePath, errors);
+      const fm = extractFrontmatter(content || '');
+      const desc = sanitize(fm.description || fm.name || '');
+      return { name, desc, filePath };
+    });
 }
 
 // 读取 .mcp.json 中的 server 名称和描述，过滤 disabled
@@ -427,8 +434,8 @@ function collectSnapshot(projectDir, userDir) {
     const projCmds = scanCommands(path.join(cwd, '.claude', 'commands'), errors);
     const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
     const cmds = [
-      ...projCmds.map(c => ({ name: c, desc: 'legacy，建议迁移到 skills/' })),
-      ...userCmds.map(c => ({ name: c, desc: 'legacy' })),
+      ...projCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy，建议迁移到 skills/' })),
+      ...userCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy' })),
     ];
     if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
   } catch (e) { errors.push(`commands: ${e.message}`); }

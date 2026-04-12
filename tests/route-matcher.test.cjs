@@ -803,3 +803,61 @@ test('createMcpOutput: outputs valid JSON with mcp__ instruction', () => {
     process.stdout.write = origWrite;
   }
 });
+
+// ─── Legacy command routing ──────────────────────────────────────────────────
+
+test('collectAllSkills: includes legacy commands with desc', () => {
+  const skills = collectAllSkills(FIXTURE_PROJECT);
+  const cmd = skills.find(s => s.name === 'legacy-cmd');
+  assert.ok(cmd, 'legacy-cmd should be in pool');
+  assert.equal(cmd.type, 'command', 'should be typed as command');
+  assert.ok(cmd.desc, 'should have desc from frontmatter');
+  assert.ok(cmd.filePath, 'should have filePath for content injection');
+});
+
+test('collectAllSkills: skills take priority over same-named legacy commands', () => {
+  // 如果 skill 和 command 同名，skill 优先
+  const skills = collectAllSkills(FIXTURE_PROJECT);
+  const validSkill = skills.find(s => s.name === 'valid-skill');
+  if (validSkill) assert.notEqual(validSkill.type, 'command', 'valid-skill should be a skill, not command');
+});
+
+test('createCommandOutput: outputs valid JSON with AUTO-ROUTE marker', () => {
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (data) => { captured += data; return true; };
+  try {
+    const { createCommandOutput } = require('../scripts/route-matcher.cjs');
+    createCommandOutput({ name: 'commit', desc: 'Create well-formatted commits', filePath: null });
+    const output = JSON.parse(captured.trim());
+    assert.equal(output.continue, true);
+    assert.ok(output.hookSpecificOutput, 'should have hookSpecificOutput');
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('[AUTO-ROUTE]'));
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('/commit'));
+  } finally {
+    process.stdout.write = origWrite;
+  }
+});
+
+test('createCommandOutput: injects file content when filePath provided', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const tmpFile = path.join(os.tmpdir(), 'test-cmd-' + process.pid + '.md');
+  fs.writeFileSync(tmpFile, '---\ndescription: test\n---\nDo the thing.\n');
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (data) => { captured += data; return true; };
+  try {
+    const { createCommandOutput } = require('../scripts/route-matcher.cjs');
+    createCommandOutput({ name: 'test-cmd', desc: 'test', filePath: tmpFile, type: 'command' });
+    const output = JSON.parse(captured.trim());
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('Do the thing.'),
+      'should inject file content (frontmatter stripped)');
+    assert.ok(!output.hookSpecificOutput.additionalContext.includes('---'),
+      'should strip frontmatter');
+  } finally {
+    process.stdout.write = origWrite;
+    fs.rmSync(tmpFile, { force: true });
+  }
+});

@@ -133,9 +133,12 @@ test('scanSkills: skips symlink directories', () => {
 
 // ─── scanCommands ────────────────────────────────────────────────────────────
 
-test('scanCommands: returns command names without .md', () => {
+test('scanCommands: returns objects with name/desc/filePath', () => {
   const cmds = scanCommands(path.join(PROJECT_DIR, '.claude', 'commands'));
-  assert.ok(cmds.includes('legacy-cmd'));
+  assert.ok(cmds.some(c => c.name === 'legacy-cmd'), 'should find legacy-cmd');
+  const cmd = cmds.find(c => c.name === 'legacy-cmd');
+  assert.ok('desc' in cmd, 'should have desc field');
+  assert.ok('filePath' in cmd, 'should have filePath field');
 });
 
 test('scanCommands: nonexistent dir returns []', () => {
