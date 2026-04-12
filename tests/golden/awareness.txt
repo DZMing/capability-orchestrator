@@ -25,4 +25,7 @@
 匹配依据：skill description 与用户任务的语义重叠。
 逃逸条件：用户明确说"直接做/skip"，或纯问答无需执行动作。
 不确定时用 ToolSearch 搜索可用能力。
+MCP 工具路由（遇到对应任务必须调用）：
+- 项目级 → 调用 mcp__test-server__*
+- 用户级 → 调用 mcp__user-server__*
 </MANDATORY>

@@ -972,3 +972,48 @@ test('awareness mode: uses cwd from stdin JSON', () => {
   });
   assert.ok(raw.includes('valid-skill'), 'should detect fixture project skill via stdin cwd');
 });
+
+// ─── Step D: MCP 路由规则动态生成 ──────────────────────────────────────────
+
+test('renderSnapshot awareness: MCP servers generate routing hints in routing section', () => {
+  const items = [
+    { name: 'chrome-devtools', desc: '控制真实 Chrome 浏览器' },
+    { name: 'context7', desc: '文档检索与上下文查询' },
+  ];
+  const snap = { sections: [{ label: 'MCP Servers', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes('chrome-devtools'), 'should mention chrome-devtools in routing');
+  assert.ok(text.includes('context7'), 'should mention context7 in routing');
+  // Should appear in routing section (after MANDATORY tag)
+  const routingIdx = text.indexOf('路由规则');
+  assert.ok(routingIdx > -1, 'routing section must exist');
+  const routingSection = text.slice(routingIdx);
+  assert.ok(routingSection.includes('chrome-devtools'), 'MCP hint in routing section');
+  assert.ok(routingSection.includes('context7'), 'MCP hint in routing section');
+});
+
+test('renderSnapshot awareness: MCP routing hints include mcp__ prefix', () => {
+  const items = [{ name: 'my-server', desc: 'does things' }];
+  const snap = { sections: [{ label: 'MCP Servers', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  const routingIdx = text.indexOf('路由规则');
+  const routingSection = text.slice(routingIdx);
+  assert.ok(routingSection.includes('mcp__my-server'), 'should include mcp__ prefixed tool name');
+});
+
+test('renderSnapshot awareness: no MCP servers means no MCP routing hints', () => {
+  const items = [{ name: 'my-skill', desc: 'does tasks' }];
+  const snap = { sections: [{ label: '项目级 Skills', prefix: '', items }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(!text.includes('mcp__'), 'no MCP servers = no mcp__ hints in output');
+});
+
+test('renderSnapshot awareness: still within budget with MCP routing hints', () => {
+  const mcpItems = Array.from({ length: 5 }, (_, i) => ({
+    name: `server-${i}`,
+    desc: `Server ${i} does many things including complex operations and workflows`,
+  }));
+  const snap = { sections: [{ label: 'MCP Servers', prefix: '', items: mcpItems }], errors: [] };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000 chars`);
+});

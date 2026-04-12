@@ -266,6 +266,33 @@ function passThrough() {
   process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
 }
 
+// MCP tool 路由：基于同 extractKeywords 的关键词匹配，返回最匹配的 MCP server
+function findBestMcpMatch(prompt, servers) {
+  if (!prompt || !servers || servers.length === 0) return null;
+  // 复用 findBestMatch 逻辑：把 MCP server 当作 skill 处理（name + desc 匹配）
+  const asMcpSkills = servers.map(s => ({ name: s.name, desc: s.desc || '' }));
+  return findBestMatch(prompt, asMcpSkills);
+}
+
+function createMcpOutput(server) {
+  const safeDesc = sanitize(server.desc || '');
+  const toolPrefix = 'mcp__' + server.name;
+  const ctx = [
+    '[AUTO-ROUTE] 检测到任务匹配 MCP server: ' + server.name,
+    '描述: ' + safeDesc,
+    '你必须先调用 ' + toolPrefix + '__* 相关工具，再执行其他操作。',
+    '可用工具前缀: ' + toolPrefix,
+  ].join('\n');
+  const output = {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: ctx,
+    },
+  };
+  process.stdout.write(JSON.stringify(output) + '\n');
+}
+
 function collectAllSkills(projectDir, userDir) {
   const claudeUserDir = userDir || (
     os.platform() === 'win32'
@@ -293,7 +320,8 @@ function collectAllSkills(projectDir, userDir) {
 
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
-  findBestMatch, createOutput, passThrough, collectAllSkills,
+  findBestMatch, findBestMcpMatch, createOutput, createMcpOutput,
+  passThrough, collectAllSkills,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
 
@@ -308,10 +336,32 @@ else {
       const stdinCwd = extractCwd(input);
       const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
       const userDir = process.env.CAPABILITY_USER_DIR;
+
+      // Skills 优先（强制路由），MCP 兜底（引导路由）
       const skills = collectAllSkills(projectDir, userDir);
       const match = findBestMatch(prompt, skills);
-      if (match) createOutput(match);
-      else passThrough();
+      if (match) return createOutput(match);
+
+      // 没有 skill 匹配时尝试 MCP server 路由
+      try {
+        const { readMcpServers } = require('./scan-environment.cjs');
+        const fs = require('fs');
+        const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
+        const mcpItems = [];
+        const projMcp = path.join(projectDir, '.mcp.json');
+        const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
+          ? path.join(claudeUserDir, 'mcp.json')
+          : path.join(claudeUserDir, '.mcp.json');
+        readMcpServers(projMcp, []).forEach(s => mcpItems.push(s));
+        const projNames = new Set(mcpItems.map(s => s.name));
+        readMcpServers(userMcpFile, []).forEach(s => {
+          if (!projNames.has(s.name)) mcpItems.push(s);
+        });
+        const mcpMatch = findBestMcpMatch(prompt, mcpItems);
+        if (mcpMatch) return createMcpOutput(mcpMatch);
+      } catch { /* fault-open: MCP scan failure is non-fatal */ }
+
+      passThrough();
     } catch (err) {
       process.stderr.write('route-matcher error: ' + err.message + '\n');
       passThrough();

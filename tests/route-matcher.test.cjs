@@ -752,3 +752,54 @@ test('synonym: findBestMatch English prompt matches Chinese skill desc via synon
   assert.ok(match, 'should match via debug→调试 synonym');
   assert.equal(match.name, 'debug-tool');
 });
+
+// ─── Step A: MCP tool 路由 ──────────────────────────────────────────────────
+
+const { findBestMcpMatch, createMcpOutput } = require('../scripts/route-matcher.cjs');
+
+test('findBestMcpMatch: matches MCP server by keyword overlap', () => {
+  const servers = [
+    { name: 'chrome-devtools', desc: '控制真实 Chrome 浏览器，截图，DOM 操作' },
+    { name: 'context7', desc: '文档检索与上下文查询' },
+  ];
+  const match = findBestMcpMatch('帮我截图当前页面', servers);
+  assert.ok(match, 'should match chrome-devtools');
+  assert.equal(match.name, 'chrome-devtools');
+});
+
+test('findBestMcpMatch: matches documentation query to context7', () => {
+  const servers = [
+    { name: 'chrome-devtools', desc: '控制真实 Chrome 浏览器截图DOM操作' },
+    { name: 'context7', desc: '文档检索库文档查询API文档' },
+  ];
+  const match = findBestMcpMatch('查一下 React 的文档', servers);
+  assert.ok(match, 'should match context7');
+  assert.equal(match.name, 'context7');
+});
+
+test('findBestMcpMatch: returns null when no match', () => {
+  const servers = [
+    { name: 'chrome-devtools', desc: '控制浏览器截图' },
+  ];
+  const match = findBestMcpMatch('帮我写一首诗', servers);
+  assert.equal(match, null, 'poetry has no MCP match');
+});
+
+test('findBestMcpMatch: returns null for empty servers', () => {
+  assert.equal(findBestMcpMatch('anything', []), null);
+});
+
+test('createMcpOutput: outputs valid JSON with mcp__ instruction', () => {
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; return true; };
+  try {
+    createMcpOutput({ name: 'chrome-devtools', desc: '控制浏览器' });
+    const output = JSON.parse(captured.trim());
+    assert.equal(output.continue, true);
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('mcp__chrome-devtools'));
+    assert.ok(output.hookSpecificOutput.additionalContext.includes('[AUTO-ROUTE]'));
+  } finally {
+    process.stdout.write = origWrite;
+  }
+});
