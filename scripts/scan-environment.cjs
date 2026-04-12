@@ -631,7 +631,15 @@ else try {
     process.stderr.write(`无效模式: ${mode}，支持: ${VALID_MODES.join('/')}\n`);
     process.exit(1);
   }
-  const projectDir = getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;
+  let stdinCwd;
+  if (!process.stdin.isTTY) {
+    try {
+      const raw = fs.readFileSync(0, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.cwd) stdinCwd = String(parsed.cwd);
+    } catch { /* ignore: stdin may be empty or non-JSON */ }
+  }
+  const projectDir = stdinCwd || getArg('project-dir') || process.env.CAPABILITY_PROJECT_DIR;
   const userDir = getArg('user-dir') || process.env.CAPABILITY_USER_DIR;
   const { text, errors: errs } = renderSnapshot(collectSnapshot(projectDir, userDir), mode);
   if (errs.length > 0) {
