@@ -222,6 +222,36 @@ test('findBestMatch: matches on skill name keywords too', () => {
   assert.equal(match.name, 'code-review');
 });
 
+// ─── confidence scoring ────────────────────────────────────────────────────
+
+test('findBestMatch: returns confidence between 0 and 1', () => {
+  const skills = [{ name: 'debugging', desc: 'fix bugs and debug errors in code' }];
+  const match = findBestMatch('there is a bug error in my code', skills);
+  assert.ok(match);
+  assert.ok(typeof match.confidence === 'number', 'should have confidence');
+  assert.ok(match.confidence > 0 && match.confidence <= 1, `confidence ${match.confidence} out of range`);
+});
+
+test('findBestMatch: high overlap produces high confidence', () => {
+  const skills = [{ name: 'review', desc: 'review code quality style patterns lint' }];
+  const match = findBestMatch('review code quality style patterns', skills);
+  assert.ok(match);
+  assert.ok(match.confidence > 0.5, `expected high confidence, got ${match.confidence}`);
+});
+
+test('findBestMatch: low overlap produces low confidence', () => {
+  const skills = [{ name: 'debug', desc: 'debug errors' }];
+  const match = findBestMatch('can you help me debug this weird issue in production', skills);
+  assert.ok(match);
+  assert.ok(match.confidence < 0.5, `expected low confidence, got ${match.confidence}`);
+});
+
+test('findBestMatch: null return has no confidence', () => {
+  const skills = [{ name: 'debug', desc: 'debug errors' }];
+  const match = findBestMatch('deploy to production server', skills);
+  assert.equal(match, null);
+});
+
 // ─── STOP_WORDS ─────────────────────────────────────────────────────────────
 
 test('STOP_WORDS: contains common English words', () => {
