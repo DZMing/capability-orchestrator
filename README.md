@@ -29,12 +29,21 @@ claude --plugin-dir ./capability-orchestrator
 
 ### 会话开始自动注入（推荐）
 
-安装脚本会在 `~/.claude/settings.json` 里注册一个 SessionStart hook，每次新会话开始时自动执行 `--mode=awareness` 扫描，注入：
+安装脚本会在 `~/.claude/settings.json` 里注册两个 hook：
+
+**SessionStart hook** — 每次新会话开始时注入能力清单 + 强制路由规则：
 
 - **MCP server 描述**（平台只暴露 tool 名，不注入 server 级说明）
 - **Subagent 描述**（帮助 Claude 判断何时委派 vs 自己做）
-- **Skills / Plugins 名称或计数**（平台已提供详情，不重复）
-- **路由策略**（告诉 Claude 遇到什么类型任务该走哪条路）
+- **Skill 名称 + 描述**（供路由匹配使用）
+- **强制路由规则**（匹配到 skill 时必须调用，不得跳过）
+
+**UserPromptSubmit hook** — 每条用户消息实时匹配 skill：
+
+- 自动扫描所有 skill 的 description，与用户消息做关键词匹配
+- 匹配到 → 注入强制调用指令，Claude 会自动通过 Skill tool 调用
+- 未匹配 → 静默放行，不影响正常使用
+- 逃逸机制：说"直接做"或"skip"可跳过路由
 
 **无需手动触发，无需 CLAUDE.md 路由规则。**
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0] - 2026-04-12
+
+### Added
+
+- UserPromptSubmit hook 实时路由：每条用户消息自动匹配 skill 并注入强制调用指令
+- route-matcher.cjs 核心匹配器（关键词提取、逃逸检测、故障开放）
+- awareness 模式 skill 展示升级：名字 + 描述（供路由匹配使用）
+- 35 项新测试：route-matcher 单元测试 + 端到端子进程测试
+
+### Changed
+
+- 路由策略升级为强制路由规则（`<MANDATORY>` 包裹，匹配到 skill 必须调用）
+- install.sh 新增 UserPromptSubmit hook 注册 + 卸载清理
+- 安装测试新增 4 项断言（route-matcher 存在/可执行、hook 注册/卸载）
+
 ## [1.2.0] - 2026-04-09
 
 ### Added

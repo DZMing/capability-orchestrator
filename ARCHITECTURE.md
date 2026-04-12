@@ -75,6 +75,7 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 - 不执行插件代码：只读取 plugin.json manifest，不 `require()` 插件
 - 不联网：零网络调用
 - 不修改权限：不改变任何文件的权限或所有者
+- route-matcher.cjs 遵循相同安全原则：只读扫描 + 零网络 + 故障开放（异常时放行）
 
 ## $CLAUDE_SKILL_DIR 路径说明
 
@@ -117,28 +118,66 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 }
 ```
 
-每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要 + 路由策略注入到会话上下文。
+每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要 + 强制路由规则注入到会话上下文。
 
 选择 `--mode=awareness` 是因为它提供了最高的性价比：
 
 - MCP servers 展示完整描述（平台不会自动注入）
 - Subagents 展示 top-15 描述（帮助 Claude 判断何时委派）
-- Skills / Plugins 只展示名称或数量（平台已提供详情）
-- 末尾附加路由策略，引导 Claude 自动选择正确执行路径
+- Skills 展示名称 + 描述（供路由匹配使用）
+- 末尾附加 `<MANDATORY>` 路由规则，强制 Claude 匹配到 skill 时必须调用
+
+## UserPromptSubmit Hook 实时路由
+
+安装脚本同时注册一个 `UserPromptSubmit` hook：
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+每条用户消息经过 `route-matcher.cjs`：
+
+1. 从 stdin 读取 JSON（含 prompt 字段）
+2. 扫描环境中所有 skill 的 name + description
+3. 关键词匹配 → 找到最佳匹配 skill
+4. 匹配到 → 通过 `additionalContext` 注入强制调用指令
+5. 未匹配 → 静默放行
+
+安全设计：
+
+- 故障开放：任何异常 → 放行，不阻断用户操作
+- stdin 读取 3s 超时，防止挂起
+- 逃逸机制：用户说"直接做"/"skip" 时跳过路由
+- 只在 UserPromptSubmit 做路由，不在 PostToolUse → 避免循环
 
 ## 渲染模式
 
-| 模式      | 参数                   | 用途                    | 输出内容              |
-| --------- | ---------------------- | ----------------------- | --------------------- |
-| route     | `--mode=route`（默认） | orchestrate skill 调用  | 完整描述，供路由决策  |
-| list      | `--mode=list`          | capabilities skill 调用 | 名称列表，纯展示      |
-| awareness | `--mode=awareness`     | SessionStart hook       | 差异化价值 + 路由策略 |
+| 模式      | 参数                   | 用途                    | 输出内容                  |
+| --------- | ---------------------- | ----------------------- | ------------------------- |
+| route     | `--mode=route`（默认） | orchestrate skill 调用  | 完整描述，供路由决策      |
+| list      | `--mode=list`          | capabilities skill 调用 | 名称列表，纯展示          |
+| awareness | `--mode=awareness`     | SessionStart hook       | 差异化价值 + 强制路由规则 |
 
 `awareness` 模式的设计原则是**只注入平台不会自动提供的信息**：
 
 - MCP server 描述（平台只暴露 tool 名，不注入 server 级描述）
 - Agent 描述（帮助判断何时委派 vs 自己做）
-- 路由策略（告诉 Claude 遇到什么类型任务该走哪条路）
+- Skill 名称 + 描述（供路由匹配使用）
+- 强制路由规则（`<MANDATORY>` 包裹，要求 Claude 匹配到 skill 时必须调用）
 
 ## Future Enhancements（仅文档记录，不实现）
 
