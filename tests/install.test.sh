@@ -53,7 +53,13 @@ chmod +x "$FAKE_GIT"
 # node/bash/git 使用真实的，fake git 排在最前面覆盖 clone 行为
 FAKE_PATH="$TMP_GIT:$(dirname "$(which node)"):$(dirname "$(which bash)"):/usr/bin:/bin"
 
-# ── 运行 install.sh ────────────────────────────────────────────────────────────
+# ── 符号链接覆盖测试 ─────────────────────────────────────────────────────────
+PLUGIN_DIR_PRE="$TMP_HOME/plugins/cache/capability-orchestrator"
+SYMLINK_TARGET=$(mktemp -d)
+mkdir -p "$(dirname "$PLUGIN_DIR_PRE")"
+ln -s "$SYMLINK_TARGET" "$PLUGIN_DIR_PRE"
+
+# ── 运行 install.sh（覆盖符号链接）────────────────────────────────────────────
 echo ""
 echo "=== install.sh smoke test ==="
 echo "CLAUDE_USER_DIR=$TMP_HOME"
@@ -61,6 +67,11 @@ echo ""
 
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
   bash "$REPO_ROOT/install.sh" 2>&1 | sed 's/^/  /'
+
+# 验证符号链接被替换为真实目录，且原目标未被 rm -rf
+assert "安装后是真实目录而非符号链接" test -d "$PLUGIN_DIR_PRE" -a ! -L "$PLUGIN_DIR_PRE"
+assert "符号链接原目标未被删除" test -d "$SYMLINK_TARGET"
+rm -rf "$SYMLINK_TARGET"
 
 echo ""
 
