@@ -6,7 +6,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
-VERSION="1.3.0"
+VERSION="1.4.0"
 
 # ── 颜色输出（必须在所有分支之前定义）────────────────────────────────────────
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }

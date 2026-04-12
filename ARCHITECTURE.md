@@ -157,11 +157,18 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 4. 匹配到 → 通过 `additionalContext` 注入强制调用指令
 5. 未匹配 → 静默放行
 
+扫描范围（v1.4.0+）：项目级 skill + 用户级 skill + 已安装插件 skill，去重优先级：项目 > 用户 > 插件。
+
+匹配算法：Unicode 分词 + CJK bigrams + 关键词交集。返回置信度评分 confidence (0-1)。
+
+CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环境变量和 process.cwd()。
+
 安全设计：
 
 - 故障开放：任何异常 → 放行，不阻断用户操作
-- stdin 读取 3s 超时，防止挂起
+- stdin 读取 3s 超时 + unref，防止挂起
 - 逃逸机制：用户说"直接做"/"skip" 时跳过路由
+- skill description 经 sanitize 清洗，防注入
 - 只在 UserPromptSubmit 做路由，不在 PostToolUse → 避免循环
 
 ## 渲染模式

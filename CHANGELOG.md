@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.0] - 2026-04-12
+
+### Added
+
+- 插件 skill 路由：route-matcher 现在扫描 `~/.claude/plugins/cache/` 中安装的插件 skill
+- 匹配置信度评分：findBestMatch 返回 confidence (0-1) 字段
+- stdin CWD 解析：SessionStart 和 UserPromptSubmit hook 均从 stdin JSON 读取项目目录
+- route-matcher 测试纳入 CI 流水线
+- 15 项新测试：中文分词、插件路由、置信度、CWD 解析、符号链接安装
+
+### Fixed
+
+- 中文分词：CJK 文本拆为单字 + bigrams，修复中文匹配完全失效
+- createOutput 注入防护：skill description 经 sanitize 清洗
+- readStdin 进程挂起：超时后 unref stdin 确保进程退出
+- 停词 "做"/"什么"/"要" 过度激进导致中文 false negative
+- install.sh `&&`/`||` 条件链优先级 bug 改为 if/elif/fi
+
+### Changed
+
+- 测试总数从 149 项增至 164 项
+
 ## [1.3.0] - 2026-04-12
 
 ### Added

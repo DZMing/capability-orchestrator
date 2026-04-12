@@ -1,6 +1,6 @@
 {
   "name": "capability-orchestrator",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "能力感知 + 路由引导：实时扫描环境中所有可用 skills、subagents、plugins 和 MCP servers，注入路由策略引导 Claude 自动选择最优执行路径",
   "scripts": {
     "test": "node --test tests/scan.test.cjs tests/skill-contract.test.cjs tests/route-matcher.test.cjs",
