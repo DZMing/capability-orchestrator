@@ -70,6 +70,8 @@ PLUGIN_DIR="$TMP_HOME/plugins/cache/capability-orchestrator"
 assert_file "plugin manifest 存在"   "$PLUGIN_DIR/.claude-plugin/plugin.json"
 assert_file "scan script 存在"        "$PLUGIN_DIR/scripts/scan-environment.cjs"
 assert_exec "scan script 可执行"      "$PLUGIN_DIR/scripts/scan-environment.cjs"
+assert_file "route-matcher 存在"      "$PLUGIN_DIR/scripts/route-matcher.cjs"
+assert_exec "route-matcher 可执行"    "$PLUGIN_DIR/scripts/route-matcher.cjs"
 assert_file "capabilities SKILL.md"  "$PLUGIN_DIR/skills/capabilities/SKILL.md"
 assert_file "orchestrate SKILL.md"   "$PLUGIN_DIR/skills/orchestrate/SKILL.md"
 assert_file "refresh SKILL.md"       "$PLUGIN_DIR/skills/refresh/SKILL.md"
@@ -90,6 +92,15 @@ HOOK_COUNT=$(node -e "
   process.stdout.write(String(n));
 ")
 assert "SessionStart hook 已注册" [ "$HOOK_COUNT" -eq 1 ]
+
+# 验证 UserPromptSubmit hook
+ROUTE_COUNT=$(node -e "
+  const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
+  const hooks = (s.hooks || {}).UserPromptSubmit || [];
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  process.stdout.write(String(n));
+")
+assert "UserPromptSubmit hook 已注册" [ "$ROUTE_COUNT" -eq 1 ]
 
 # 验证 hook 命令指向正确脚本
 HOOK_CMD=$(node -e "
@@ -124,7 +135,15 @@ HOOK_AFTER=$(node -e "
   const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
   process.stdout.write(String(n));
 ")
-assert "卸载后 hook 已移除" [ "$HOOK_AFTER" -eq 0 ]
+assert "卸载后 SessionStart hook 已移除" [ "$HOOK_AFTER" -eq 0 ]
+
+ROUTE_AFTER=$(node -e "
+  const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
+  const hooks = (s.hooks || {}).UserPromptSubmit || [];
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  process.stdout.write(String(n));
+")
+assert "卸载后 UserPromptSubmit hook 已移除" [ "$ROUTE_AFTER" -eq 0 ]
 
 # ── 结果 ──────────────────────────────────────────────────────────────────────
 echo ""

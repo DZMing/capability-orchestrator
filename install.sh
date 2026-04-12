@@ -38,11 +38,14 @@ const settingsFile = process.argv[2];
 try {
   const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
   if (!settings.hooks) settings.hooks = {};
-  const hooks = settings.hooks.SessionStart || [];
-  settings.hooks.SessionStart = hooks.filter(entry =>
-    !(entry.hooks && entry.hooks.some(h => h.command && h.command.includes('capability-orchestrator')))
+  const marker = 'capability-orchestrator';
+  const filterHooks = (arr) => (arr || []).filter(entry =>
+    !(entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker)))
   );
+  settings.hooks.SessionStart = filterHooks(settings.hooks.SessionStart);
+  settings.hooks.UserPromptSubmit = filterHooks(settings.hooks.UserPromptSubmit);
   if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
+  if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   process.stdout.write('hook 已移除\n');
@@ -129,6 +132,7 @@ fi
 
 # 确保脚本可执行
 chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
+chmod +x "$INSTALL_DIR/scripts/route-matcher.cjs"
 
 # ── 注册 SessionStart hook ────────────────────────────────────────────────────
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
@@ -180,9 +184,54 @@ fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
 fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 NODEJS
 
+# ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
+ROUTE_CMD="node \"$INSTALL_DIR/scripts/route-matcher.cjs\""
+
+yellow "正在注册 UserPromptSubmit hook..."
+node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
+const fs = require('fs');
+const path = require('path');
+
+const settingsFile = process.argv[2];
+const hookCmd = process.argv[3];
+
+let settings = {};
+if (fs.existsSync(settingsFile)) {
+  try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+}
+
+if (!settings.hooks) settings.hooks = {};
+if (!settings.hooks.UserPromptSubmit) settings.hooks.UserPromptSubmit = [];
+
+const marker = 'capability-orchestrator';
+const alreadyRegistered = settings.hooks.UserPromptSubmit.some(entry =>
+  entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker))
+);
+
+if (alreadyRegistered) {
+  for (const entry of settings.hooks.UserPromptSubmit) {
+    if (!entry.hooks) continue;
+    for (const h of entry.hooks) {
+      if (h.command && h.command.includes(marker)) {
+        h.command = hookCmd;
+      }
+    }
+  }
+  process.stdout.write('updated\n');
+} else {
+  settings.hooks.UserPromptSubmit.push({
+    hooks: [{ type: 'command', command: hookCmd, timeout: 5 }]
+  });
+  process.stdout.write('added\n');
+}
+
+fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+ROUTEJS
+
 echo ""
 green "✓ 安装完成：$INSTALL_DIR"
 green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
+green "✓ UserPromptSubmit hook 已注册（每条消息自动匹配 skill）"
 echo ""
 bold "使用方式："
 echo "  新会话开始时自动感知环境能力（无需手动触发）"
