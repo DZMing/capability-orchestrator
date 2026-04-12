@@ -56,9 +56,28 @@ test('extractKeywords: splits English text', () => {
   assert.ok(kw.includes('now'));
 });
 
-test('extractKeywords: splits Chinese text', () => {
+test('extractKeywords: splits Chinese text into individual characters', () => {
   const kw = extractKeywords('调试代码问题');
-  assert.ok(kw.length > 0);
+  assert.ok(kw.includes('调'));
+  assert.ok(kw.includes('试'));
+  assert.ok(kw.includes('代'));
+  assert.ok(kw.includes('码'));
+  assert.ok(kw.includes('问'));
+  assert.ok(kw.includes('题'));
+});
+
+test('extractKeywords: Chinese bigrams extracted', () => {
+  const kw = extractKeywords('调试代码');
+  assert.ok(kw.includes('调试'));
+  assert.ok(kw.includes('代码'));
+});
+
+test('extractKeywords: mixed Chinese and English', () => {
+  const kw = extractKeywords('调试debug代码bug');
+  assert.ok(kw.includes('debug'));
+  assert.ok(kw.includes('bug'));
+  assert.ok(kw.includes('调'), 'CJK chars should be split individually');
+  assert.ok(kw.includes('调试'), 'CJK bigrams should be extracted');
 });
 
 test('extractKeywords: filters stop words', () => {
@@ -73,6 +92,13 @@ test('extractKeywords: filters Chinese stop words', () => {
   const kw = extractKeywords('帮我调试这个代码');
   assert.ok(!kw.includes('帮我'));
   assert.ok(!kw.includes('这'));
+});
+
+test('extractKeywords: Chinese sentence produces matchable keywords', () => {
+  const skillKw = extractKeywords('调试代码错误');
+  const promptKw = extractKeywords('帮我调试这个代码的错误');
+  const overlap = promptKw.filter(k => skillKw.includes(k));
+  assert.ok(overlap.length >= 2, `should have >=2 overlap, got ${overlap.length}: ${JSON.stringify(overlap)}`);
 });
 
 test('extractKeywords: deduplicates', () => {
@@ -191,6 +217,24 @@ test('STOP_WORDS: contains common Chinese words', () => {
   assert.ok(STOP_WORDS.has('的'));
   assert.ok(STOP_WORDS.has('是'));
   assert.ok(STOP_WORDS.has('帮我'));
+});
+
+// ─── createOutput sanitization ──────────────────────────────────────────────
+
+test('createOutput: sanitizes skill description to prevent injection', () => {
+  const { createOutput } = require('../scripts/route-matcher.cjs');
+  const origWrite = process.stdout.write;
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; };
+  try {
+    createOutput({ name: 'evil-skill', desc: 'normal <script>alert(1)</script> `rm -rf /`' });
+    const output = JSON.parse(captured.trim());
+    const ctx = output.hookSpecificOutput.additionalContext;
+    assert.ok(!ctx.includes('<script>'), 'HTML tags should be stripped');
+    assert.ok(!ctx.includes('`rm'), 'backticks should be neutralized');
+  } finally {
+    process.stdout.write = origWrite;
+  }
 });
 
 // ─── 端到端子进程测试 ──────────────────────────────────────────────────────

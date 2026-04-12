@@ -14,7 +14,7 @@
 
 const path = require('path');
 const os = require('os');
-const { scanSkills } = require('./scan-environment.cjs');
+const { scanSkills, sanitize } = require('./scan-environment.cjs');
 
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
@@ -50,6 +50,7 @@ function readStdin(timeoutMs) {
         settled = true;
         process.stdin.removeAllListeners();
         process.stdin.destroy();
+        process.stdin.unref();
         resolve(Buffer.concat(chunks).toString('utf-8'));
       }
     }, timeoutMs);
@@ -88,11 +89,33 @@ function extractPrompt(input) {
   }
 }
 
+const CJK_RANGE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+const CJK_RUN = /[\u4e00-\u9fff\u3400-\u4dbf]+/g;
+const NON_CJK_RUN = /[^\u4e00-\u9fff\u3400-\u4dbf]+/g;
+
 function extractKeywords(text) {
   if (!text || typeof text !== 'string') return [];
   const lower = text.toLowerCase();
-  const tokens = lower.match(/[\p{L}\p{N}]+/gu) || [];
-  return [...new Set(tokens.filter(t => t.length > 1 && !STOP_WORDS.has(t)))];
+  const rawTokens = lower.match(/[\p{L}\p{N}]+/gu) || [];
+  const tokens = [];
+  for (const t of rawTokens) {
+    if (CJK_RANGE.test(t)) {
+      const cjkRuns = t.match(CJK_RUN) || [];
+      for (const run of cjkRuns) {
+        const chars = [...run];
+        for (const c of chars) tokens.push(c);
+        for (let i = 0; i < chars.length - 1; i++) tokens.push(chars[i] + chars[i + 1]);
+      }
+      const nonCjkRuns = t.match(NON_CJK_RUN) || [];
+      for (const run of nonCjkRuns) {
+        const sub = run.match(/[\p{L}\p{N}]+/gu) || [];
+        for (const s of sub) tokens.push(s);
+      }
+    } else {
+      tokens.push(t);
+    }
+  }
+  return [...new Set(tokens.filter(t => !STOP_WORDS.has(t) && (t.length > 1 || CJK_RANGE.test(t))))];
 }
 
 function isEscaped(prompt) {
@@ -127,9 +150,10 @@ function findBestMatch(prompt, skills) {
 }
 
 function createOutput(match) {
+  const safeDesc = sanitize(match.desc || '');
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
-    '描述: ' + (match.desc || ''),
+    '描述: ' + safeDesc,
     '你必须先通过 Skill tool 调用此 skill，再执行其他操作。',
     '调用方式: Skill("' + match.name + '")',
   ].join('\n');
