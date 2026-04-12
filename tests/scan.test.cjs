@@ -907,6 +907,20 @@ test('renderSection level 4: 纯计数', () => {
   assert.ok(!out.includes('s0'), 'level 4 should not show any names');
 });
 
+// ─── 4f: renderSection level 2 vs level 3 mutation guard ─────────────────────
+
+test('mutation: renderSection level 2 and level 3 produce different output', () => {
+  const items = Array.from({ length: 20 }, (_, i) => ({ name: `skill-${i}`, desc: `desc ${i}` }));
+  const section = { label: 'Test', prefix: '', items };
+  const out2 = renderSection(section, 2);
+  const out3 = renderSection(section, 3);
+  assert.notEqual(out2, out3, 'level 2 and level 3 must differ');
+  // Level 2 shows all names, level 3 shows only top-15 + fold
+  assert.ok(out2.includes('skill-19'), 'level 2 should show all names');
+  assert.ok(!out3.includes('skill-19'), 'level 3 should NOT show items beyond top-15');
+  assert.ok(out3.includes('+5 个'), 'level 3 should fold');
+});
+
 // ─── awareness 边界 + collectSnapshot 健壮性 ────────────────────────────────
 
 test('awareness 空快照仍包含路由规则', () => {

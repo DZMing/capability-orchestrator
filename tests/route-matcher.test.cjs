@@ -500,3 +500,85 @@ test('collectAllSkills: fault-open when plugin scan throws', () => {
   const names = skills.map(s => s.name);
   assert.ok(names.includes('valid-skill'), 'project skill should still be present');
 });
+
+// ─── Session 4: 突变测试断言加固 ──────────────────────────────────────────
+
+// 4a: MIN_KEYWORD_OVERLAP boundary — exactly 2 keywords overlap must match
+test('mutation: exactly 2 keyword overlap matches (MIN_KEYWORD_OVERLAP=2)', () => {
+  const skills = [{ name: 'deploy', desc: 'deploy production server application' }];
+  // 'deploy' and 'production' overlap — exactly 2
+  const match = findBestMatch('deploy to production environment', skills);
+  assert.ok(match, 'exactly 2 keyword overlap should match');
+  assert.equal(match.name, 'deploy');
+});
+
+// 4b: SHORT_SINGLE_KEYWORD_LEN boundary — 21+ char prompt with 1 keyword overlap
+test('mutation: single keyword overlap with long prompt matches (SHORT_SINGLE_KEYWORD_LEN=20)', () => {
+  const skills = [{ name: 'deploy', desc: 'deploy application' }];
+  // Only 'deploy' overlaps but prompt is > 20 chars
+  const longPrompt = 'please deploy this thing for me now';
+  assert.ok(longPrompt.length > 20, 'prompt must be > 20 chars');
+  const match = findBestMatch(longPrompt, skills);
+  assert.ok(match, 'single keyword + long prompt should match');
+  // Short prompt with same single overlap should NOT match
+  const shortMatch = findBestMatch('deploy it', skills);
+  assert.equal(shortMatch, null, 'single keyword + short prompt should not match');
+});
+
+// 4c: isEscaped short question threshold — 25 char question should be escaped
+test('mutation: 25-char question is escaped (threshold < 30)', () => {
+  // Exactly 25 characters ending with ?
+  const q = 'abcdefghijklmnopqrstuvwx?';
+  assert.equal(q.length, 25);
+  assert.ok(isEscaped(q), '25-char question should be escaped');
+  // 30-char question should also be escaped (< 30)
+  const q29 = 'abcdefghijklmnopqrstuvwxyzab?';
+  assert.equal(q29.length, 29);
+  assert.ok(isEscaped(q29), '29-char question should be escaped');
+  // 31-char question should NOT be escaped
+  const q31 = 'abcdefghijklmnopqrstuvwxyzabcd?';
+  assert.equal(q31.length, 31);
+  assert.ok(!isEscaped(q31), '31-char question should NOT be escaped');
+});
+
+// 4e: MIN_PROMPT_LEN boundary — 5 char prompt processed, 4 char skipped
+test('mutation: MIN_PROMPT_LEN boundary at 5 chars', () => {
+  const skills = [{ name: 'debug', desc: 'debug errors code bugs fix' }];
+  // 4-char prompt should be skipped (passThrough) in CLI — test via e2e
+  const raw4 = execFileSync(NODE, [SCRIPT], {
+    input: JSON.stringify({ prompt: 'abcd' }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const out4 = JSON.parse(raw4);
+  assert.equal(out4.suppressOutput, true, '4-char prompt should be skipped');
+
+  // 5-char prompt should be processed (not auto-skipped)
+  const raw5 = execFileSync(NODE, [SCRIPT], {
+    input: JSON.stringify({ prompt: 'debug' }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const out5 = JSON.parse(raw5);
+  // 'debug' alone won't match (single keyword, short prompt) but it should be processed
+  assert.equal(out5.continue, true, '5-char prompt should be processed');
+});
+
+// 4g: compareSemver exact return values
+test('mutation: compareSemver returns exactly 1 or -1', () => {
+  const { compareSemver } = require('../scripts/scan-environment.cjs');
+  assert.equal(compareSemver('2.0.0', '1.0.0'), 1, 'greater should return 1');
+  assert.equal(compareSemver('1.0.0', '2.0.0'), -1, 'lesser should return -1');
+  assert.equal(compareSemver('1.0.0', '1.0.0'), 0, 'equal should return 0');
+});
+
+// 4h: collectAllSkills dedup order — project > user > plugin
+test('mutation: collectAllSkills dedup prefers project over plugin', () => {
+  const skills = collectAllSkills(FIXTURE_PROJECT, FIXTURE_USER);
+  // 'valid-skill' exists in project fixture
+  const vs = skills.find(s => s.name === 'valid-skill');
+  assert.ok(vs, 'valid-skill should exist');
+  // Its desc should be from project level, not a hypothetical plugin override
+  assert.ok(vs.desc.includes('valid test skill'),
+    `desc should be project-level, got: ${vs.desc}`);
+});
