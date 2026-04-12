@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.0] - 2026-04-12
+
+### Fixed
+
+- Unicode NFC/NFD 归一化：extractKeywords 对 NFC 和 NFD 输入产出相同结果（`café` vs `café`）
+- CJK Extensions B-G 支持：CJK_RANGE 扩展到 U+20000-U+3134F，覆盖罕见汉字
+
+### Added
+
+- 17 项 fuzz/property 测试：sanitize、extractKeywords、findBestMatch、passThrough、createOutput（约 4700 次随机迭代）
+- 7 项突变防护测试：MIN_KEYWORD_OVERLAP、SHORT_SINGLE_KEYWORD_LEN、isEscaped 阈值、MIN_PROMPT_LEN、compareSemver、dedup 顺序、renderSection level 边界
+- 13 项压力测试：10k skills 性能、100KB prompt、深层嵌套插件目录、6 种畸形 SKILL.md、4 种 JSON 注释反斜杠边界
+- 10 项集成测试：golden snapshot（awareness + renderSection level 0-4）、完整 hook 流程、安装/卸载/重装循环
+- readStdin 超时路径、多 chunk 积累、空 stdin、插件异常 fault-open 4 项覆盖测试
+- sanitize Markdown 正则回溯安全证明（10k 字符 <2ms）
+
+### Changed
+
+- 测试总数从 164 项增至 222 项（+58 项）
+- 新增 3 个测试文件：fuzz.test.cjs、stress.test.cjs、integration.test.cjs
+- 新增 golden 快照目录：tests/golden/
+
 ## [1.4.0] - 2026-04-12
 
 ### Added
