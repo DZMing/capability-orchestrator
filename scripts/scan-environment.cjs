@@ -572,7 +572,7 @@ function renderAwareness(snapshot) {
   }
 
   // 路由规则是 awareness 模式的核心价值，必须保证不被截断
-  const ROUTING = '\n### 路由规则\n<MANDATORY>\n有匹配 skill 时必须用 Skill tool 调用，不得跳过直接做。\n匹配依据：skill description 与用户任务的语义重叠。\n逃逸条件：用户明确说"直接做/skip"，或纯问答无需执行动作。\n不确定时用 ToolSearch 搜索可用能力。' + mcpHints + '\n</MANDATORY>';
+  const ROUTING = '\n### 路由规则\n<MANDATORY>\n1. 有匹配 skill 时必须用 Skill tool 调用，不得跳过直接做。\n   匹配依据：skill description 与用户任务的语义重叠。\n2. 当 UserPromptSubmit hook 输出包含 [AUTO-ROUTE] 和 /command 时，必须立即调用 Skill tool 执行该 /command，等同于用户亲自输入该命令。不得忽略、不得自行回答、不得询问确认。\n3. 逃逸条件：用户明确说"直接做/skip"，或纯问答无需执行动作。\n4. 不确定时用 ToolSearch 搜索可用能力。' + mcpHints + '\n</MANDATORY>';
   const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
   const listBudget = MAX_TOTAL_CHARS - ROUTING.length - FOOTER.length;
 

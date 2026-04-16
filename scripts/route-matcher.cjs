@@ -256,8 +256,8 @@ function createOutput(match) {
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即通过 Skill tool 调用此 skill，不得询问确认，不得先做其他事。',
-    '调用方式: Skill("' + match.name + '")',
+    '【强制指令】立即执行以下命令，不得询问确认，不得先做其他事。',
+    '/' + match.name,
   ].join('\n');
   process.stdout.write(ctx + '\n');
 }
