@@ -191,7 +191,8 @@ function scanSkills(dir, errors) {
     if (content === null) continue;
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
-    results.push({ name, desc });
+    const filePath = path.join(fullPath, 'SKILL.md');
+    results.push({ name, desc, filePath });
   }
   return results;
 }
@@ -207,7 +208,7 @@ function scanAgents(dir, errors) {
     if (content === null) continue;
     const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
-    results.push({ name, desc });
+    results.push({ name, desc, filePath: fullPath });
   }
   return results;
 }
@@ -331,8 +332,9 @@ function scanInstalledPlugins(claudeUserDir, errors) {
         .filter(d => !d.name.startsWith('.') && d.isDirectory()
           && fs.existsSync(path.join(pluginPath, 'skills', d.name, 'SKILL.md')))
         .map(d => {
-          const head = tryReadHead(path.join(pluginPath, 'skills', d.name, 'SKILL.md'), errors);
-          return { name: sanitize(getName(head, d.name)), desc: head ? getDescription(head) : '' };
+          const skillPath = path.join(pluginPath, 'skills', d.name, 'SKILL.md');
+          const head = tryReadHead(skillPath, errors);
+          return { name: sanitize(getName(head, d.name)), desc: head ? getDescription(head) : '', filePath: skillPath };
         });
       const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true, errors)
         .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))

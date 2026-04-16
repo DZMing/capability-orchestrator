@@ -248,16 +248,26 @@ function findBestMatch(prompt, skills) {
   return { ...best, confidence: conf };
 }
 
-// 改进1：纯文本输出，绕过 JSON hookSpecificOutput 首条消息 bug
-// 官方文档建议：plain text stdout 更可靠
+// 直接注入 skill 内容，不依赖 Claude 调用 Skill tool
 function createOutput(match) {
+  let body = '';
+  if (match.filePath) {
+    try {
+      let raw = fs.readFileSync(match.filePath, 'utf8');
+      // 剥离 frontmatter
+      raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
+      // 限制长度防止超出 context 预算
+      if (raw.length > 3000) raw = raw.slice(0, 3000) + '\n[...截断]';
+      body = raw.trim();
+    } catch { /* fault-open */ }
+  }
   const safeDesc = sanitize(match.desc || '');
-  // 改进3：加强指令语气，减少 Claude 询问确认的情况
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即执行以下命令，不得询问确认，不得先做其他事。',
-    '/' + match.name,
+    '【强制指令】立即按照以下定义执行任务，不得询问确认，不得偏离：',
+    '',
+    body || ('执行 /' + match.name + ' 命令的完整流程。'),
   ].join('\n');
   process.stdout.write(ctx + '\n');
 }

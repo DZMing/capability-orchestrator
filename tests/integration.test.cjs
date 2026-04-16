@@ -92,7 +92,7 @@ test('integration: UserPromptSubmit hook matches skill via stdin', () => {
   assert.ok(isMatch || isPassThrough, 'should produce AUTO-ROUTE or passThrough output');
   if (isMatch) {
     assert.ok(raw.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
-    assert.ok(raw.includes('Skill tool') || raw.includes('命令'), 'should instruct to use skill or command');
+    assert.ok(raw.includes('Skill tool') || raw.includes('命令') || raw.includes('定义'), 'should instruct to use skill or command');
   }
 });
 
