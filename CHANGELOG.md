@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.0] - 2026-04-16
+
+### Changed
+
+- 路由输出格式从 `Skill("name")` 改为 `/name`，Claude 理解更精准
+- 双层路由强化：SessionStart awareness 注入 AUTO-ROUTE 合规规则，UserPromptSubmit 输出具体 `/command`
+- package.json 新增 keywords、homepage、bugs 字段
+- README 新增英文摘要，提升 GitHub 发现性
+- CONTRIBUTING.md 补充 test:install 安全警告
+
+### Added
+
+- CLAUDE.md 项目文档（命令、架构、约束）
+- `findLiteralMatch()` 支持字面量匹配：`/commit` 或短 prompt 中的 skill 名直接命中
+- 跨语言 name-match gate：单同义词匹配 skill 名称时直接通过
+- 同义词表新增：提交↔commit、推送↔push
+
 ## [1.5.0] - 2026-04-12
 
 ### Fixed

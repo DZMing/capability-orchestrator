@@ -11,6 +11,9 @@ cd capability-orchestrator
 
 ## 运行测试
 
+> **注意**: `npm run test:install` 和 `npm run test:idempotent` 会修改 `~/.claude/settings.json`。
+> 建议在安全环境中运行，或先用 `CLAUDE_USER_DIR=$(mktemp -d)` 指定临时目录。
+
 ```bash
 # 单元测试
 node --test tests/scan.test.cjs tests/skill-contract.test.cjs

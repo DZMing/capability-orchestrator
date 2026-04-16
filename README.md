@@ -1,5 +1,7 @@
 # capability-orchestrator
 
+> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 251 tests.
+
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
 让 Claude Code 实时感知当前环境的全部可用能力（skills / subagents / plugins / MCP servers / commands），并通过路由策略引导 Claude 自动选择最优执行路径。

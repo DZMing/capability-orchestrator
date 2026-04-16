@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm test                    # 全部单元测试（243 项）
+npm test                    # 全部单元测试（251 项）
 npm run test:install        # 安装/卸载/重装循环集成测试
 npm run test:all            # 上两者全跑
 
