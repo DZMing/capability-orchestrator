@@ -357,6 +357,8 @@ function scanInstalledPlugins(claudeUserDir, errors) {
 
 // WSL 下额外探测 Windows %USERPROFILE%\.claude
 function resolveUserDir() {
+  const configuredDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR;
+  if (configuredDir) return configuredDir;
   const linuxHome = path.join(os.homedir(), '.claude');
   if (!process.env.WSL_DISTRO_NAME) return linuxHome;
   // 优先 Linux home（通常是 ~/.claude symlink 或挂载点）

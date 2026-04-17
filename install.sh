@@ -13,6 +13,7 @@ green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
 red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+shell_quote() { printf '%q' "$1"; }
 
 # 确定用户级 Claude 目录
 CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
@@ -39,9 +40,12 @@ try {
   const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
   if (!settings.hooks) settings.hooks = {};
   const marker = 'capability-orchestrator';
-  const filterHooks = (arr) => (arr || []).filter(entry =>
-    !(entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker)))
-  );
+  const filterHooks = (arr) => (arr || [])
+    .map(entry => {
+      const hooks = (entry.hooks || []).filter(h => !(h.command && h.command.includes(marker)));
+      return hooks.length > 0 ? { ...entry, hooks } : null;
+    })
+    .filter(Boolean);
   settings.hooks.SessionStart = filterHooks(settings.hooks.SessionStart);
   settings.hooks.UserPromptSubmit = filterHooks(settings.hooks.UserPromptSubmit);
   if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
@@ -144,7 +148,7 @@ chmod +x "$INSTALL_DIR/scripts/route-matcher.cjs"
 
 # ── 注册 SessionStart hook ────────────────────────────────────────────────────
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-HOOK_CMD="node \"$INSTALL_DIR/scripts/scan-environment.cjs\" --mode=awareness"
+HOOK_CMD="CLAUDE_USER_DIR=$(shell_quote "$CLAUDE_DIR") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
 
 yellow "正在注册 SessionStart hook..."
 node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
@@ -157,12 +161,17 @@ const hookCmd = process.argv[3];
 // 读取或初始化 settings.json
 let settings = {};
 if (fs.existsSync(settingsFile)) {
-  try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  } catch (e) {
+    process.stderr.write('settings.json 解析失败: ' + e.message + '\n');
+    process.exit(1);
+  }
 }
 
 // 确保 hooks.SessionStart 数组存在
 if (!settings.hooks) settings.hooks = {};
-if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
+if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = [];
 
 // 检查是否已注册（避免重复）
 const marker = 'capability-orchestrator';
@@ -193,7 +202,7 @@ fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 NODEJS
 
 # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
-ROUTE_CMD="node \"$INSTALL_DIR/scripts/route-matcher.cjs\""
+ROUTE_CMD="CLAUDE_USER_DIR=$(shell_quote "$CLAUDE_DIR") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
 yellow "正在注册 UserPromptSubmit hook..."
 node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
@@ -205,11 +214,16 @@ const hookCmd = process.argv[3];
 
 let settings = {};
 if (fs.existsSync(settingsFile)) {
-  try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+  } catch (e) {
+    process.stderr.write('settings.json 解析失败: ' + e.message + '\n');
+    process.exit(1);
+  }
 }
 
 if (!settings.hooks) settings.hooks = {};
-if (!settings.hooks.UserPromptSubmit) settings.hooks.UserPromptSubmit = [];
+if (!Array.isArray(settings.hooks.UserPromptSubmit)) settings.hooks.UserPromptSubmit = [];
 
 const marker = 'capability-orchestrator';
 const alreadyRegistered = settings.hooks.UserPromptSubmit.some(entry =>
