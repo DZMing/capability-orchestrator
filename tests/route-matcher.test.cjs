@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync, spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const {
   extractPrompt, extractKeywords, isEscaped, findBestMatch,
@@ -549,6 +551,30 @@ test('e2e: uses cwd from stdin for skill scanning', () => {
   if (isMatch) {
     assert.ok(raw.includes('[AUTO-ROUTE]'), 'match should include AUTO-ROUTE marker');
     assert.ok(raw.includes('Skill tool') || raw.includes('命令') || raw.includes('定义'), 'should instruct to use skill or command');
+  }
+});
+
+test('e2e: respects CLAUDE_USER_DIR for user skill scanning', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-user-'));
+  const userDir = path.join(tmpHome, 'custom-home');
+  try {
+    const skillDir = path.join(userDir, 'skills', 'demo-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: demo-skill\ndescription: custom route only skill\n---\n');
+
+    const raw = execFileSync(NODE, [SCRIPT], {
+      input: JSON.stringify({
+        prompt: 'please use custom route only skill now',
+        cwd: FIXTURE_PROJECT,
+      }),
+      env: { ...process.env, CLAUDE_USER_DIR: userDir },
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+
+    assert.ok(raw.includes('demo-skill'), `should route to custom CLAUDE_USER_DIR skill, got: ${raw.slice(0, 200)}`);
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
 

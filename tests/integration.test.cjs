@@ -133,6 +133,25 @@ test('integration: SessionStart awareness mode includes fixture skills', () => {
   assert.ok(raw.includes('valid-skill'), 'should list project skill');
 });
 
+test('integration: scan script respects CLAUDE_USER_DIR env', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-user-'));
+  const userDir = path.join(tmpHome, 'custom-home');
+  try {
+    const skillDir = path.join(userDir, 'skills', 'demo-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: demo-skill\ndescription: custom scan only skill\n---\n');
+
+    const raw = execFileSync(NODE, [SCAN_SCRIPT, '--mode=list', `--project-dir=${FIXTURE_PROJECT}`], {
+      env: { ...process.env, CLAUDE_USER_DIR: userDir },
+      encoding: 'utf-8',
+      timeout: 10000,
+    });
+    assert.ok(raw.includes('demo-skill'), 'should list skills from CLAUDE_USER_DIR');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
 test('integration: scan list mode outputs compact format', () => {
   const raw = execFileSync(NODE, [SCAN_SCRIPT, '--mode=list',
     `--project-dir=${FIXTURE_PROJECT}`,
@@ -201,6 +220,75 @@ test('integration: install and uninstall cycle', () => {
     assert.ok(fs.existsSync(pluginDir), 'plugin directory should exist after reinstall');
     const settingsReinstall = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
     assert.ok(settingsReinstall.hooks.SessionStart, 'SessionStart hook should exist after reinstall');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('integration: install fails safely on malformed settings.json', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
+  const settingsFile = path.join(tmpHome, 'settings.json');
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  const original = '{"model":"opus", invalid\n';
+  fs.writeFileSync(settingsFile, original);
+
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CLAUDE_USER_DIR: tmpHome,
+  };
+
+  try {
+    assert.throws(
+      () => execFileSync('bash', [installScript], {
+        env,
+        encoding: 'utf-8',
+        timeout: 30000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+      /settings\.json|JSON|解析/u
+    );
+    assert.equal(fs.readFileSync(settingsFile, 'utf8'), original, 'malformed settings.json should stay untouched');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('integration: uninstall keeps unrelated hooks in same entry', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
+  const settingsFile = path.join(tmpHome, 'settings.json');
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            { type: 'command', command: 'node /x/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness', timeout: 10 },
+            { type: 'command', command: 'node /keep/me.js', timeout: 10 },
+          ],
+        },
+      ],
+    },
+  }, null, 2));
+
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CLAUDE_USER_DIR: tmpHome,
+  };
+
+  try {
+    execFileSync('bash', [installScript, '--uninstall'], {
+      env,
+      encoding: 'utf-8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    const hooks = (settings.hooks || {}).SessionStart || [];
+    assert.equal(hooks.length, 1, 'shared hook entry should stay');
+    assert.equal(hooks[0].hooks.length, 1, 'only unrelated hook should remain');
+    assert.equal(hooks[0].hooks[0].command, 'node /keep/me.js');
   } finally {
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }

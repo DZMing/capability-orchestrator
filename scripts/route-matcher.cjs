@@ -45,6 +45,10 @@ const STOP_WORDS = new Set([
   '功能', '系统', '工具', '服务',
 ]);
 
+function resolveUserDir() {
+  return process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || path.join(os.homedir(), '.claude');
+}
+
 function readStdin(timeoutMs) {
   return new Promise((resolve) => {
     const chunks = [];
@@ -343,7 +347,7 @@ function createMcpOutput(server) {
 }
 
 function collectAllSkills(projectDir, userDir) {
-  const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
+  const claudeUserDir = userDir || resolveUserDir();
   const projSkills = scanSkills(path.join(projectDir, '.claude', 'skills'), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
   const pluginSkills = [];
@@ -393,7 +397,7 @@ else {
       }
       const stdinCwd = extractCwd(input);
       const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
-      const userDir = process.env.CAPABILITY_USER_DIR;
+      const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR;
 
       // Skills + legacy commands 优先（强制路由），MCP 兜底（引导路由）
       const skills = collectAllSkills(projectDir, userDir);
@@ -407,7 +411,7 @@ else {
       // 没有 skill/command 匹配时尝试 MCP server 路由
       try {
         const { readMcpServers } = require('./scan-environment.cjs');
-        const claudeUserDir = userDir || path.join(os.homedir(), '.claude');
+        const claudeUserDir = userDir || resolveUserDir();
         const mcpItems = [];
         const projMcp = path.join(projectDir, '.mcp.json');
         const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
