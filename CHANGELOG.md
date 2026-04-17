@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `route-matcher.cjs --explain`：输出稳定 JSON，解释某条 prompt 为什么命中 skill / command / MCP，或为什么被放行
+- 新增 `/debug-route` skill，供人工排查误路由和回归测试时使用
+- `scripts/lib/user-dir.cjs`：共享用户目录解析
+- `scripts/lib/scan-core.cjs` / `scripts/lib/scan-render.cjs`：扫描与渲染分层
+
+### Changed
+
+- `scan-environment.cjs` 保持稳定入口不变，但内部改为 core/render/user-dir 三层结构
+- `route-matcher` explain 和默认路由共用同一套判定逻辑，避免两套行为漂移
+- README / ARCHITECTURE / CONTRIBUTING 补充 explain 与 debug-route 的使用说明
+
+### Fixed
+
+- explain 模式下可稳定给出 `matched-skill` / `matched-command` / `matched-mcp` / `escaped` / `too-short` / `no-match`
+- debug-route skill 可直接执行，且不会修改 repo 跟踪文件
+
 ## [1.6.0] - 2026-04-16
 
 ### Changed

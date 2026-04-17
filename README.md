@@ -1,6 +1,6 @@
 # capability-orchestrator
 
-> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 256 tests.
+> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 264 tests.
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
@@ -96,6 +96,14 @@ claude --plugin-dir ./capability-orchestrator
 
 扫描当前环境后给出"用哪个 skill/agent 最合适"的建议。
 
+### 调试一条路由为什么这样判定
+
+```
+/capability-orchestrator:debug-route
+```
+
+读取一条示例 prompt，调用 `route-matcher --explain`，解释它为什么命中某个 skill / command / MCP，或为什么被放行。
+
 ### 安装新插件后刷新
 
 ```
@@ -109,6 +117,11 @@ claude --plugin-dir ./capability-orchestrator
 ```bash
 # 测试扫描脚本是否正常输出
 node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness
+
+# 调试某条 prompt 会如何路由
+printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."}' \
+  | CLAUDE_USER_DIR="$HOME/.claude" \
+    node ~/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs --explain
 ```
 
 ## 卸载
@@ -128,3 +141,4 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 - 插件缓存目录 `~/.claude/plugins/cache/` 的结构未正式文档化，扫描插件信息为 best-effort
 - `!command` 在 skill 渲染时执行，CWD 为 Claude Code 启动目录（即项目根目录）
 - 输出硬限制 3000 字符；能力过多时自动缩短 description
+- `route-matcher --explain` 是调试入口，不会替代真实 hook，只用于解释判定结果

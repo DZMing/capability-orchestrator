@@ -593,6 +593,117 @@ test('e2e: matched skill output should not leak raw !command syntax', () => {
   assert.ok(raw.includes('/capabilities'), 'should instruct direct skill invocation');
 });
 
+test('e2e: --explain returns matched skill JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: '输出当前环境的全部可用能力摘要',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'route');
+  assert.equal(output.reason, 'matched-skill');
+  assert.equal(output.targetType, 'skill');
+  assert.equal(output.targetName, 'capabilities');
+  assert.ok(typeof output.confidence === 'number');
+  assert.ok(Array.isArray(output.matchedKeywords));
+  assert.ok(output.matchedKeywords.length > 0);
+  assert.equal(output.cwd, FIXTURE_PROJECT);
+  assert.ok(output.userDirSource, 'should expose userDirSource');
+  assert.ok(!raw.includes('!`'), 'explain output should not leak raw !command');
+});
+
+test('e2e: --explain returns matched command JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: 'valid test legacy command integration testing',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'route');
+  assert.equal(output.reason, 'matched-command');
+  assert.equal(output.targetType, 'command');
+  assert.equal(output.targetName, 'legacy-cmd');
+});
+
+test('e2e: --explain returns matched mcp JSON', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-mcp-proj-'));
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-mcp-home-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, '.mcp.json'), JSON.stringify({
+      mcpServers: {
+        docs: { description: 'docs query helper' },
+      },
+    }, null, 2));
+    const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+      input: JSON.stringify({
+        prompt: 'please use the docs query helper',
+        cwd: tmpDir,
+      }),
+      env: { ...process.env, CLAUDE_USER_DIR: tmpHome },
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+    const output = JSON.parse(raw);
+    assert.equal(output.action, 'route');
+    assert.equal(output.reason, 'matched-mcp');
+    assert.equal(output.targetType, 'mcp');
+    assert.equal(output.targetName, 'docs');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('e2e: --explain returns no-match JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: 'tell me about the weather in Tokyo tomorrow',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'pass');
+  assert.equal(output.reason, 'no-match');
+  assert.equal(output.targetType, null);
+  assert.equal(output.targetName, null);
+});
+
+test('e2e: --explain returns escaped JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: 'skip，直接做：输出当前环境能力',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'pass');
+  assert.equal(output.reason, 'escaped');
+});
+
+test('e2e: --explain returns too-short JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: 'hi',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'pass');
+  assert.equal(output.reason, 'too-short');
+});
+
 // ─── Session 2: readStdin 超时 & 异常路径 ─────────────────────────────────
 
 test('e2e: stdin timeout produces passThrough (no stdin data)', (t, done) => {
