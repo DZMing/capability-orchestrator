@@ -13,9 +13,9 @@
 'use strict';
 
 const path = require('path');
-const os = require('os');
 const fs = require('fs');
-const { scanSkills, sanitize, scanInstalledPlugins, scanCommands } = require('./scan-environment.cjs');
+const { scanSkills, sanitize, scanInstalledPlugins, scanCommands, readMcpServers } = require('./lib/scan-core.cjs');
+const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
 
@@ -46,7 +46,7 @@ const STOP_WORDS = new Set([
 ]);
 
 function resolveUserDir() {
-  return process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || path.join(os.homedir(), '.claude');
+  return resolveUserDirWithSource().dir;
 }
 
 function readStdin(timeoutMs) {
@@ -202,6 +202,7 @@ function findBestMatch(prompt, skills) {
   let best = null;
   let bestScore = 0;
   let bestOverlap = 0;
+  let bestMatchedKeywords = [];
   for (const { skill, kwSet, nameSet } of skillData) {
     // 门槛：优先用词干化（无同义词）的 token 判断重叠，防止同义词虚高
     const stemmedSkillKw = new Set(_tokenizeStemmed(skill.desc + ' ' + skill.name));
@@ -243,13 +244,14 @@ function findBestMatch(prompt, skills) {
       bestScore = score;
       bestOverlap = overlap;
       best = skill;
+      bestMatchedKeywords = [...new Set(matched)];
     }
   }
   if (!best) return null;
   // confidence = raw overlap / raw prompt length，保持 0-1 范围
   const rawPromptLen = Math.max(promptRaw.length, 1);
   const conf = Math.min(bestOverlap / rawPromptLen, 1);
-  return { ...best, confidence: conf };
+  return { ...best, confidence: conf, matchedKeywords: bestMatchedKeywords };
 }
 
 // skill 路由：注入明确的调用指令，避免泄漏未渲染的 !command 原文
@@ -278,14 +280,15 @@ function findLiteralMatch(prompt, skills) {
   const slashMatch = trimmed.match(/^\/([a-z0-9_-]+)/i);
   if (slashMatch) {
     const name = slashMatch[1].toLowerCase();
-    return skills.find(s => s.name.toLowerCase() === name) || null;
+    const found = skills.find(s => s.name.toLowerCase() === name);
+    return found ? { ...found, confidence: 1, matchedKeywords: [name] } : null;
   }
   // 匹配单词完全等于某个 skill/command 名称（如 "commit" 单独出现）
   const words = trimmed.toLowerCase().split(/\s+/);
   if (words.length <= 3) {
     for (const w of words) {
       const found = skills.find(s => s.name.toLowerCase() === w);
-      if (found) return found;
+      if (found) return { ...found, confidence: 1, matchedKeywords: [w] };
     }
   }
   return null;
@@ -369,59 +372,144 @@ function collectAllSkills(projectDir, userDir) {
   return deduped;
 }
 
+function buildExplainResult({ action, reason, targetType = null, targetName = null, confidence = 0, matchedKeywords = [], cwd = '', userDirSource = '' }) {
+  return {
+    action,
+    reason,
+    targetType,
+    targetName,
+    confidence,
+    matchedKeywords,
+    cwd,
+    userDirSource,
+  };
+}
+
+function resolveRouteDecision(input) {
+  const prompt = extractPrompt(input);
+  const stdinCwd = extractCwd(input);
+  const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
+  const { dir: inferredUserDir, source: userDirSource } = resolveUserDirWithSource();
+  const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || inferredUserDir;
+
+  if (!prompt || prompt.length < MIN_PROMPT_LEN) {
+    return {
+      explain: buildExplainResult({
+        action: 'pass',
+        reason: 'too-short',
+        cwd: projectDir,
+        userDirSource,
+      }),
+    };
+  }
+
+  if (isEscaped(prompt)) {
+    return {
+      explain: buildExplainResult({
+        action: 'pass',
+        reason: 'escaped',
+        cwd: projectDir,
+        userDirSource,
+      }),
+    };
+  }
+
+  const skills = collectAllSkills(projectDir, userDir);
+  const literal = findLiteralMatch(prompt, skills);
+  const match = literal || findBestMatch(prompt, skills);
+  if (match) {
+    const targetType = match.type === 'command' ? 'command' : 'skill';
+    return {
+      match,
+      targetType,
+      explain: buildExplainResult({
+        action: 'route',
+        reason: targetType === 'command' ? 'matched-command' : 'matched-skill',
+        targetType,
+        targetName: match.name,
+        confidence: match.confidence || 0,
+        matchedKeywords: match.matchedKeywords || [],
+        cwd: projectDir,
+        userDirSource,
+      }),
+    };
+  }
+
+  try {
+    const mcpItems = [];
+    const projMcp = path.join(projectDir, '.mcp.json');
+    const userMcpFile = fs.existsSync(path.join(userDir, 'mcp.json'))
+      ? path.join(userDir, 'mcp.json')
+      : path.join(userDir, '.mcp.json');
+    readMcpServers(projMcp, []).forEach(s => mcpItems.push(s));
+    const projNames = new Set(mcpItems.map(s => s.name));
+    readMcpServers(userMcpFile, []).forEach(s => {
+      if (!projNames.has(s.name)) mcpItems.push(s);
+    });
+    const mcpMatch = findBestMcpMatch(prompt, mcpItems);
+    if (mcpMatch) {
+      return {
+        match: mcpMatch,
+        targetType: 'mcp',
+        explain: buildExplainResult({
+          action: 'route',
+          reason: 'matched-mcp',
+          targetType: 'mcp',
+          targetName: mcpMatch.name,
+          confidence: mcpMatch.confidence || 0,
+          matchedKeywords: mcpMatch.matchedKeywords || [],
+          cwd: projectDir,
+          userDirSource,
+        }),
+      };
+    }
+  } catch { /* fault-open: mcp explain falls through to no-match */ }
+
+  return {
+    explain: buildExplainResult({
+      action: 'pass',
+      reason: 'no-match',
+      cwd: projectDir,
+      userDirSource,
+    }),
+  };
+}
+
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
   findBestMatch, findBestMcpMatch, findLiteralMatch,
   createOutput, createMcpOutput, createCommandOutput,
-  passThrough, collectAllSkills,
+  passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
 
 if (require.main !== module) { /* 被 require 时不执行 */ }
 else {
+  const explainMode = process.argv.includes('--explain');
   readStdin(STDIN_TIMEOUT).then(input => {
     try {
-      const prompt = extractPrompt(input);
-      if (!prompt || prompt.length < MIN_PROMPT_LEN || isEscaped(prompt)) {
-        return passThrough();
+      const decision = resolveRouteDecision(input);
+      if (explainMode) {
+        process.stdout.write(JSON.stringify(decision.explain) + '\n');
+        return;
       }
-      const stdinCwd = extractCwd(input);
-      const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
-      const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR;
-
-      // Skills + legacy commands 优先（强制路由），MCP 兜底（引导路由）
-      const skills = collectAllSkills(projectDir, userDir);
-      // 改进2：命令名直接命中（/commit 或 "commit"），跳过语义匹配
-      const literal = findLiteralMatch(prompt, skills);
-      const match = literal || findBestMatch(prompt, skills);
-      if (match) {
-        return match.type === 'command' ? createCommandOutput(match) : createOutput(match);
-      }
-
-      // 没有 skill/command 匹配时尝试 MCP server 路由
-      try {
-        const { readMcpServers } = require('./scan-environment.cjs');
-        const claudeUserDir = userDir || resolveUserDir();
-        const mcpItems = [];
-        const projMcp = path.join(projectDir, '.mcp.json');
-        const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
-          ? path.join(claudeUserDir, 'mcp.json')
-          : path.join(claudeUserDir, '.mcp.json');
-        readMcpServers(projMcp, []).forEach(s => mcpItems.push(s));
-        const projNames = new Set(mcpItems.map(s => s.name));
-        readMcpServers(userMcpFile, []).forEach(s => {
-          if (!projNames.has(s.name)) mcpItems.push(s);
-        });
-        const mcpMatch = findBestMcpMatch(prompt, mcpItems);
-        if (mcpMatch) return createMcpOutput(mcpMatch);
-      } catch { /* fault-open: MCP scan failure is non-fatal */ }
-
-      passThrough();
+      if (!decision.match) return passThrough();
+      if (decision.targetType === 'command') return createCommandOutput(decision.match);
+      if (decision.targetType === 'mcp') return createMcpOutput(decision.match);
+      return createOutput(decision.match);
     } catch (err) {
       process.stderr.write('route-matcher error: ' + err.message + '\n');
-      passThrough();
+      if (explainMode) {
+        process.stdout.write(JSON.stringify(buildExplainResult({ action: 'pass', reason: 'no-match' })) + '\n');
+      } else {
+        passThrough();
+      }
     }
   }).catch(() => {
-    passThrough();
+    if (explainMode) {
+      process.stdout.write(JSON.stringify(buildExplainResult({ action: 'pass', reason: 'no-match' })) + '\n');
+    } else {
+      passThrough();
+    }
   });
 }

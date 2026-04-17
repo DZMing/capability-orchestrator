@@ -26,6 +26,10 @@ bash tests/install-idempotent.test.sh
 
 # 全部
 npm test && npm run test:install && npm run test:idempotent
+
+# 调试 explain 输出
+printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."}' \
+  | node scripts/route-matcher.cjs --explain
 ```
 
 ## 提交规范
@@ -39,6 +43,6 @@ npm test && npm run test:install && npm run test:idempotent
 ## 代码风格
 
 - 零依赖（仅 Node.js 标准库）
-- 单文件架构（scan-environment.cjs），超 600 行时考虑拆分
+- 稳定入口允许存在，但复杂逻辑优先拆到 `scripts/lib/`
 - 所有用户可见文本用中文
 - sanitize 所有注入 Claude 上下文的字符串

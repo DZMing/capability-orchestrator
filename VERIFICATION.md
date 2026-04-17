@@ -36,6 +36,8 @@ npm run test:all
 - malformed `settings.json` 安全失败
 - 卸载保留 shared-entry 中的无关 hook
 - 命中 skill 时不再泄漏原始 `!command`
+- `--explain` 对 skill / command / mcp / no-match / escaped / too-short 的稳定 JSON 输出
+- `/debug-route` skill 合约测试
 
 ## 本机安装态验证
 
@@ -94,6 +96,25 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"..
 - 输出包含明确的 `/capabilities` 调用指令
 - 不再泄漏原始 `!command`
 
+### 2.1 explain 调试模式
+
+命令：
+
+```bash
+printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":".../capability-orchestrator"}' \
+  | CLAUDE_USER_DIR="$HOME/.claude" \
+    node "$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs" --explain
+```
+
+结果：
+
+- 返回稳定 JSON
+- `action=route`
+- `reason=matched-skill`
+- `targetType=skill`
+- `targetName=capabilities`
+- explain 输出不包含原始 `!command`
+
 ### 3. `UserPromptSubmit` 未命中放行
 
 命令：
@@ -138,3 +159,4 @@ printf '%s' '{"prompt":"skip，直接做：输出当前环境能力","cwd":".../
 - 本机安装态：通过
 - hook 生效链路：通过
 - 文档 / 实现 / 配置一致性：通过
+- explain 调试入口：通过
