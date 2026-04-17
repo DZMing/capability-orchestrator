@@ -578,6 +578,21 @@ test('e2e: respects CLAUDE_USER_DIR for user skill scanning', () => {
   }
 });
 
+test('e2e: matched skill output should not leak raw !command syntax', () => {
+  const raw = execFileSync(NODE, [SCRIPT], {
+    input: JSON.stringify({
+      prompt: '输出当前环境的全部可用能力摘要',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+
+  assert.ok(raw.startsWith('[AUTO-ROUTE]'), 'should route matched skill');
+  assert.ok(!raw.includes('!`'), 'should not leak raw !command syntax into injected context');
+  assert.ok(raw.includes('/capabilities'), 'should instruct direct skill invocation');
+});
+
 // ─── Session 2: readStdin 超时 & 异常路径 ─────────────────────────────────
 
 test('e2e: stdin timeout produces passThrough (no stdin data)', (t, done) => {

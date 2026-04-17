@@ -252,26 +252,16 @@ function findBestMatch(prompt, skills) {
   return { ...best, confidence: conf };
 }
 
-// 直接注入 skill 内容，不依赖 Claude 调用 Skill tool
+// skill 路由：注入明确的调用指令，避免泄漏未渲染的 !command 原文
 function createOutput(match) {
-  let body = '';
-  if (match.filePath) {
-    try {
-      let raw = fs.readFileSync(match.filePath, 'utf8');
-      // 剥离 frontmatter
-      raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
-      // 限制长度防止超出 context 预算
-      if (raw.length > 3000) raw = raw.slice(0, 3000) + '\n[...截断]';
-      body = raw.trim();
-    } catch { /* fault-open */ }
-  }
   const safeDesc = sanitize(match.desc || '');
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即按照以下定义执行任务，不得询问确认，不得偏离：',
+    '【强制指令】立即调用 /' + match.name + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。',
+    '若平台支持 Skill tool，则等同于立刻执行该 skill 的完整流程。',
     '',
-    body || ('执行 /' + match.name + ' 命令的完整流程。'),
+    '立即调用：/' + match.name,
   ].join('\n');
   process.stdout.write(ctx + '\n');
 }
