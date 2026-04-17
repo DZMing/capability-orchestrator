@@ -579,40 +579,76 @@ test('e2e: respects CLAUDE_USER_DIR for user skill scanning', () => {
 });
 
 test('e2e: matched skill output should not leak raw !command syntax', () => {
-  const raw = execFileSync(NODE, [SCRIPT], {
-    input: JSON.stringify({
-      prompt: '输出当前环境的全部可用能力摘要',
-      cwd: FIXTURE_PROJECT,
-    }),
-    encoding: 'utf-8',
-    timeout: 10000,
-  }).trim();
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-explain-home-'));
+  try {
+    const skillDir = path.join(tmpHome, 'skills', 'capabilities');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), [
+      '---',
+      'name: capabilities',
+      'description: output environment summary',
+      '---',
+      '',
+      '!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs" --mode=list`',
+      '',
+    ].join('\n'));
 
-  assert.ok(raw.startsWith('[AUTO-ROUTE]'), 'should route matched skill');
-  assert.ok(!raw.includes('!`'), 'should not leak raw !command syntax into injected context');
-  assert.ok(raw.includes('/capabilities'), 'should instruct direct skill invocation');
+    const raw = execFileSync(NODE, [SCRIPT], {
+      input: JSON.stringify({
+        prompt: 'please output environment summary',
+        cwd: FIXTURE_PROJECT,
+      }),
+      env: { ...process.env, CLAUDE_USER_DIR: tmpHome },
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+
+    assert.ok(raw.startsWith('[AUTO-ROUTE]'), 'should route matched skill');
+    assert.ok(!raw.includes('!`'), 'should not leak raw !command syntax into injected context');
+    assert.ok(raw.includes('/capabilities'), 'should instruct direct skill invocation');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
 });
 
 test('e2e: --explain returns matched skill JSON', () => {
-  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
-    input: JSON.stringify({
-      prompt: '输出当前环境的全部可用能力摘要',
-      cwd: FIXTURE_PROJECT,
-    }),
-    encoding: 'utf-8',
-    timeout: 10000,
-  }).trim();
-  const output = JSON.parse(raw);
-  assert.equal(output.action, 'route');
-  assert.equal(output.reason, 'matched-skill');
-  assert.equal(output.targetType, 'skill');
-  assert.equal(output.targetName, 'capabilities');
-  assert.ok(typeof output.confidence === 'number');
-  assert.ok(Array.isArray(output.matchedKeywords));
-  assert.ok(output.matchedKeywords.length > 0);
-  assert.equal(output.cwd, FIXTURE_PROJECT);
-  assert.ok(output.userDirSource, 'should expose userDirSource');
-  assert.ok(!raw.includes('!`'), 'explain output should not leak raw !command');
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-explain-home-'));
+  try {
+    const skillDir = path.join(tmpHome, 'skills', 'capabilities');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), [
+      '---',
+      'name: capabilities',
+      'description: output environment summary',
+      '---',
+      '',
+      '!`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs" --mode=list`',
+      '',
+    ].join('\n'));
+
+    const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+      input: JSON.stringify({
+        prompt: 'please output environment summary',
+        cwd: FIXTURE_PROJECT,
+      }),
+      env: { ...process.env, CLAUDE_USER_DIR: tmpHome },
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+    const output = JSON.parse(raw);
+    assert.equal(output.action, 'route');
+    assert.equal(output.reason, 'matched-skill');
+    assert.equal(output.targetType, 'skill');
+    assert.equal(output.targetName, 'capabilities');
+    assert.ok(typeof output.confidence === 'number');
+    assert.ok(Array.isArray(output.matchedKeywords));
+    assert.ok(output.matchedKeywords.length > 0);
+    assert.equal(output.cwd, FIXTURE_PROJECT);
+    assert.equal(output.userDirSource, 'CLAUDE_USER_DIR');
+    assert.ok(!raw.includes('!`'), 'explain output should not leak raw !command');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
 });
 
 test('e2e: --explain returns matched command JSON', () => {
