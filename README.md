@@ -1,6 +1,6 @@
 # capability-orchestrator
 
-> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 251 tests.
+> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 256 tests.
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
@@ -49,7 +49,7 @@ claude --plugin-dir ./capability-orchestrator
 
 **无需手动触发，无需 CLAUDE.md 路由规则。**
 
-如需手动添加 hook，在 `~/.claude/settings.json` 的 `hooks.SessionStart` 数组里加：
+如需手动添加 hook，建议同时注册 `SessionStart` 和 `UserPromptSubmit`：
 
 ```json
 {
@@ -59,8 +59,19 @@ claude --plugin-dir ./capability-orchestrator
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
+            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs\"",
+            "timeout": 5
           }
         ]
       }
@@ -106,7 +117,7 @@ node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cj
 bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 ```
 
-会自动移除插件目录和 `settings.json` 中的 SessionStart hook。
+会自动移除插件目录，以及 `settings.json` 中由 capability-orchestrator 注册的 `SessionStart` 和 `UserPromptSubmit` hooks。
 
 ## 架构
 

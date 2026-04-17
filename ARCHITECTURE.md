@@ -108,7 +108,7 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
+            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
             "timeout": 10
           }
         ]
@@ -139,7 +139,7 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs\"",
+            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs\"",
             "timeout": 5
           }
         ]
@@ -162,6 +162,7 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 匹配算法：Unicode 分词 + CJK bigrams + 关键词交集。返回置信度评分 confidence (0-1)。
 
 CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环境变量和 process.cwd()。
+用户目录解析：优先 `CAPABILITY_USER_DIR`，其次 `CLAUDE_USER_DIR`，最后 fallback 到默认 `~/.claude` / WSL 探测。
 
 安全设计：
 
@@ -170,6 +171,7 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - 逃逸机制：用户说"直接做"/"skip" 时跳过路由
 - skill description 经 sanitize 清洗，防注入
 - 只在 UserPromptSubmit 做路由，不在 PostToolUse → 避免循环
+- 匹配到 skill 时注入明确的 `/<skill-name>` 调用指令，不注入未渲染的 `SKILL.md` 原文
 
 ## 渲染模式
 
