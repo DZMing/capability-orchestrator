@@ -145,3 +145,30 @@ test('script: 从不同 cwd 调用，exit 0，输出合法', () => {
   assert.ok(stdout.length > 0, '从 tmpdir 调用应有输出');
   assert.ok(stdout.length <= MAX_CHARS, '从 tmpdir 调用输出不应超限');
 });
+
+test('debug-route skill: example output should be informative', () => {
+  const skillMd = readSkillMd('debug-route');
+  const cmdStr = extractCommand(skillMd);
+  assert.ok(cmdStr, 'debug-route/SKILL.md 应包含 !command');
+
+  const skillDir = path.join(SKILLS_DIR, 'debug-route');
+  const tokens = parseCommand(cmdStr, skillDir);
+  const [rawExec, ...args] = tokens;
+  const file = rawExec === 'node' ? process.execPath : rawExec;
+
+  const stdout = execFileSync(file, args, {
+    cwd: FIXTURE_PROJECT,
+    env: {
+      ...process.env,
+      CLAUDE_SKILL_DIR: skillDir,
+      CLAUDE_PROJECT_DIR: FIXTURE_PROJECT,
+      HOME: process.env.HOME,
+    },
+    encoding: 'utf8',
+    timeout: 15000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  assert.ok(!stdout.includes('"reason":"too-short"'), 'example should not be a too-short placeholder');
+  assert.ok(stdout.includes('"action":"route"'), 'example should show a real routed result');
+});

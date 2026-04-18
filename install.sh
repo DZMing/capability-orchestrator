@@ -6,7 +6,15 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
-VERSION="1.6.0"
+FALLBACK_VERSION="1.7.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
+VERSION="$FALLBACK_VERSION"
+if [[ -n "${SCRIPT_DIR:-}" && -f "$SCRIPT_DIR/package.json" ]]; then
+  PARSED_VERSION="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$SCRIPT_DIR/package.json" | head -n 1)"
+  if [[ -n "${PARSED_VERSION:-}" ]]; then
+    VERSION="$PARSED_VERSION"
+  fi
+fi
 
 # ── 颜色输出（必须在所有分支之前定义）────────────────────────────────────────
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }

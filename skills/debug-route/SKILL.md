@@ -6,7 +6,7 @@ allowed-tools: Bash Read
 
 ## explain 示例
 
-!`node "${CLAUDE_SKILL_DIR}/../../scripts/route-matcher.cjs" --explain`
+!`node "${CLAUDE_SKILL_DIR}/../../scripts/debug-route-example.cjs"`
 
 ---
 

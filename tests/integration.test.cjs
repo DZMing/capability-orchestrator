@@ -293,3 +293,14 @@ test('integration: uninstall keeps unrelated hooks in same entry', () => {
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
+
+test('integration: install.sh --version matches package.json version', () => {
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const raw = execFileSync('bash', [installScript, '--version'], {
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+
+  assert.equal(raw, `capability-orchestrator ${pkg.version}`);
+});
