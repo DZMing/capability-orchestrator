@@ -6,14 +6,18 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 BRANCH="master"
 PLUGIN_NAME="capability-orchestrator"
-FALLBACK_VERSION="1.7.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
-VERSION="$FALLBACK_VERSION"
-if [[ -n "${SCRIPT_DIR:-}" && -f "$SCRIPT_DIR/package.json" ]]; then
-  PARSED_VERSION="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$SCRIPT_DIR/package.json" | head -n 1)"
-  if [[ -n "${PARSED_VERSION:-}" ]]; then
-    VERSION="$PARSED_VERSION"
-  fi
+VERSION="unknown"
+if [[ -n "${SCRIPT_DIR:-}" ]]; then
+  for VERSION_FILE in "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/.claude-plugin/plugin.json"; do
+    if [[ -f "$VERSION_FILE" ]]; then
+      PARSED_VERSION="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$VERSION_FILE" | head -n 1)"
+      if [[ -n "${PARSED_VERSION:-}" ]]; then
+        VERSION="$PARSED_VERSION"
+        break
+      fi
+    fi
+  done
 fi
 
 # ── 颜色输出（必须在所有分支之前定义）────────────────────────────────────────
@@ -61,7 +65,10 @@ try {
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   process.stdout.write('hook 已移除\n');
-} catch (e) { process.stderr.write('清理 hook 失败: ' + e.message + '\n'); }
+} catch (e) {
+  process.stderr.write('清理 hook 失败: ' + e.message + '\n');
+  process.exit(1);
+}
 UNINSTALL_JS
   fi
   # 删除插件目录（sanity check 防止空路径误删）

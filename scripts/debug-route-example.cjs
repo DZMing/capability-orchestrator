@@ -1,19 +1,39 @@
 #!/usr/bin/env node
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { resolveRouteDecision } = require('./route-matcher.cjs');
 
-const repoRoot = path.join(__dirname, '..');
-const fixtureProject = path.join(repoRoot, 'tests', 'fixtures', 'project');
-const fixtureUser = path.join(repoRoot, 'tests', 'fixtures', 'user');
+const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'capability-debug-route-'));
 
-process.env.CLAUDE_USER_DIR = fixtureUser;
+try {
+  const projectDir = path.join(tmpBase, 'project');
+  const userDir = path.join(tmpBase, 'user');
+  const skillDir = path.join(projectDir, '.claude', 'skills', 'valid-skill');
 
-const input = JSON.stringify({
-  prompt: 'I need a valid test skill for this important task',
-  cwd: fixtureProject,
-});
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), [
+    '---',
+    'name: valid-skill',
+    'description: A valid test skill',
+    '---',
+    '',
+    'This is a valid skill.',
+    '',
+  ].join('\n'));
 
-const decision = resolveRouteDecision(input);
-process.stdout.write(JSON.stringify(decision.explain) + '\n');
+  process.env.CLAUDE_USER_DIR = userDir;
+
+  const input = JSON.stringify({
+    prompt: 'I need a valid test skill for this important task',
+    cwd: projectDir,
+  });
+
+  const decision = resolveRouteDecision(input);
+  process.stdout.write(JSON.stringify(decision.explain) + '\n');
+} finally {
+  fs.rmSync(tmpBase, { recursive: true, force: true });
+}

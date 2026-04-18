@@ -304,3 +304,36 @@ test('integration: install.sh --version matches package.json version', () => {
 
   assert.equal(raw, `capability-orchestrator ${pkg.version}`);
 });
+
+test('integration: uninstall aborts on malformed settings.json and preserves plugin dir', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  const pluginDir = path.join(tmpHome, 'plugins', 'cache', 'capability-orchestrator');
+  const settingsFile = path.join(tmpHome, 'settings.json');
+  const original = '{"hooks": {"SessionStart": [invalid\n';
+
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.writeFileSync(settingsFile, original);
+
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CLAUDE_USER_DIR: tmpHome,
+  };
+
+  try {
+    assert.throws(
+      () => execFileSync('bash', [installScript, '--uninstall'], {
+        env,
+        encoding: 'utf-8',
+        timeout: 30000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+      /settings\.json|JSON|解析|清理 hook 失败/u
+    );
+    assert.ok(fs.existsSync(pluginDir), 'plugin dir should stay when uninstall cannot safely clean hooks');
+    assert.equal(fs.readFileSync(settingsFile, 'utf8'), original, 'malformed settings.json should stay untouched');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});

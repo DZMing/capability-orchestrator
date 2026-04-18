@@ -172,3 +172,9 @@ test('debug-route skill: example output should be informative', () => {
   assert.ok(!stdout.includes('"reason":"too-short"'), 'example should not be a too-short placeholder');
   assert.ok(stdout.includes('"action":"route"'), 'example should show a real routed result');
 });
+
+test('debug-route example script: does not depend on tests/fixtures paths', () => {
+  const fs = require('fs');
+  const content = fs.readFileSync(path.join(REPO_ROOT, 'scripts', 'debug-route-example.cjs'), 'utf8');
+  assert.ok(!content.includes('fixtures'), 'example script should be self-contained');
+});
