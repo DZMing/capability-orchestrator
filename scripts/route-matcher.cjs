@@ -23,7 +23,7 @@ const { expandSynonyms } = require('./synonyms.cjs');
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
 const MIN_KEYWORD_OVERLAP = 2;
-const MIN_CONFIDENCE = 0.3;
+const MIN_CONFIDENCE = 0.35;
 const SHORT_SINGLE_KEYWORD_LEN = 20;
 const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
