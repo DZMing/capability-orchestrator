@@ -23,6 +23,7 @@ const { expandSynonyms } = require('./synonyms.cjs');
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
 const MIN_KEYWORD_OVERLAP = 2;
+const MIN_CONFIDENCE = 0.3;
 const SHORT_SINGLE_KEYWORD_LEN = 20;
 const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
@@ -448,7 +449,9 @@ function _resolveRouteDecisionInner(input) {
   const skills = collectAllSkills(projectDir, userDir);
   const literal = findLiteralMatch(prompt, skills);
   const literalMatched = !!literal;
-  const match = literal || findBestMatch(prompt, skills);
+  const bestSkill = findBestMatch(prompt, skills);
+  // 语义匹配低于最低置信度阈值视为噪音，不路由（字面量匹配不受限制）
+  const match = literal || (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE ? bestSkill : null);
   if (match) {
     const targetType = match.type === 'command' ? 'command' : 'skill';
     const reason = targetType === 'command'
@@ -482,7 +485,7 @@ function _resolveRouteDecisionInner(input) {
       if (!projNames.has(s.name)) mcpItems.push(s);
     });
     const mcpMatch = findBestMcpMatch(prompt, mcpItems);
-    if (mcpMatch) {
+    if (mcpMatch && (mcpMatch.confidence || 0) >= MIN_CONFIDENCE) {
       return {
         match: mcpMatch,
         targetType: 'mcp',
@@ -524,7 +527,7 @@ module.exports = {
   readCommandBody, canInvokeAsSlashCommand, getCommandExplainReason,
   passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
   _tokenizeStemmed,
-  STOP_WORDS, ESCAPE_PATTERNS,
+  STOP_WORDS, ESCAPE_PATTERNS, MIN_CONFIDENCE,
 };
 
 if (require.main !== module) { /* 被 require 时不执行 */ }

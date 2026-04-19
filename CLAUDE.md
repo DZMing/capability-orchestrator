@@ -75,6 +75,13 @@ UserPromptSubmit hook
 
 - `stem-rules.cjs`：英文词干化规则（-ing/-ed/-s/-es，无外部依赖）
 - `synonyms.cjs`：中英同义词表（70+ 条），`expandSynonyms()` 做双向扩展
+- `route-logger.cjs`：JSONL 路由日志，写入 `CLAUDE_PLUGIN_DATA/route-log.jsonl`，1MB×3 文件轮转（~3MB 上限），fire-and-forget 模式
+
+### 路由精度控制
+
+- `MIN_KEYWORD_OVERLAP = 2`：语义匹配至少 2 个关键词重叠
+- `MIN_CONFIDENCE = 0.3`：语义/MCP 匹配的最低置信度阈值，低于此值视为噪音放行（字面量匹配不受限制）
+- `SHORT_SINGLE_KEYWORD_LEN = 20`：单关键词命中 skill 名称时 prompt 最小长度
 
 ### 测试文件对应关系
 
@@ -82,15 +89,16 @@ UserPromptSubmit hook
 | ------------------------- | ------------------------------------------------------------------------- |
 | `scan.test.cjs`           | scan-environment.cjs 全部导出函数                                         |
 | `route-matcher.test.cjs`  | route-matcher.cjs、stemming、synonym、MCP 路由、literal 匹配              |
+| `route-logger.test.cjs`   | route-logger.cjs 日志写入、轮转、统计、性能、安全                         |
 | `fuzz.test.cjs`           | sanitize/extractKeywords/passThrough/findBestMatch 随机输入 property 测试 |
 | `stress.test.cjs`         | 大规模 skills、超长 prompt、畸形 SKILL.md、MCP JSON 边界                  |
-| `integration.test.cjs`    | 完整 hook 流程 E2E + golden snapshot + 安装卸载循环                       |
+| `integration.test.cjs`    | 完整 hook 流程 E2E + golden snapshot + 安装卸载循环 + 日志写入验证        |
 | `skill-contract.test.cjs` | skills/ 目录下每个 skill 的 frontmatter 结构契约                          |
 
 ## 关键约束
 
 - **零外部依赖**：只用 Node.js 18+ stdlib，不能引入任何 npm 包
-- **只读**：脚本只读文件系统，不写入任何文件，不联网，不修改权限
+- **只读**：脚本只读文件系统（唯一例外：`route-logger.cjs` 写 `route-log.jsonl` 到 `CLAUDE_PLUGIN_DATA`），不联网，不修改权限
 - **Token 预算**：awareness 输出上限 5000 字符（约 1250 tokens）
 - **CJK 感知**：中文用 bigram 分词，单字 + 相邻双字组合；bigram 覆盖的单字从评分中去重
 - **IDF 加权**：出现在多个 skill desc 里的高频词权重降低，防止"代码"之类通用词误匹配

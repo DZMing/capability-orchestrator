@@ -50,7 +50,7 @@ function parseCommand(cmdStr, skillDir) {
 // 用一个最小 fixtures 目录作为 cwd，避免扫描真实用户目录干扰测试结果
 const FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'project');
 
-const SKILLS = ['capabilities', 'debug-route', 'orchestrate', 'refresh'];
+const SKILLS = ['capabilities', 'debug-route', 'orchestrate', 'refresh', 'stats'];
 
 for (const skillName of SKILLS) {
   test(`skill ${skillName}: !command 可执行、exit 0、输出非空、≤${MAX_CHARS} 字符`, () => {

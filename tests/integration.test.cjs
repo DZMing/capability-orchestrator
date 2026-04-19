@@ -85,6 +85,7 @@ test('integration: UserPromptSubmit hook matches skill via stdin', () => {
     }),
     encoding: 'utf-8',
     timeout: 10000,
+    env: { ...process.env, CLAUDE_USER_DIR: path.join(__dirname, 'fixtures', 'user') },
   }).trim();
   // Output is plain text [AUTO-ROUTE] or JSON passThrough
   const isMatch = raw.startsWith('[AUTO-ROUTE]');

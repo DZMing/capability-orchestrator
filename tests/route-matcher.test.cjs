@@ -539,10 +539,12 @@ test('e2e: exit 0 on normal input', () => {
 
 test('e2e: uses cwd from stdin for skill scanning', () => {
   const fixtureProject = path.join(__dirname, 'fixtures', 'project');
+  const fixtureUser = path.join(__dirname, 'fixtures', 'user');
   const raw = execFileSync(NODE, [SCRIPT], {
     input: JSON.stringify({ prompt: 'I need a valid test skill for this task', cwd: fixtureProject }),
     encoding: 'utf-8',
     timeout: 10000,
+    env: { ...process.env, CLAUDE_USER_DIR: fixtureUser },
   }).trim();
   // Output is either plain text AUTO-ROUTE or passThrough JSON
   const isMatch = raw.startsWith('[AUTO-ROUTE]');
