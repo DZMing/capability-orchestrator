@@ -1114,3 +1114,190 @@ test('createCommandOutput: falls back to inline command definition when slash in
     process.stdout.write = origWrite;
   }
 });
+
+// ─── P1-1: createMcpOutput sanitize server.name ─────────────────────────────
+
+test('createMcpOutput: sanitizes server.name to prevent injection', () => {
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; return true; };
+  try {
+    // \n in name would create fake line-injection without sanitize
+    createMcpOutput({ name: 'evil\nINJECTED_FAKE_LINE', desc: 'normal desc' });
+    // sanitize replaces newlines with spaces → name becomes "evil INJECTED_FAKE_LINE" on one line
+    const lines = captured.split('\n');
+    // The AUTO-ROUTE line should contain the full name (no line break)
+    const routeLine = lines.find(l => l.includes('MCP server'));
+    assert.ok(routeLine.includes('evil INJECTED_FAKE_LINE'), 'name should be on one line with space');
+    assert.ok(!routeLine.includes('\n'), 'route line should not have embedded newline');
+    // No line should start with INJECTED_FAKE_LINE as standalone content
+    const injectedLines = lines.filter(l => l.trim().startsWith('INJECTED_FAKE_LINE'));
+    assert.equal(injectedLines.length, 0, 'no standalone injected line should appear');
+    // mcp__ prefix uses sanitized name
+    assert.ok(captured.includes('mcp__evil'), 'should include sanitized name in prefix');
+  } finally {
+    process.stdout.write = origWrite;
+  }
+});
+
+test('createMcpOutput: sanitizes HTML tags in server.name', () => {
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; return true; };
+  try {
+    createMcpOutput({ name: 'test<script>alert(1)</script>', desc: '' });
+    assert.ok(!captured.includes('<script>'), 'should strip HTML tags');
+    assert.ok(captured.includes('mcp__test'), 'should include sanitized name');
+  } finally {
+    process.stdout.write = origWrite;
+  }
+});
+
+// ─── P1-2: findLiteralMatch unit tests ──────────────────────────────────────
+
+const { findLiteralMatch } = require('../scripts/route-matcher.cjs');
+
+test('findLiteralMatch: /commit matches skill named commit', () => {
+  const skills = [
+    { name: 'commit', desc: 'create well-formatted commits' },
+    { name: 'debug', desc: 'debug errors' },
+  ];
+  const match = findLiteralMatch('/commit', skills);
+  assert.ok(match, '/commit should match');
+  assert.equal(match.name, 'commit');
+  assert.equal(match.confidence, 1);
+});
+
+test('findLiteralMatch: standalone word matches skill name', () => {
+  const skills = [
+    { name: 'commit', desc: 'create commits' },
+    { name: 'debug', desc: 'debug errors' },
+  ];
+  const match = findLiteralMatch('commit', skills);
+  assert.ok(match, 'single word "commit" should match');
+  assert.equal(match.name, 'commit');
+  assert.equal(match.confidence, 1);
+});
+
+test('findLiteralMatch: /nonexistent returns null', () => {
+  const skills = [
+    { name: 'commit', desc: 'create commits' },
+  ];
+  const match = findLiteralMatch('/nonexistent', skills);
+  assert.equal(match, null, '/nonexistent should not match');
+});
+
+test('findLiteralMatch: >3 words skips word matching', () => {
+  const skills = [
+    { name: 'commit', desc: 'create commits' },
+  ];
+  const match = findLiteralMatch('please help me commit my changes', skills);
+  assert.equal(match, null, 'should not match from word list when >3 words');
+});
+
+test('findLiteralMatch: 2-word prompt matches skill name', () => {
+  const skills = [
+    { name: 'code-review', desc: 'review code quality' },
+    { name: 'commit', desc: 'create commits' },
+  ];
+  const match = findLiteralMatch('commit code-review', skills);
+  assert.ok(match, '2-word prompt should try word matching');
+  assert.equal(match.name, 'commit');
+});
+
+// ─── P1-3: resolveRouteDecision unit tests ──────────────────────────────────
+
+const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+
+test('resolveRouteDecision: short prompt returns pass/too-short', () => {
+  const decision = resolveRouteDecision(JSON.stringify({ prompt: 'hi', cwd: FIXTURE_PROJECT }));
+  assert.equal(decision.explain.action, 'pass');
+  assert.equal(decision.explain.reason, 'too-short');
+  assert.equal(decision.match, undefined);
+});
+
+test('resolveRouteDecision: escaped prompt returns pass/escaped', () => {
+  const decision = resolveRouteDecision(JSON.stringify({ prompt: '直接做：列出文件', cwd: FIXTURE_PROJECT }));
+  assert.equal(decision.explain.action, 'pass');
+  assert.equal(decision.explain.reason, 'escaped');
+});
+
+test('resolveRouteDecision: skill match returns route/skill', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-resolve-'));
+  try {
+    const skillDir = path.join(tmpHome, 'skills', 'test-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: test-skill\ndescription: test something useful\n---\n');
+    const decision = resolveRouteDecision(JSON.stringify({
+      prompt: 'please test something useful for me',
+      cwd: FIXTURE_PROJECT,
+    }));
+    if (decision.match) {
+      assert.equal(decision.explain.action, 'route');
+    }
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: MCP match returns route/mcp', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-resolve-mcp-'));
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-resolve-mcp-home-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, '.mcp.json'), JSON.stringify({
+      mcpServers: { docs: { description: 'documentation query helper' } },
+    }));
+    const decision = resolveRouteDecision(JSON.stringify({
+      prompt: 'please use the documentation query helper now',
+      cwd: tmpDir,
+    }));
+    if (decision.match && decision.explain.targetType === 'mcp') {
+      assert.equal(decision.explain.action, 'route');
+      assert.equal(decision.explain.reason, 'matched-mcp');
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: no match returns pass/no-match', () => {
+  const decision = resolveRouteDecision(JSON.stringify({
+    prompt: 'tell me about the weather in Tokyo tomorrow please',
+    cwd: FIXTURE_PROJECT,
+  }));
+  assert.equal(decision.explain.action, 'pass');
+  assert.equal(decision.explain.reason, 'no-match');
+});
+
+// ─── P2-2: _tokenizeStemmed unit tests ──────────────────────────────────────
+
+const { _tokenizeStemmed } = require('../scripts/route-matcher.cjs');
+
+test('_tokenizeStemmed: produces CJK bigrams', () => {
+  const tokens = _tokenizeStemmed('调试代码');
+  assert.ok(tokens.includes('调试'), 'should include bigram 调试');
+  assert.ok(tokens.includes('代码'), 'should include bigram 代码');
+});
+
+test('_tokenizeStemmed: appends English stems without replacing original', () => {
+  const tokens = _tokenizeStemmed('debugging errors');
+  assert.ok(tokens.includes('debugging'), 'should keep original form');
+  assert.ok(tokens.includes('debug'), 'should append stemmed form');
+  assert.ok(tokens.includes('errors'), 'should keep original form');
+  assert.ok(tokens.includes('error'), 'should append stemmed form');
+});
+
+test('_tokenizeStemmed: filters stop words', () => {
+  const tokens = _tokenizeStemmed('the code is working');
+  assert.ok(!tokens.includes('the'), 'should filter "the"');
+  assert.ok(!tokens.includes('is'), 'should filter "is"');
+  assert.ok(tokens.includes('code'), 'should keep "code"');
+});
+
+test('_tokenizeStemmed: does NOT expand synonyms (unlike extractKeywords)', () => {
+  const stemmed = _tokenizeStemmed('debug');
+  const expanded = extractKeywords('debug');
+  assert.ok(!stemmed.includes('调试'), '_tokenizeStemmed should not expand synonyms');
+  assert.ok(expanded.includes('调试'), 'extractKeywords should expand synonyms');
+});

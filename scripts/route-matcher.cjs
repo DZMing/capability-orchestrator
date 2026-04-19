@@ -194,20 +194,20 @@ function findBestMatch(prompt, skills) {
     const nameKw = extractKeywords(skill.name);
     const kwSet = new Set([...descKw, ...nameKw]);
     const nameSet = new Set(nameKw);
-    // IDF 基于词干化但未扩展的词集，保持统计意义
+    // 缓存词干化结果，避免循环内重复调用
     const stemmedSet = new Set([..._tokenizeStemmed(skill.name), ..._tokenizeStemmed(skill.desc)]);
+    const stemmedNameKw = new Set(_tokenizeStemmed(skill.name));
+    const stemmedSkillKw = new Set(_tokenizeStemmed(skill.desc + ' ' + skill.name));
     for (const k of stemmedSet) df.set(k, (df.get(k) || 0) + 1);
-    return { skill, kwSet, nameSet };
+    return { skill, kwSet, nameSet, stemmedSkillKw, stemmedNameKw };
   });
 
   let best = null;
   let bestScore = 0;
   let bestOverlap = 0;
   let bestMatchedKeywords = [];
-  for (const { skill, kwSet, nameSet } of skillData) {
-    // 门槛：优先用词干化（无同义词）的 token 判断重叠，防止同义词虚高
-    const stemmedSkillKw = new Set(_tokenizeStemmed(skill.desc + ' ' + skill.name));
-    const stemmedNameKw = new Set(_tokenizeStemmed(skill.name));
+  for (const { skill, kwSet, nameSet, stemmedSkillKw, stemmedNameKw } of skillData) {
+    // 使用预计算的词干化结果判断重叠
     const stemmedMatched = promptRaw.filter(k => stemmedSkillKw.has(k));
     let overlap = stemmedMatched.length;
     if (overlap < MIN_KEYWORD_OVERLAP) {
@@ -357,10 +357,11 @@ function findBestMcpMatch(prompt, servers) {
 }
 
 function createMcpOutput(server) {
+  const safeName = sanitize(server.name || '');
   const safeDesc = sanitize(server.desc || '');
-  const toolPrefix = 'mcp__' + server.name;
+  const toolPrefix = 'mcp__' + safeName;
   const ctx = [
-    '[AUTO-ROUTE] 检测到任务匹配 MCP server: ' + server.name,
+    '[AUTO-ROUTE] 检测到任务匹配 MCP server: ' + safeName,
     '描述: ' + safeDesc,
     '【强制指令】立即调用 ' + toolPrefix + '__* 相关工具，不得询问确认。',
     '可用工具前缀: ' + toolPrefix,
@@ -514,6 +515,7 @@ module.exports = {
   createOutput, createMcpOutput, createCommandOutput,
   readCommandBody, canInvokeAsSlashCommand, getCommandExplainReason,
   passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
+  _tokenizeStemmed,
   STOP_WORDS, ESCAPE_PATTERNS,
 };
 

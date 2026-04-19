@@ -9,12 +9,6 @@ const AWARENESS_AGENT_DESC = 60;
 const AWARENESS_SKILL_DESC = 40;
 
 const BUILTINS_COMPACT = '内置 24 个（/help 查看）';
-const BUILTINS_FULL = [
-  '/clear', '/compact', '/cost', '/help', '/model', '/config',
-  '/hooks', '/permissions', '/agents', '/skills', '/resume', '/init',
-  '/rename', '/reload-plugins', '/plan', '/mcp', '/memory', '/btw',
-  '/diff', '/context', '/fast', '/effort', '/export', '/copy',
-].join(' | ');
 
 function renderSection(section, level) {
   const { label, prefix, items } = section;
@@ -113,10 +107,9 @@ function renderSnapshot(snapshot, mode) {
   const { sections, errors } = snapshot;
   const initLevel = mode === 'list' ? 2 : 0;
   const levels = sections.map(() => initLevel);
-  const useCompactBuiltins = true;
 
   function assemble() {
-    const header = useCompactBuiltins ? BUILTINS_COMPACT : `### 内置命令 [built-in]\n${BUILTINS_FULL}`;
+    const header = BUILTINS_COMPACT;
     const parts = sections.map((s, i) => renderSection(s, levels[i]));
     return `## 当前环境能力摘要\n\n${header}\n\n${parts.join('\n\n')}`;
   }

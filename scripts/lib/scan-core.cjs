@@ -122,8 +122,12 @@ function getName(content, fallback) {
   return sanitize((fm.name || fallback || '').trim());
 }
 
-function isSymlink(filePath) {
-  try { return fs.lstatSync(filePath).isSymbolicLink(); } catch { return true; }
+function isSymlink(filePath, errors) {
+  try { return fs.lstatSync(filePath).isSymbolicLink(); }
+  catch (e) {
+    if (errors && e.code !== 'ENOENT') errors.push(`lstat ${path.basename(filePath)}: ${e.code}`);
+    return true;
+  }
 }
 
 function scanSkills(dir, errors) {
