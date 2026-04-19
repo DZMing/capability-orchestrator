@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm test                    # 全部单元测试（251 项）
+npm test                    # 全部自动化基线
 npm run test:install        # 安装/卸载/重装循环集成测试
 npm run test:all            # 上两者全跑
 
@@ -22,7 +22,9 @@ node scripts/scan-environment.cjs --mode=awareness
 **修改后同步到已安装插件**（两处必须一致）：
 
 ```bash
+mkdir -p ~/.claude/plugins/cache/capability-orchestrator/scripts/lib
 cp scripts/*.cjs ~/.claude/plugins/cache/capability-orchestrator/scripts/
+cp scripts/lib/*.cjs ~/.claude/plugins/cache/capability-orchestrator/scripts/lib/
 ```
 
 ## 架构
@@ -62,8 +64,8 @@ UserPromptSubmit hook
 
 输出规则：
 
-- 匹配 skill → 纯文本 `[AUTO-ROUTE] ... 【强制指令】Skill("name")`
-- 匹配 legacy command → 纯文本 `[AUTO-ROUTE] ... 【强制指令】` + 命令文件内容注入
+- 匹配 skill → 纯文本 `[AUTO-ROUTE] ... 【强制指令】立即调用 /<skill-name>`
+- 匹配 legacy command → 优先输出 `/<command>` 调用指令；仅在命令名不适合 slash 调用时回退命令定义
 - 匹配 MCP → 纯文本 `[AUTO-ROUTE] ... mcp__server__*`
 - 无匹配 → JSON `{"continue":true}`
 
@@ -89,7 +91,7 @@ UserPromptSubmit hook
 
 - **零外部依赖**：只用 Node.js 18+ stdlib，不能引入任何 npm 包
 - **只读**：脚本只读文件系统，不写入任何文件，不联网，不修改权限
-- **Token 预算**：awareness 输出上限 3000 字符（约 750 tokens）
+- **Token 预算**：awareness 输出上限 5000 字符（约 1250 tokens）
 - **CJK 感知**：中文用 bigram 分词，单字 + 相邻双字组合；bigram 覆盖的单字从评分中去重
 - **IDF 加权**：出现在多个 skill desc 里的高频词权重降低，防止"代码"之类通用词误匹配
 - **同名去重**：项目级 > 用户级 > 插件级；legacy command 不覆盖同名 skill

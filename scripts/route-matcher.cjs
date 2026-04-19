@@ -23,6 +23,7 @@ const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
 const MIN_KEYWORD_OVERLAP = 2;
 const SHORT_SINGLE_KEYWORD_LEN = 20;
+const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
 const ESCAPE_PATTERNS = ['直接做', '直接回答', '不要用skill', '不用skill', 'skip'];
 
@@ -294,27 +295,55 @@ function findLiteralMatch(prompt, skills) {
   return null;
 }
 
-// Legacy command 路由：注入命令文件内容作为 additionalContext，等效于用户输入 /command
+// Legacy command 路由：优先注入明确的 /command 调用；仅在命令名不适合 slash 调用时回退到命令定义
+function readCommandBody(filePath) {
+  if (!filePath) return '';
+  try {
+    let raw = fs.readFileSync(filePath, 'utf8');
+    // 剥离 frontmatter
+    raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
+    // 限制长度防止超出 context 预算
+    if (raw.length > 5000) raw = raw.slice(0, 5000) + '\n[...截断]';
+    return raw.trim();
+  } catch {
+    return '';
+  }
+}
+
+function canInvokeAsSlashCommand(match) {
+  return !!(match && typeof match.name === 'string' && SLASH_COMMAND_NAME.test(match.name));
+}
+
+function getCommandExplainReason(match, literalMatched) {
+  if (!canInvokeAsSlashCommand(match)) return 'matched-command-fallback';
+  return literalMatched ? 'matched-command-literal' : 'matched-command-semantic';
+}
+
 function createCommandOutput(match) {
   let body = '';
-  if (match.filePath) {
-    try {
-      let raw = fs.readFileSync(match.filePath, 'utf8');
-      // 剥离 frontmatter
-      raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
-      // 限制长度防止超出 context 预算
-      if (raw.length > 3000) raw = raw.slice(0, 3000) + '\n[...截断]';
-      body = raw.trim();
-    } catch { /* fault-open */ }
-  }
+  body = readCommandBody(match.filePath);
   const safeDesc = sanitize(match.desc || '');
-  // 改进3：加强指令语气
+  if (canInvokeAsSlashCommand(match)) {
+    const ctx = [
+      '[AUTO-ROUTE] 检测到任务匹配命令: /' + match.name,
+      '描述: ' + safeDesc,
+      '【强制指令】优先立即调用 /' + match.name + ' 执行该命令，不得直接回答，不得询问确认，不得偏离。',
+      '若平台当前无法直接调用该命令，再按下面的命令定义继续执行：',
+      '',
+      '立即调用：/' + match.name,
+      '',
+      '[回退定义]',
+      body || ('执行 /' + match.name + ' 命令的完整流程。'),
+    ].join('\n');
+    process.stdout.write(ctx + '\n');
+    return;
+  }
   const ctx = [
-    '[AUTO-ROUTE] 检测到任务匹配命令: /' + match.name,
+    '[AUTO-ROUTE] 检测到任务匹配命令定义: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即按照以下命令定义执行任务，不得询问确认，不得偏离：',
+    '【强制指令】该命令名不适合直接作为 /command 调用。请立即按照以下命令定义执行任务，不得询问确认，不得偏离：',
     '',
-    body || ('执行 /' + match.name + ' 命令的完整流程。'),
+    body || ('执行该命令定义的完整流程。'),
   ].join('\n');
   process.stdout.write(ctx + '\n');
 }
@@ -416,15 +445,19 @@ function resolveRouteDecision(input) {
 
   const skills = collectAllSkills(projectDir, userDir);
   const literal = findLiteralMatch(prompt, skills);
+  const literalMatched = !!literal;
   const match = literal || findBestMatch(prompt, skills);
   if (match) {
     const targetType = match.type === 'command' ? 'command' : 'skill';
+    const reason = targetType === 'command'
+      ? getCommandExplainReason(match, literalMatched)
+      : 'matched-skill';
     return {
       match,
       targetType,
       explain: buildExplainResult({
         action: 'route',
-        reason: targetType === 'command' ? 'matched-command' : 'matched-skill',
+        reason,
         targetType,
         targetName: match.name,
         confidence: match.confidence || 0,
@@ -479,6 +512,7 @@ module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
   findBestMatch, findBestMcpMatch, findLiteralMatch,
   createOutput, createMcpOutput, createCommandOutput,
+  readCommandBody, canInvokeAsSlashCommand, getCommandExplainReason,
   passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
   STOP_WORDS, ESCAPE_PATTERNS,
 };

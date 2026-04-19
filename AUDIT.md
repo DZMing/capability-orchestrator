@@ -3,75 +3,54 @@
 ## 范围
 
 - 仓库源码：`install.sh`、`scripts/scan-environment.cjs`、`scripts/route-matcher.cjs`、测试与 CI
-- 本机安装态：`~/.claude/plugins/cache/capability-orchestrator`
-- Claude Code 配置态：`~/.claude/settings.json` 中由 capability-orchestrator 注册的 hooks
+- 文档契约：`README.md`、`ARCHITECTURE.md`、`SECURITY.md`、`SUPPORT.md`、`RELEASE.md`、`CLAUDE.md`
+- 安装态：隔离测试目录与 clean-room Claude CLI
 
-## 结论
+## 当前结论
 
 - 当前结论：`PASS`
-- 阻塞项：无 open `P0/P1/P2`
-- 审核结果：核心安装契约、运行契约、hook 生效链路和现有测试矩阵已对齐
+- 阻塞项：无 open `P0/P1`
+- 适用标准：高质量长期自用工业标准
 
 ## 已验证并修复的问题
 
-### P1 已修复：`CLAUDE_USER_DIR` 安装与运行目录不一致
+### P1 已修复：默认安装绕过支持策略
 
-- 现象：安装脚本支持 `CLAUDE_USER_DIR`，运行时脚本却 fallback 到默认 `~/.claude`
-- 影响：自定义 home 安装后，运行时扫错用户目录
-- 修复：运行时统一识别 `CAPABILITY_USER_DIR` / `CLAUDE_USER_DIR`，安装写入的 hook 显式带上 `CLAUDE_USER_DIR`
-- 证据：新增集成测试与 e2e 测试覆盖自定义用户目录安装/路由
+- 现象：默认安装原本固定到 `master`，与“只支持最新 release”冲突
+- 修复：默认安装改为最新 tag release，显式保留 `master` 自用渠道
+- 证据：`tests/install*.sh` 与 `tests/integration.test.cjs` 已覆盖 release/master 两种路径
 
-### P1 已修复：坏掉的 `settings.json` 会被静默覆盖
+### P2 已修复：维护者同步说明遗漏 `scripts/lib/*.cjs`
 
-- 现象：安装阶段解析 JSON 失败时吞错并以空配置写回
-- 影响：会丢失用户原有 `model`、`permissions`、其他 hooks
-- 修复：安装阶段改为解析失败即退出，保留原文件不动
-- 证据：新增集成测试覆盖 malformed `settings.json`
+- 现象：`CLAUDE.md` 只让维护者复制 `scripts/*.cjs`
+- 修复：同步命令补入 `scripts/lib/*.cjs`
+- 证据：文档已更新，当前实现与维护说明一致
 
-### P2 已修复：卸载会误删同 entry 内其他 hook
+### P2 已修复：legacy command fallback 重新引入 slash 语义
 
-- 现象：只要 entry 中任意一个 command 命中 `capability-orchestrator`，整个 entry 都被删除
-- 影响：同组中的无关 `SessionStart` / `UserPromptSubmit` hook 会被一起删掉
-- 修复：卸载时只删除命中的 hook，保留同 entry 内其他命令
-- 证据：新增集成测试覆盖 shared-entry 场景
+- 现象：unsafe command fallback 文案会重新出现 `/<name>`
+- 修复：fallback 文案改为纯命令定义语义，并增加测试锁定
+- 证据：`tests/route-matcher.test.cjs` 已覆盖
 
-### P1 已修复：`route-matcher` 命中 skill 时泄漏原始 `!command`
+### P2 已修复：README 回滚示例写死旧 tag
 
-- 现象：命中 `capabilities` / `orchestrate` / `refresh` 等 skill 时，注入的是未渲染的 `SKILL.md` 原文
-- 影响：Claude 收到的是原始 `!command` 文本，而不是明确的 skill 调用动作，动态内容不会真正执行
-- 修复：`route-matcher` 现在注入明确的 `/<skill-name>` 调用指令，不再内联未渲染的 skill 正文
-- 证据：新增 e2e 测试断言命中 skill 时不再出现原始 `!``...```
+- 现象：用户回滚示例固定为过时 tag
+- 修复：改成 `vX.Y.Z` 占位
+- 证据：README 已更新
 
-### P3 已修复：文档与真实 hook 命令不一致
+### P2 已修复：git 安装副本会因 `chmod +x` 变脏
 
-- 现象：`README.md` / `ARCHITECTURE.md` 里的 hook 示例仍是旧写法，未体现 `CLAUDE_USER_DIR`
-- 影响：手动配置 hook 时容易配出和安装脚本不同的行为
-- 修复：文档示例统一改为和安装脚本一致，同时补上 `UserPromptSubmit` 示例
-
-### P3 已修复：本机安装副本被 `.orphaned_at` 垃圾文件污染
-
-- 现象：本机已安装 repo 中出现多处 `.orphaned_at`，导致 `git status` 持续有噪音
-- 影响：本机安装态审计和升级排障成本变高
-- 修复：仓库 `.gitignore` 新增 `.orphaned_at`
-
-### P3 已修复：`scan-environment.cjs` 单文件复杂度过高
-
-- 现象：核心扫描、渲染和 CLI 入口长期堆在同一个入口文件里
-- 影响：后续继续迭代时，回归定位和行为对齐成本越来越高
-- 修复：内部拆为 `scan-core` / `scan-render` / `user-dir`，保留 `scripts/scan-environment.cjs` 稳定入口
-
-### P3 已修复：缺少正式的路由可解释性调试入口
-
-- 现象：误路由排查只能靠看源码或手工猜测匹配过程
-- 影响：回归测试、人工排障和审计说明都比较费劲
-- 修复：新增 `route-matcher --explain` 与 `/debug-route`
+- 现象：`route-matcher.cjs` 仓库 tracked mode 为 `100644`，安装器会把 git 副本弄脏
+- 修复：将 `scripts/route-matcher.cjs` tracked mode 改为可执行
+- 证据：幂等安装和 integration 测试通过
 
 ## 当前剩余风险
 
-- 无 open `P1/P2`
-- 当前仅剩常规维护性优化项，不阻塞使用或发布
+- 真实 Claude Code GUI 会话尚未做肉眼验收
+- install release tag 时，git 会输出 detached-head 提示；当前不影响正确性，但仍有体验优化空间
+- `OPEN_SOURCE_READINESS_AUDIT.md` 与 `ROADMAP.md` 属于研究/路线文档，不影响自用签字，但不应被误读为当前阻塞项清单
 
 ## 审核签字建议
 
-- 可以签字通过
-- 当前版本可继续推进合并与发布
+- 按“长期稳定自用”标准：可以签字通过
+- 若以后要按“公开发布/对外支持”标准继续打磨，再补 GUI 手工验收和 release 体验优化

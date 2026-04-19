@@ -24,6 +24,7 @@ assert_exec() { assert "$1" test -x "$2"; }
 TMP_HOME=$(mktemp -d)
 TMP_GIT=$(mktemp -d)
 trap 'rm -rf "$TMP_HOME" "$TMP_GIT"' EXIT
+LATEST_TAG=$(/usr/bin/git -C "$REPO_ROOT" tag --list 'v*' | sort -V | tail -n 1)
 
 # 生成一个 fake git 脚本，让 clone 变成 cp（避免网络请求）
 FAKE_GIT="$TMP_GIT/git"
@@ -31,6 +32,15 @@ cat > "$FAKE_GIT" <<GITEOF
 #!/usr/bin/env bash
 # fake git: 把 clone 替换为从本地 repo 复制
 if [ "\$1" = "clone" ]; then
+  BRANCH=""
+  for ((i=1; i<=\$#; i++)); do
+    if [ "\${!i}" = "--branch" ]; then
+      j=\$((i + 1))
+      BRANCH="\${!j}"
+      break
+    fi
+  done
+  printf '%s' "\$BRANCH" > "$TMP_GIT/last-clone-branch.txt"
   # 最后一个参数是目标目录
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
@@ -129,10 +139,17 @@ assert "hook 命令含 scan-environment.cjs" \
   node -e "process.exit('$HOOK_CMD'.includes('scan-environment.cjs')?0:1)"
 assert "hook 命令含 --mode=awareness" \
   node -e "process.exit('$HOOK_CMD'.includes('--mode=awareness')?0:1)"
+assert "默认安装渠道使用最新 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
 
 # ── 验证安装后脚本能运行 ──────────────────────────────────────────────────────
 assert "scan script 可直接 node 执行" \
   node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=awareness
+
+# ── 验证显式 master 渠道 ─────────────────────────────────────────────────────
+CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_CHANNEL=master CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" 2>&1 | sed 's/^/  /'
+
+assert "显式 master 渠道仍可用" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "master" ]
 
 # ── 验证卸载 ─────────────────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \

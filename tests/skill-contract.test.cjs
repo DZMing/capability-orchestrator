@@ -17,7 +17,7 @@ const { execFileSync } = require('child_process');
 const REPO_ROOT = path.join(__dirname, '..');
 const SKILLS_DIR = path.join(REPO_ROOT, 'skills');
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'scan-environment.cjs');
-const MAX_CHARS = 3000;
+const MAX_CHARS = 5000;
 
 // 从 SKILL.md 提取 !`...` 命令字符串
 function extractCommand(skillMd) {
@@ -130,8 +130,8 @@ test('capabilities skill: --mode=list 输出更紧凑', () => {
   });
   // list 模式从 level 2 开始（仅名称），route 从 level 0 开始但可能降级更多
   // 两者都应在预算内
-  assert.ok(stdout.length <= 3100, `list 模式输出 (${stdout.length}) 应在预算范围内`);
-  assert.ok(stdoutRoute.length <= 3100, `route 模式输出 (${stdoutRoute.length}) 应在预算范围内`);
+  assert.ok(stdout.length <= 5100, `list 模式输出 (${stdout.length}) 应在预算范围内`);
+  assert.ok(stdoutRoute.length <= 5100, `route 模式输出 (${stdoutRoute.length}) 应在预算范围内`);
 });
 
 test('script: 从不同 cwd 调用，exit 0，输出合法', () => {

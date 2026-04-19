@@ -72,11 +72,11 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## Token 预算
 
-输出上限 3000 字符的原因：
+输出上限 5000 字符的原因：
 
 - skill description 总预算约为上下文窗口的 1%（约 2000 字符/200k 窗口）
 - orchestrate skill 的快照是主要内容，不应占用过多 token
-- 3000 字符约等于 750 tokens（通用 BPE 分词估算），对大多数项目足够
+- 5000 字符约等于 1250 tokens（通用 BPE 分词估算），对大多数项目足够
 - 超限时自动缩短 description（100→50 字符），优先保留能力名称
 
 ## 安全边界
@@ -162,10 +162,11 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 每条用户消息经过 `route-matcher.cjs`：
 
 1. 从 stdin 读取 JSON（含 prompt 字段）
-2. 扫描环境中所有 skill 的 name + description
-3. 关键词匹配 → 找到最佳匹配 skill
-4. 匹配到 → 通过 `additionalContext` 注入强制调用指令
-5. 未匹配 → 静默放行
+2. 扫描环境中所有 skill / legacy command 的 name + description
+3. 关键词匹配 → 找到最佳匹配目标
+4. 匹配到 skill → 注入明确的 `/<skill-name>` 调用指令
+5. 匹配到 legacy command → 优先注入明确的 `/<command>` 调用；仅在命令名不适合 slash 调用时回退到命令定义
+6. 未匹配 → 静默放行
 
 扫描范围（v1.4.0+）：项目级 skill + 用户级 skill + 已安装插件 skill，去重优先级：项目 > 用户 > 插件。
 
@@ -182,13 +183,14 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - skill description 经 sanitize 清洗，防注入
 - 只在 UserPromptSubmit 做路由，不在 PostToolUse → 避免循环
 - 匹配到 skill 时注入明确的 `/<skill-name>` 调用指令，不注入未渲染的 `SKILL.md` 原文
+- 匹配到 legacy command 时优先注入明确的 `/<command>` 调用，只在 slash 调用不安全时回退到命令定义
 
 ## explain 调试入口
 
 `route-matcher.cjs` 新增 `--explain` 只读模式。输入与 hook 相同的 stdin JSON，输出机器可读 JSON：
 
 - `action`: `route` / `pass`
-- `reason`: `matched-skill` / `matched-command` / `matched-mcp` / `escaped` / `too-short` / `no-match`
+- `reason`: `matched-skill` / `matched-command-literal` / `matched-command-semantic` / `matched-command-fallback` / `matched-mcp` / `escaped` / `too-short` / `no-match`
 - `targetType`: `skill` / `command` / `mcp` / `null`
 - `targetName`
 - `confidence`

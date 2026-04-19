@@ -662,9 +662,49 @@ test('e2e: --explain returns matched command JSON', () => {
   }).trim();
   const output = JSON.parse(raw);
   assert.equal(output.action, 'route');
-  assert.equal(output.reason, 'matched-command');
+  assert.equal(output.reason, 'matched-command-semantic');
   assert.equal(output.targetType, 'command');
   assert.equal(output.targetName, 'legacy-cmd');
+});
+
+test('e2e: --explain returns matched literal command JSON', () => {
+  const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+    input: JSON.stringify({
+      prompt: '/legacy-cmd',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  const output = JSON.parse(raw);
+  assert.equal(output.action, 'route');
+  assert.equal(output.reason, 'matched-command-literal');
+  assert.equal(output.targetType, 'command');
+  assert.equal(output.targetName, 'legacy-cmd');
+});
+
+test('e2e: --explain returns fallback command reason when command cannot slash invoke', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-fallback-cmd-'));
+  try {
+    const cmdDir = path.join(tmpDir, '.claude', 'commands');
+    fs.mkdirSync(cmdDir, { recursive: true });
+    fs.writeFileSync(path.join(cmdDir, 'bad cmd.md'), '---\ndescription: fallback command semantics\n---\nUse fallback only.\n');
+    const raw = execFileSync(NODE, [SCRIPT, '--explain'], {
+      input: JSON.stringify({
+        prompt: 'please use fallback command semantics now',
+        cwd: tmpDir,
+      }),
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim();
+    const output = JSON.parse(raw);
+    assert.equal(output.action, 'route');
+    assert.equal(output.reason, 'matched-command-fallback');
+    assert.equal(output.targetType, 'command');
+    assert.equal(output.targetName, 'bad cmd');
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test('e2e: --explain returns matched mcp JSON', () => {
@@ -1027,8 +1067,9 @@ test('createCommandOutput: outputs plain text with AUTO-ROUTE marker', () => {
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'commit', desc: 'Create well-formatted commits', filePath: null });
-    // createCommandOutput now outputs plain text (not JSON)
     assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
+    assert.ok(captured.includes('优先立即调用 /commit'), 'should prefer direct slash command invocation');
+    assert.ok(captured.includes('立即调用：/commit'), 'should include explicit slash command call');
     assert.ok(captured.includes('/commit'), 'should reference /commit');
     assert.ok(captured.includes('强制指令'), 'should include mandatory instruction');
   } finally {
@@ -1036,7 +1077,7 @@ test('createCommandOutput: outputs plain text with AUTO-ROUTE marker', () => {
   }
 });
 
-test('createCommandOutput: injects file content when filePath provided', () => {
+test('createCommandOutput: includes fallback command content when slash invoke is supported', () => {
   const fs = require('fs');
   const os = require('os');
   const path = require('path');
@@ -1048,13 +1089,28 @@ test('createCommandOutput: injects file content when filePath provided', () => {
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'test-cmd', desc: 'test', filePath: tmpFile, type: 'command' });
-    // createCommandOutput outputs plain text
+    assert.ok(captured.includes('[回退定义]'), 'should include explicit fallback section');
     assert.ok(captured.includes('Do the thing.'),
-      'should inject file content (frontmatter stripped)');
+      'should include fallback file content (frontmatter stripped)');
     assert.ok(!captured.includes('description: test'),
       'should strip frontmatter');
   } finally {
     process.stdout.write = origWrite;
     fs.rmSync(tmpFile, { force: true });
+  }
+});
+
+test('createCommandOutput: falls back to inline command definition when slash invoke is unsafe', () => {
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let captured = '';
+  process.stdout.write = (data) => { captured += data; return true; };
+  try {
+    const { createCommandOutput } = require('../scripts/route-matcher.cjs');
+    createCommandOutput({ name: 'bad cmd', desc: 'fallback only', filePath: null, type: 'command' });
+    assert.ok(captured.includes('不适合直接作为 /command 调用'), 'should explain inline fallback mode');
+    assert.ok(!captured.includes('立即调用：/bad cmd'), 'should not emit unsafe slash invocation');
+    assert.ok(!captured.includes('执行 /bad cmd 命令的完整流程。'), 'should not reintroduce unsafe slash syntax in fallback copy');
+  } finally {
+    process.stdout.write = origWrite;
   }
 });

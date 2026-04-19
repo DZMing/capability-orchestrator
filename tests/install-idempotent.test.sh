@@ -24,11 +24,21 @@ assert() {
 TMP_HOME=$(mktemp -d)
 TMP_GIT=$(mktemp -d)
 trap 'rm -rf "$TMP_HOME" "$TMP_GIT"' EXIT
+LATEST_TAG=$(/usr/bin/git -C "$REPO_ROOT" tag --list 'v*' | sort -V | tail -n 1)
 
 FAKE_GIT="$TMP_GIT/git"
 cat > "$FAKE_GIT" <<GITEOF
 #!/usr/bin/env bash
 if [ "\$1" = "clone" ]; then
+  BRANCH=""
+  for ((i=1; i<=\$#; i++)); do
+    if [ "\${!i}" = "--branch" ]; then
+      j=\$((i + 1))
+      BRANCH="\${!j}"
+      break
+    fi
+  done
+  printf '%s' "\$BRANCH" > "$TMP_GIT/last-clone-branch.txt"
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
   cp -r "$REPO_ROOT/." "\$TARGET/"
@@ -76,6 +86,7 @@ COUNT1=$(node -e "
   process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('capability-orchestrator'))).length));
 ")
 assert "第一次安装后 hook 数量为 1" [ "$COUNT1" -eq 1 ]
+assert "第一次安装默认使用 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
 
 # ── 第二次安装（模拟 upgrade）─────────────────────────────────────────────────
 echo "--- 第二次安装 ---"
@@ -88,6 +99,7 @@ COUNT2=$(node -e "
   process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('capability-orchestrator'))).length));
 ")
 assert "第二次安装后 hook 数量仍为 1（无重复）" [ "$COUNT2" -eq 1 ]
+assert "第二次安装仍使用相同 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
 
 # ── 断言无关 settings 未被破坏 ───────────────────────────────────────────────
 assert "model 字段保留" node -e "

@@ -209,7 +209,7 @@ test('renderSnapshot: output never exceeds MAX_TOTAL_CHARS', () => {
     errors: [],
   };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000`);
+  assert.ok(text.length <= 5000, `output ${text.length} should be ≤ 5000`);
 });
 
 test('renderSnapshot: empty snapshot outputs header only', () => {
@@ -228,7 +228,7 @@ test('renderSnapshot: error footer stays within budget', () => {
     errors: ['EACCES /foo/bar'],
   };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 3000, `output with error footer ${text.length} should be ≤ 3000`);
+  assert.ok(text.length <= 5000, `output with error footer ${text.length} should be ≤ 5000`);
   assert.match(text, /部分扫描失败/);
 });
 
@@ -511,15 +511,15 @@ test('sanitize: normal Markdown links still stripped after regex fix', () => {
 // ─── renderSnapshot level 3/4 ──────────────────────────────────────────────
 
 test('renderSnapshot: level 3 shows top-15 names + fold count', () => {
-  // 名字必须够长，使 level 2（仅名逗号拼接）超过 3000 字符，才会降级到 level 3
-  // 30 个 ~120 字符的名字：30*120 + 29*2 ≈ 3658 > 3000
-  const items = Array.from({ length: 30 }, (_, i) => ({
+  // 名字必须够长，使 level 2（仅名逗号拼接）超过 5000 字符，才会降级到 level 3
+  // 45 个 ~120 字符的名字：45*120 + 44*2 ≈ 5448 > 5000
+  const items = Array.from({ length: 45 }, (_, i) => ({
     name: `skill-${'x'.repeat(110)}-${String(i).padStart(2, '0')}`, desc: 'A'.repeat(100),
   }));
   const snap = { sections: [{ label: '测试 Skills', prefix: '', items }], errors: [] };
   const { text } = renderSnapshot(snap, 'route');
   assert.ok(text.includes('skill-'), 'first skill should appear');
-  assert.ok(text.includes('+15 个'), 'fold count should show +15');
+  assert.ok(text.includes('+30 个'), 'fold count should show +30');
 });
 
 test('renderSnapshot: level 4 pure count on extreme name length', () => {
@@ -532,7 +532,7 @@ test('renderSnapshot: level 4 pure count on extreme name length', () => {
   }));
   const snap = { sections, errors: [] };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000`);
+  assert.ok(text.length <= 5000, `output ${text.length} should be ≤ 5000`);
   assert.match(text, /50 个/, 'extreme names should degrade to pure count');
 });
 
@@ -616,7 +616,7 @@ test('sanitize: kitchen sink — multiple injection vectors combined', () => {
 test('renderSnapshot awareness: output within budget', () => {
   const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.length <= 3000, `awareness output ${text.length} should be ≤ 3000`);
+  assert.ok(text.length <= 5000, `awareness output ${text.length} should be ≤ 5000`);
 });
 
 test('renderSnapshot awareness: contains mandatory routing rules', () => {
@@ -746,7 +746,7 @@ test('P0: awareness 路由策略在内容极长时仍保留', () => {
   const snap = { sections, errors: [] };
   const { text } = renderSnapshot(snap, 'awareness');
   assert.ok(text.includes('路由规则'), 'routing rules must survive truncation');
-  assert.ok(text.length <= 3000, `total ${text.length} within budget`);
+  assert.ok(text.length <= 5000, `total ${text.length} within budget`);
 });
 
 test('P0: JSON 注释剥离正确处理 \\\\"（转义反斜杠后的引号）', () => {
@@ -1018,5 +1018,5 @@ test('renderSnapshot awareness: still within budget with MCP routing hints', () 
   }));
   const snap = { sections: [{ label: 'MCP Servers', prefix: '', items: mcpItems }], errors: [] };
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.length <= 3000, `output ${text.length} should be ≤ 3000 chars`);
+  assert.ok(text.length <= 5000, `output ${text.length} should be ≤ 5000 chars`);
 });

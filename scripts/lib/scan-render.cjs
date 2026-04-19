@@ -2,7 +2,7 @@
 
 const { truncate } = require('./scan-core.cjs');
 
-const MAX_TOTAL_CHARS = 3000;
+const MAX_TOTAL_CHARS = 5000;
 const TOP_N = 15;
 const AWARENESS_MCP_DESC = 80;
 const AWARENESS_AGENT_DESC = 60;

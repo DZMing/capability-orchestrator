@@ -1,128 +1,154 @@
 # capability-orchestrator
 
-> Auto-routing plugin for Claude Code. Matches user prompts to skills, commands, and MCP tools via semantic + literal + cross-language routing. Zero config, zero dependencies, 264 tests.
+> Claude Code 的能力感知与强制路由层。它扫描当前环境中的 skills / agents /
+> plugins / MCP servers / commands，并在 Claude 决策前注入更清晰的路由上下文。
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
-让 Claude Code 实时感知当前环境的全部可用能力（skills / subagents / plugins / MCP servers / commands），并通过路由策略引导 Claude 自动选择最优执行路径。
+`capability-orchestrator` 是一个零依赖的 Claude Code 插件，适合已经在使用
+hooks、skills、MCP servers、plugins 和 subagents 的用户。它不试图替代
+Claude 自己的 agent loop，而是把当前环境里可用的“菜单”尽量展示清楚，并在
+`SessionStart` 和 `UserPromptSubmit` 两个时机注入更强的路由约束。
+
+## 适用对象
+
+如果你符合下面这些情况，这个插件是合适的：
+
+- 已经在 Claude Code 中使用项目级或用户级 skills
+- 希望 Claude 能看到更多本地可用能力面
+- 希望对 skills、legacy commands 和 MCP servers 加更严格的路由层
+- 能接受插件通过修改 `~/.claude/settings.json` 来安装 hooks
+
+## 不适用对象
+
+如果你符合下面这些情况，这个插件并不适合：
+
+- 需要 Windows 原生支持
+- 需要 GUI 配置流程
+- 不能接受安装器修改 Claude Code 的 hook 设置
+- 希望得到托管服务、远程控制面或依赖遥测的产品
+
+## 兼容性
+
+下面的兼容声明刻意保守，只反映当前仓库里已经文档化或验证过的事实。
+
+| 维度              | 状态   | 说明                                            |
+| ----------------- | ------ | ----------------------------------------------- |
+| Node.js           | 支持   | `>=18`                                          |
+| macOS             | 支持   | CI 和本地验证覆盖                               |
+| Linux             | 支持   | CI 覆盖                                         |
+| WSL               | 实验性 | `ARCHITECTURE.md` 已文档化；仅 best effort      |
+| Windows 原生      | 不支持 | 不假设 Claude Code 原生支持 Windows             |
+| Claude Code hooks | 必需   | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks |
+
+## 安装会改什么
+
+安装器会拉取仓库内容，并注册两个 Claude Code hooks。
+
+它会做这些事：
+
+- 安装到 `~/.claude/plugins/cache/capability-orchestrator`
+- 在 `~/.claude/settings.json` 中写入或更新一条 `SessionStart` hook
+- 在 `~/.claude/settings.json` 中写入或更新一条 `UserPromptSubmit` hook
+- 升级和卸载时保留无关 hook 条目
+
+它不会做这些事：
+
+- 不修改你的项目仓库文件
+- 不引入后台 daemon 或本地数据库
+- 运行时脚本不会主动发起网络请求
+- 运行时脚本不会主动执行被扫描插件目录中的代码
 
 ## 安装
 
-**一键安装（推荐）：**
+推荐方式：默认安装最新已发布 tag release。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
 ```
 
-需要 Node.js 18+，有 git 或 curl 即可。
+要求：
 
-**手动安装：**
+- Node.js 18+
+- `git` 或 `curl`
+
+手动安装指定 release：
 
 ```bash
-# 克隆到插件缓存目录
-git clone --depth=1 https://github.com/DZMing/capability-orchestrator.git \
+git clone --branch vX.Y.Z --depth=1 https://github.com/DZMing/capability-orchestrator.git \
   ~/.claude/plugins/cache/capability-orchestrator
-
-# 或开发测试（不安装，直接加载）
-claude --plugin-dir ./capability-orchestrator
 ```
 
-## 使用
+把 `vX.Y.Z` 替换成你要安装的实际 tag。若只是想安装最新版，优先使用上面的
+`install.sh`，它会自动解析最新 release tag。
 
-### 会话开始自动注入（推荐）
-
-安装脚本会在 `~/.claude/settings.json` 里注册两个 hook：
-
-**SessionStart hook** — 每次新会话开始时注入能力清单 + 强制路由规则：
-
-- **MCP server 描述**（平台只暴露 tool 名，不注入 server 级说明）
-- **Subagent 描述**（帮助 Claude 判断何时委派 vs 自己做）
-- **Skill 名称 + 描述**（供路由匹配使用）
-- **强制路由规则**（匹配到 skill 时必须调用，不得跳过）
-
-**UserPromptSubmit hook** — 每条用户消息实时匹配 skill：
-
-- 自动扫描所有 skill 的 description，与用户消息做关键词匹配
-- 匹配到 → 注入强制调用指令，Claude 会自动通过 Skill tool 调用
-- 未匹配 → 静默放行，不影响正常使用
-- 逃逸机制：说"直接做"或"skip"可跳过路由
-
-**无需手动触发，无需 CLAUDE.md 路由规则。**
-
-如需手动添加 hook，建议同时注册 `SessionStart` 和 `UserPromptSubmit`：
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs\" --mode=awareness",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "CLAUDE_USER_DIR=\"$HOME/.claude\" node \"$HOME/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 手动查看完整能力摘要
-
-```
-/capability-orchestrator:capabilities
-```
-
-输出当前环境全部可用能力，含描述，不做路由判断。
-
-### 路由复杂任务
-
-```
-/capability-orchestrator:orchestrate
-```
-
-扫描当前环境后给出"用哪个 skill/agent 最合适"的建议。
-
-### 调试一条路由为什么这样判定
-
-```
-/capability-orchestrator:debug-route
-```
-
-读取一条示例 prompt，调用 `route-matcher --explain`，解释它为什么命中某个 skill / command / MCP，或为什么被放行。
-
-### 安装新插件后刷新
-
-```
-/capability-orchestrator:refresh
-```
-
-重新扫描环境，对比前后变化，告知 Claude 新增了什么、移除了什么。
-
-## 验证安装
+自用 `master` 渠道（未发布，仅显式使用）：
 
 ```bash
-# 测试扫描脚本是否正常输出
-node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --channel=master
+```
 
-# 调试某条 prompt 会如何路由
+## 验证
+
+验证 awareness 快照：
+
+```bash
+node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness
+```
+
+验证路由解释：
+
+```bash
 printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."}' \
   | CLAUDE_USER_DIR="$HOME/.claude" \
     node ~/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs --explain
 ```
+
+期望现象：
+
+- awareness 输出中包含环境能力分区
+- explain 输出返回稳定 JSON
+- skill 命中结果是明确的 `/skill-name` 指令，而不是原始 `!command`
+
+更完整的验证记录见 [VERIFICATION.md](VERIFICATION.md)。
+
+## 升级
+
+升级到最新 release 的方式是重新执行安装器：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
+```
+
+如果你显式使用的是 `master` 自用渠道，则升级命令也要带上 `--channel=master`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --channel=master
+```
+
+如果插件是从你自己维护的本地 checkout 安装的，请先更新那个 checkout，再重跑
+你的常规验证命令。
+
+## 回滚
+
+回滚是手工流程，并沿用现有安装路径。
+
+如果已安装副本是 git checkout：
+
+```bash
+git -C ~/.claude/plugins/cache/capability-orchestrator fetch --tags
+git -C ~/.claude/plugins/cache/capability-orchestrator checkout vX.Y.Z
+```
+
+如果已安装副本不是 git checkout：
+
+```bash
+rm -rf ~/.claude/plugins/cache/capability-orchestrator
+git clone --branch vX.Y.Z --depth=1 https://github.com/DZMing/capability-orchestrator.git \
+  ~/.claude/plugins/cache/capability-orchestrator
+```
+
+把 `vX.Y.Z` 替换成你要回滚到的实际 tag。回滚后请重新执行上面的验证命令。
 
 ## 卸载
 
@@ -130,7 +156,125 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."
 bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 ```
 
-会自动移除插件目录，以及 `settings.json` 中由 capability-orchestrator 注册的 `SessionStart` 和 `UserPromptSubmit` hooks。
+它会删除已安装的插件目录，并移除由 `capability-orchestrator` 注册的 hook 条目。
+
+## 使用
+
+安装后可用的 skills：
+
+- `/capability-orchestrator:capabilities`
+  输出完整能力摘要，但不做路由判断。
+- `/capability-orchestrator:orchestrate`
+  扫描当前环境，并为复杂任务建议最合适的 skill 或 agent 路径。
+- `/capability-orchestrator:debug-route`
+  解释一条示例 prompt 为什么命中某个 skill、command、MCP server，或为什么
+  被放行。
+- `/capability-orchestrator:refresh`
+  重新扫描环境，并对比新增了什么、移除了什么。
+
+legacy command 的当前执行策略：
+
+- 优先输出明确的 `/<command>` 调用指令
+- 只有当命令名不适合直接作为 slash command 使用时，才回退到命令定义正文
+
+## FAQ 与 Troubleshooting
+
+### 安装器在完成前就失败了
+
+先检查运行时：
+
+```bash
+node --version
+```
+
+期望结果：
+
+- Node.js 主版本号是 `18` 或更高
+
+如果安装器提示 `settings.json` 无法解析：
+
+- 先修复损坏的 JSON
+- 只有在 `~/.claude/settings.json` 恢复成合法 JSON 后再重跑安装器
+
+安装器在这种情况下会 fail-safe，而不是覆盖原文件。
+
+### 我的 Claude 设置里已经有 hooks 了
+
+这是受支持的场景。
+
+安装器只会更新或插入包含 `capability-orchestrator` 标记的条目，并保留同一文件
+中的无关 hooks。
+
+如果你想手工检查已安装条目：
+
+```bash
+cat ~/.claude/settings.json
+```
+
+你应当能看到一条 `SessionStart` 命令和一条 `UserPromptSubmit` 命令，它们都指向
+`~/.claude/plugins/cache/capability-orchestrator`。
+
+### 一条 prompt 没有按预期命中路由
+
+使用 explain 模式：
+
+```bash
+printf '%s' '{"prompt":"你的原始 prompt","cwd":"."}' \
+  | CLAUDE_USER_DIR="$HOME/.claude" \
+    node ~/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs --explain
+```
+
+期望结果：
+
+- JSON 中包含 `action`、`reason`、`targetType`、`targetName`、
+  `confidence`
+
+如果 `reason` 是 `escaped`、`too-short` 或 `no-match`，通常说明当前行为
+符合设计，而不一定是安装失败。
+
+### 一条 prompt 命中了错误的目标
+
+先确认这次路由来自哪一层：
+
+- 字面量 `/command` 命中
+- skill 名称命中
+- 语义描述命中
+- MCP fallback
+
+对 legacy command 再额外确认它走的是哪条路径：
+
+- `matched-command-literal`：直接命中了 `/<command>`
+- `matched-command-semantic`：语义命中 command，但仍优先输出 `/<command>`
+- `matched-command-fallback`：命令名不适合直接作为 slash command，回退到命令定义
+
+提交 bug 报告时请附上 `--explain` 输出，并包含 prompt、期望目标、实际目标、
+OS、Node.js 版本、Claude Code 版本、安装方式，以及是否自定义了
+`CLAUDE_USER_DIR`。
+
+### 插件扫描看起来不完整
+
+对 `~/.claude/plugins/cache/` 的扫描是 best-effort，因为缓存结构没有正式文档。
+插件会刻意容忍部分元数据缺失，而不是直接失败。
+
+如果插件发现结果看起来不对，先确认系统其他部分仍然正常：
+
+```bash
+node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cjs --mode=awareness
+```
+
+然后把磁盘上的插件缓存结构和快照输出对照起来，再带着相关目录结构提交 bug。
+
+## 安全、支持与发布策略
+
+- [SECURITY.md](SECURITY.md) - 支持版本、漏洞报告方式和安全边界
+- [SUPPORT.md](SUPPORT.md) - bug、使用问题和功能请求分别走哪条路径
+- [RELEASE.md](RELEASE.md) - 版本策略、发布清单、tag 规则和手工回滚策略
+
+## 仓库治理评估
+
+- [OPEN_SOURCE_READINESS_AUDIT.md](OPEN_SOURCE_READINESS_AUDIT.md) - 基于本地
+  证据与外部对标信号的仓库成熟度审计
+- [ROADMAP.md](ROADMAP.md) - 后续改进 backlog 和下一波优先级
 
 ## 架构
 
@@ -138,7 +282,8 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 
 ## 已知限制
 
-- 插件缓存目录 `~/.claude/plugins/cache/` 的结构未正式文档化，扫描插件信息为 best-effort
-- `!command` 在 skill 渲染时执行，CWD 为 Claude Code 启动目录（即项目根目录）
-- 输出硬限制 3000 字符；能力过多时自动缩短 description
-- `route-matcher --explain` 是调试入口，不会替代真实 hook，只用于解释判定结果
+- `~/.claude/plugins/cache/` 的插件缓存目录扫描是 best-effort，因为结构没有
+  正式文档化
+- `!command` 在 skill 渲染上下文中执行，CWD 是 Claude Code 的启动目录
+- awareness 输出上限是 5000 字符，能力过多时会缩短 description
+- `route-matcher --explain` 是调试入口，不替代真实 hook 流程

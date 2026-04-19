@@ -305,6 +305,59 @@ test('integration: install.sh --version matches package.json version', () => {
   assert.equal(raw, `capability-orchestrator ${pkg.version}`);
 });
 
+test('integration: install respects CAPABILITY_INSTALL_REF release override', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  const latestTag = execFileSync('bash', ['-lc', "git tag --list 'v*' | sort -V | tail -n 1"], {
+    cwd: path.join(__dirname, '..'),
+    encoding: 'utf-8',
+  }).trim();
+
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CLAUDE_USER_DIR: tmpHome,
+    CAPABILITY_INSTALL_REF: latestTag,
+  };
+
+  try {
+    const raw = execFileSync('bash', [installScript], {
+      env,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+    assert.ok(raw.includes('安装渠道：release'));
+    assert.ok(raw.includes(`安装目标：${latestTag}`));
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('integration: install accepts explicit master channel', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
+  const installScript = path.join(__dirname, '..', 'install.sh');
+
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CLAUDE_USER_DIR: tmpHome,
+    CAPABILITY_INSTALL_REF: 'master',
+    CAPABILITY_INSTALL_CHANNEL: 'release',
+  };
+
+  try {
+    const raw = execFileSync('bash', [installScript, '--channel=master'], {
+      env,
+      encoding: 'utf-8',
+      timeout: 30000,
+    });
+    assert.ok(raw.includes('安装渠道：master'));
+    assert.ok(raw.includes('安装目标：master'));
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  }
+});
+
 test('integration: uninstall aborts on malformed settings.json and preserves plugin dir', () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-home-'));
   const installScript = path.join(__dirname, '..', 'install.sh');
