@@ -390,3 +390,35 @@ test('integration: uninstall aborts on malformed settings.json and preserves plu
     fs.rmSync(tmpHome, { recursive: true, force: true });
   }
 });
+
+// ─── hook → 磁盘日志验证 ─────────────────────────────────────────────────────
+
+test('integration: UserPromptSubmit hook writes route log to disk', () => {
+  const tmpData = fs.mkdtempSync(path.join(os.tmpdir(), 'co-int-log-'));
+  const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
+    input: JSON.stringify({
+      prompt: 'I need a valid test skill for this important task',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+    env: { ...process.env, CLAUDE_PLUGIN_DATA: tmpData, CLAUDE_USER_DIR: path.join(__dirname, 'fixtures', 'user') },
+  }).trim();
+
+  // hook 本身应该正常输出
+  const isMatch = raw.startsWith('[AUTO-ROUTE]');
+  const isPassThrough = raw.startsWith('{');
+  assert.ok(isMatch || isPassThrough, 'hook should produce valid output');
+
+  // 日志文件应该存在
+  const logPath = path.join(tmpData, 'route-log.jsonl');
+  assert.ok(fs.existsSync(logPath), 'route-log.jsonl should be created');
+
+  // 日志内容应该是合法 JSON
+  const logContent = fs.readFileSync(logPath, 'utf8').trim();
+  const entry = JSON.parse(logContent);
+  assert.ok(entry.ts, 'log entry should have timestamp');
+  assert.ok(entry.action === 'route' || entry.action === 'pass', 'log entry should have valid action');
+
+  fs.rmSync(tmpData, { recursive: true, force: true });
+});
