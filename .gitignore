@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 *.log
 .orphaned_at
+tests/fixtures/user/plugins/
