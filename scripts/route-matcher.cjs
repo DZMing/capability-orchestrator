@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const { scanSkills, sanitize, scanInstalledPlugins, scanCommands, readMcpServers } = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
+const { appendRouteLog } = require('./lib/route-logger.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
 
@@ -415,7 +416,7 @@ function buildExplainResult({ action, reason, targetType = null, targetName = nu
   };
 }
 
-function resolveRouteDecision(input) {
+function _resolveRouteDecisionInner(input) {
   const prompt = extractPrompt(input);
   const stdinCwd = extractCwd(input);
   const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
@@ -507,6 +508,13 @@ function resolveRouteDecision(input) {
       userDirSource,
     }),
   };
+}
+
+function resolveRouteDecision(input) {
+  const decision = _resolveRouteDecisionInner(input);
+  // 追加路由日志（fire-and-forget，失败不影响路由）
+  appendRouteLog(decision.explain);
+  return decision;
 }
 
 module.exports = {
