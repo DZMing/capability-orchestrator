@@ -407,17 +407,33 @@ if (fs.existsSync(hooksFile)) {
 
 if (!hooksConfig.hooks) hooksConfig.hooks = {};
 
-// 注册 SessionStart
-const cleanHooks = (arr, cmd) => {
-  const filtered = (arr || []).filter(h => !(h.command && h.command.includes(marker)));
-  return [...filtered, { type: 'command', command: cmd, statusMessage: 'Scanning capabilities...' }];
+// 注册 hooks：查找已有 marker 条目则更新，否则追加（保留 matcher 等字段）
+const registerHookEntry = (entries, cmd, statusMsg) => {
+  if (!Array.isArray(entries)) entries = [];
+  let found = false;
+  for (const entry of entries) {
+    if (!entry.hooks) continue;
+    for (const h of entry.hooks) {
+      if (h.command && h.command.includes(marker)) {
+        h.command = cmd;
+        if (statusMsg) h.statusMessage = statusMsg;
+        found = true;
+      }
+    }
+  }
+  if (!found) {
+    entries.push({
+      hooks: [{ type: 'command', command: cmd, statusMessage: statusMsg || 'Scanning capabilities...' }]
+    });
+  }
+  return entries;
 };
-hooksConfig.hooks.SessionStart = [{ hooks: cleanHooks(
-  (hooksConfig.hooks.SessionStart || []).flatMap(e => e.hooks || []), scanCmd
-) }];
-hooksConfig.hooks.UserPromptSubmit = [{ hooks: cleanHooks(
-  (hooksConfig.hooks.UserPromptSubmit || []).flatMap(e => e.hooks || []), routeCmd
-) }];
+hooksConfig.hooks.SessionStart = registerHookEntry(
+  hooksConfig.hooks.SessionStart, scanCmd, 'Scanning capabilities...'
+);
+hooksConfig.hooks.UserPromptSubmit = registerHookEntry(
+  hooksConfig.hooks.UserPromptSubmit, routeCmd, 'Routing prompt...'
+);
 
 fs.mkdirSync(path.dirname(hooksFile), { recursive: true });
 fs.writeFileSync(hooksFile, JSON.stringify(hooksConfig, null, 2) + '\n');

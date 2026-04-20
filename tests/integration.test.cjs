@@ -475,3 +475,97 @@ test('integration: Codex platform scans .agents/skills/ for project skills', () 
     fs.rmSync(tmpProj, { recursive: true, force: true });
   }
 });
+
+test('integration: Codex hooks.json registration preserves existing matcher fields', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-hooks-'));
+  const codexDir = path.join(tmpHome, '.codex');
+  fs.mkdirSync(codexDir, { recursive: true });
+  const hooksFile = path.join(codexDir, 'hooks.json');
+
+  // 模拟用户已有的带 matcher 的 hooks
+  const existingHooks = {
+    hooks: {
+      SessionStart: [
+        { matcher: 'startup|resume', hooks: [{ type: 'command', command: 'my-existing-hook.sh' }] }
+      ],
+      UserPromptSubmit: [
+        { matcher: 'some-pattern', hooks: [{ type: 'command', command: 'another-hook.sh' }] }
+      ]
+    }
+  };
+  fs.writeFileSync(hooksFile, JSON.stringify(existingHooks, null, 2) + '\n');
+
+  // 运行安装
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  execFileSync('bash', [installScript, '--platform=codex'], {
+    env: {
+      ...process.env,
+      HOME: tmpHome,
+      CODEX_USER_DIR: codexDir,
+      CAPABILITY_INSTALL_REF: 'master',
+      CAPABILITY_PLATFORM: 'codex',
+    },
+    encoding: 'utf-8',
+    timeout: 30000,
+  });
+
+  // 验证 hooks.json
+  const result = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+
+  // SessionStart 应保留 matcher 条目 + 新增 capability-orchestrator 条目
+  const sessionEntries = result.hooks.SessionStart;
+  assert.ok(sessionEntries.length >= 2, 'should have at least 2 SessionStart entries (existing + new)');
+
+  const existingEntry = sessionEntries.find(e => e.matcher === 'startup|resume');
+  assert.ok(existingEntry, 'existing matcher entry should be preserved');
+  assert.equal(existingEntry.hooks[0].command, 'my-existing-hook.sh', 'existing hook command unchanged');
+
+  const capEntry = sessionEntries.find(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator')));
+  assert.ok(capEntry, 'capability-orchestrator entry should exist');
+  assert.ok(!capEntry.matcher, 'new entry should not have matcher (scoped to all)');
+
+  // UserPromptSubmit 同理
+  const promptEntries = result.hooks.UserPromptSubmit;
+  const matcherEntry = promptEntries.find(e => e.matcher === 'some-pattern');
+  assert.ok(matcherEntry, 'UserPromptSubmit matcher entry should be preserved');
+
+  fs.rmSync(tmpHome, { recursive: true, force: true });
+});
+
+test('integration: Codex hooks.json uninstall removes only our hooks', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-uninstall-'));
+  const codexDir = path.join(tmpHome, '.codex');
+  fs.mkdirSync(codexDir, { recursive: true });
+  const hooksFile = path.join(codexDir, 'hooks.json');
+
+  // 先安装
+  const installScript = path.join(__dirname, '..', 'install.sh');
+  const env = {
+    ...process.env,
+    HOME: tmpHome,
+    CODEX_USER_DIR: codexDir,
+    CAPABILITY_INSTALL_REF: 'master',
+    CAPABILITY_PLATFORM: 'codex',
+  };
+  execFileSync('bash', [installScript, '--platform=codex'], { env, encoding: 'utf-8', timeout: 30000 });
+
+  // 添加额外的无关 hook
+  const hooks = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+  hooks.hooks.SessionStart.push({
+    matcher: 'resume', hooks: [{ type: 'command', command: 'unrelated-hook.sh' }]
+  });
+  fs.writeFileSync(hooksFile, JSON.stringify(hooks, null, 2) + '\n');
+
+  // 卸载
+  execFileSync('bash', [installScript, '--uninstall', '--platform=codex'], { env, encoding: 'utf-8', timeout: 30000 });
+
+  // 验证：无关 hook 保留，我们的被移除
+  const after = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+  const sessionHooks = after.hooks.SessionStart || [];
+  const hasOurs = sessionHooks.some(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator')));
+  assert.ok(!hasOurs, 'our hooks should be removed');
+  const hasUnrelated = sessionHooks.some(e => e.matcher === 'resume');
+  assert.ok(hasUnrelated, 'unrelated hooks should be preserved');
+
+  fs.rmSync(tmpHome, { recursive: true, force: true });
+});
