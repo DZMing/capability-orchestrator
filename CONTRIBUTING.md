@@ -43,6 +43,7 @@ cd capability-orchestrator
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
+npm run verify:release
 
 # 或直接跑封装脚本
 npm run test:all
@@ -50,7 +51,16 @@ npm run test:all
 # 手工调试 explain 输出
 printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."}' \
   | node scripts/route-matcher.cjs --explain
+
+# 真实 CLI / hook / log 验收（需要本机已登录对应客户端）
+npm run verify:live:claude
+npm run verify:live:codex
 ```
+
+说明：
+
+- `verify:live:*` 是功能级 CLI 验收，不是 CI 基线；它依赖本机已登录的 Claude / Codex 客户端
+- 如果改动触及安装行为、hooks、平台检测、路由输出或公开契约，至少应运行 `npm run verify:release`
 
 ## 维护预期
 

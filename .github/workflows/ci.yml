@@ -18,11 +18,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Syntax check
+        run: node --check scripts/*.cjs scripts/lib/*.cjs
+      - name: Release readiness
+        run: npm run verify:release
       - name: Unit tests
-        run: node --test tests/scan.test.cjs tests/skill-contract.test.cjs tests/route-matcher.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs
+        run: npm test
       - name: Coverage (Node 22 only)
         if: matrix.node-version == 22 && matrix.os == 'ubuntu-latest'
-        run: node --test --experimental-test-coverage tests/scan.test.cjs tests/route-matcher.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs
+        run: node --test --experimental-test-coverage tests/scan.test.cjs tests/route-matcher.test.cjs tests/route-logger.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/skill-contract.test.cjs
       - name: Install smoke test
         run: bash tests/install.test.sh
       - name: Install idempotency test
