@@ -177,6 +177,7 @@ assert "管道执行 install.sh --version 仍返回已发布版本" \
 PIPE_HOME=$(mktemp -d)
 PIPE_LOG="$PIPE_HOME/install-piped.log"
 if CLAUDE_USER_DIR="$PIPE_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REPO_URL="$REPO_ROOT" \
+  CAPABILITY_INSTALL_REF="$LATEST_TAG" \
   bash <(cat "$REPO_ROOT/install.sh") >"$PIPE_LOG" 2>&1; then
   :
 else

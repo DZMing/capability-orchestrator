@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.11] - 2026-04-20
+
+### Fixed
+
+- Piped-install smoke coverage now pins the target ref explicitly instead of relying on a live latest-tag lookup, eliminating that test's dependence on GitHub API timing during CI
+
 ## [1.11.10] - 2026-04-20
 
 ### Fixed
