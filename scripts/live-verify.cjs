@@ -250,7 +250,7 @@ function verifyCodex(timeoutSec) {
   ensureDir(skillDir);
   fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: valid-skill\ndescription: A valid test skill\n---\n');
 
-  const aliasPath = '/tmp/cap-orch-codex-live';
+  const aliasPath = `/tmp/cap-orch-codex-live-${process.pid}`;
   try {
     if (fs.existsSync(aliasPath) || fs.lstatSync(aliasPath).isSymbolicLink()) {
       fs.rmSync(aliasPath, { recursive: true, force: true });

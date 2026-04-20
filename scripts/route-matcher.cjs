@@ -373,7 +373,9 @@ function findBestMcpMatch(prompt, servers) {
 }
 
 function createMcpOutput(server) {
-  const safeName = sanitize(server.name || '');
+  const rawName = server.name || '';
+  const cleaned = sanitize(rawName);
+  const safeName = /^[a-zA-Z0-9_-]+$/.test(cleaned) ? cleaned : cleaned.replace(/[^a-zA-Z0-9_-]/g, '');
   const safeDesc = sanitize(server.desc || '');
   const toolPrefix = 'mcp__' + safeName;
   const ctx = [

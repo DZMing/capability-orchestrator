@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.13] - 2026-04-20
+
+### Fixed
+
+- `createMcpOutput` now sanitizes MCP server names through `sanitize()` before regex validation, preventing newline injection in tool prefix output while preserving anti-XSS protection
+- `live-verify.cjs` uses PID-unique symlink paths to avoid race conditions in parallel test runs
+
 ## [1.11.12] - 2026-04-20
 
 ### Fixed

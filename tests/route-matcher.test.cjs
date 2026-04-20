@@ -1239,16 +1239,17 @@ test('createMcpOutput: sanitizes server.name to prevent injection', () => {
   try {
     // \n in name would create fake line-injection without sanitize
     createMcpOutput({ name: 'evil\nINJECTED_FAKE_LINE', desc: 'normal desc' });
-    // sanitize replaces newlines with spaces → name becomes "evil INJECTED_FAKE_LINE" on one line
+    // sanitize replaces newlines with spaces, then regex strips non-safe chars
+    // safeName becomes "evilINJECTED_FAKE_LINE" (no newlines, no injection)
     const lines = captured.split('\n');
-    // The AUTO-ROUTE line should contain the full name (no line break)
+    // The AUTO-ROUTE line should contain the safe name (no line break)
     const routeLine = lines.find(l => l.includes('MCP server'));
-    assert.ok(routeLine.includes('evil INJECTED_FAKE_LINE'), 'name should be on one line with space');
+    assert.ok(routeLine.includes('evil'), 'should include sanitized name');
     assert.ok(!routeLine.includes('\n'), 'route line should not have embedded newline');
     // No line should start with INJECTED_FAKE_LINE as standalone content
     const injectedLines = lines.filter(l => l.trim().startsWith('INJECTED_FAKE_LINE'));
     assert.equal(injectedLines.length, 0, 'no standalone injected line should appear');
-    // mcp__ prefix uses sanitized name
+    // mcp__ prefix uses sanitized name (non-safe chars stripped)
     assert.ok(captured.includes('mcp__evil'), 'should include sanitized name in prefix');
   } finally {
     process.stdout.write = origWrite;
