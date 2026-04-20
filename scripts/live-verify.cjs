@@ -10,6 +10,7 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const REAL_HOME = process.env.REAL_HOME || os.homedir();
 const LIVE_VERIFY_ROOT = path.join(REAL_HOME, '.capability-orchestrator-live');
 const CLAUDE_AUTH = path.join(REAL_HOME, '.claude', '.credentials.json');
+const CLAUDE_SETTINGS = path.join(REAL_HOME, '.claude', 'settings.json');
 const CODEX_AUTH = path.join(REAL_HOME, '.codex', 'auth.json');
 const CODEX_CONFIG = path.join(REAL_HOME, '.codex', 'config.toml');
 
@@ -70,6 +71,39 @@ function syncWorktreeSnapshot(installDir) {
 
 function maybeCopy(src, dest) {
   if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+}
+
+function extractClaudeRuntimeSettings(settings = {}) {
+  const runtime = {};
+
+  if (settings && typeof settings.model === 'string' && settings.model.trim()) {
+    runtime.model = settings.model;
+  }
+
+  if (settings && settings.env && typeof settings.env === 'object' && !Array.isArray(settings.env)) {
+    const env = Object.fromEntries(
+      Object.entries(settings.env)
+        .filter(([key, value]) => typeof key === 'string' && key && ['string', 'number', 'boolean'].includes(typeof value))
+        .map(([key, value]) => [key, String(value)])
+    );
+    if (Object.keys(env).length > 0) runtime.env = env;
+  }
+
+  return runtime;
+}
+
+function prepareClaudeRuntimeSettings(claudeDir) {
+  if (!fs.existsSync(CLAUDE_SETTINGS)) return {};
+
+  try {
+    const runtime = extractClaudeRuntimeSettings(JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, 'utf8')));
+    if (Object.keys(runtime).length > 0) {
+      fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify(runtime, null, 2) + '\n');
+    }
+    return runtime;
+  } catch {
+    return {};
+  }
 }
 
 function run(cmd, args, options = {}) {
@@ -150,15 +184,16 @@ function verifyClaude(timeoutSec) {
   const claudeDir = path.join(tmpHome, '.claude');
   ensureDir(claudeDir);
   maybeCopy(CLAUDE_AUTH, path.join(claudeDir, '.credentials.json'));
+  const runtimeSettings = prepareClaudeRuntimeSettings(claudeDir);
 
-  const installEnv = { ...process.env, HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
+  const installEnv = { ...process.env, ...(runtimeSettings.env || {}), HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
   const install = run('bash', [path.join(REPO_ROOT, 'install.sh')], { env: installEnv });
   if (install.status !== 0) throw new Error(`install failed: ${install.stderr || install.stdout}`);
   syncWorktreeSnapshot(path.join(claudeDir, 'plugins', 'cache', 'capability-orchestrator'));
 
   const fixture = path.join(REPO_ROOT, 'tests', 'fixtures', 'project');
   const debugFile = path.join(tmpHome, 'claude-debug.log');
-  const env = { ...process.env, HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
+  const env = { ...process.env, ...(runtimeSettings.env || {}), HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
   const proc = run('claude', [
     '-p',
     '--verbose',
@@ -291,6 +326,7 @@ if (require.main === module) {
   main();
 } else {
   module.exports = {
+    extractClaudeRuntimeSettings,
     summarizeClaude,
     summarizeCodexRouteLog,
   };

@@ -111,6 +111,7 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"..
 - 新建临时 `HOME`
 - 只复制 `~/.claude/.credentials.json` 保留登录态
 - 使用隔离的临时 `CLAUDE_USER_DIR`
+- 同步 `~/.claude/settings.json` 中的运行时 `model + env`
 - 在该目录安装插件
 - 再把当前工作区版本同步到临时插件目录，确保验证的是当前工作区，而不是旧 tag
 - 用真实 `claude` CLI 跑 `stream-json + include-hook-events + debug-file`
@@ -196,7 +197,7 @@ npm run verify:release
 
 说明：
 
-- `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
+- `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，并继承真实 `settings.json` 中的 `model + env` 运行时配置，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
 - `verify:live:codex`：隔离 `HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并要求 fresh `route-log.jsonl` 里出现目标 skill 路由条目
 - `verify:release`：用于发布前检查版本/manifest/changelog 同步，并显式报告 `HEAD` 是否已经等于最新 tag、以及工作树是否 clean；这些状态需要人工检查，不能只看退出码
 

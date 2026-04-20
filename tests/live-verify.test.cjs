@@ -4,9 +4,36 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  extractClaudeRuntimeSettings,
   summarizeClaude,
   summarizeCodexRouteLog,
 } = require('../scripts/live-verify.cjs');
+
+test('extractClaudeRuntimeSettings: keeps model and serializable env values only', () => {
+  const runtime = extractClaudeRuntimeSettings({
+    model: 'glm-5.1',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://glm.example.invalid',
+      ANTHROPIC_AUTH_TOKEN: 'secret',
+      API_TIMEOUT_MS: 45000,
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: true,
+      NULLISH: null,
+      BAD: { nested: true },
+    },
+    hooks: { SessionStart: [] },
+    enabledPlugins: ['some-plugin'],
+  });
+
+  assert.deepEqual(runtime, {
+    model: 'glm-5.1',
+    env: {
+      ANTHROPIC_BASE_URL: 'https://glm.example.invalid',
+      ANTHROPIC_AUTH_TOKEN: 'secret',
+      API_TIMEOUT_MS: '45000',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
+    },
+  });
+});
 
 test('summarizeClaude: only passes when the same UserPromptSubmit hook response contains AUTO-ROUTE and target skill', () => {
   const positive = [

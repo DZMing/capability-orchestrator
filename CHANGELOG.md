@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.4] - 2026-04-20
+
+### Added
+
+- Claude live-verify 现在有 runtime-settings 提取测试，锁定 `model + env` 继承行为
+
+### Changed
+
+- `verify:live:claude` 现在会把真实 `~/.claude/settings.json` 中的运行时 `model` / `env` 同步到隔离环境，确保 live 验证贴近用户真实 API-key / base-url 配置
+
+### Fixed
+
+- 使用自定义 `ANTHROPIC_BASE_URL` / `glm-5.1` 之类设置时，Claude live verifier 不再只复制 OAuth 凭证而丢失实际认证路径
+
 ## [1.9.3] - 2026-04-20
 
 ### Added
