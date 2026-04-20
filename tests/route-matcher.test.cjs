@@ -9,6 +9,10 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+const ISOLATED_ECOSYSTEM_ROOT = path.join(os.tmpdir(), `cap-ecosystem-empty-${process.pid}`);
+process.env.OPENCLAW_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'openclaw');
+process.env.HERMES_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'hermes');
+
 const {
   extractPrompt, extractKeywords, isEscaped, findBestMatch,
   collectAllSkills, STOP_WORDS, ESCAPE_PATTERNS,
@@ -857,6 +861,35 @@ test('collectAllSkills: fault-open when plugin scan throws', () => {
   assert.ok(Array.isArray(skills), 'should return array');
   const names = skills.map(s => s.name);
   assert.ok(names.includes('valid-skill'), 'project skill should still be present');
+});
+
+test('collectAllSkills: includes OpenClaw and Hermes skills in matching pool', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecosystem-route-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const hermesRoot = path.join(tmp, 'hermes');
+  fs.mkdirSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-skill'), { recursive: true });
+  fs.mkdirSync(path.join(hermesRoot, 'skills', 'hermes-skill'), { recursive: true });
+  fs.writeFileSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-skill', 'SKILL.md'), '---\nname: oc-skill\ndescription: openclaw code audit helper\n---\n');
+  fs.writeFileSync(path.join(hermesRoot, 'skills', 'hermes-skill', 'SKILL.md'), '---\nname: hermes-skill\ndescription: hermes planning helper\n---\n');
+
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedHermes = process.env.HERMES_USER_DIR;
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.HERMES_USER_DIR = hermesRoot;
+  try {
+    const skills = collectAllSkills(FIXTURE_PROJECT, path.join(__dirname, 'fixtures', 'user'));
+    const names = skills.map(s => s.name);
+    assert.ok(names.includes('oc-skill'));
+    assert.ok(names.includes('hermes-skill'));
+    assert.equal(findBestMatch('please do an openclaw code audit', skills).name, 'oc-skill');
+    assert.equal(findBestMatch('need hermes planning help', skills).name, 'hermes-skill');
+  } finally {
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
+    else process.env.HERMES_USER_DIR = savedHermes;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 // ─── Session 4: 突变测试断言加固 ──────────────────────────────────────────

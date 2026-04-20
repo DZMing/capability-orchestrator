@@ -8,6 +8,8 @@
 
 **一句话**：装上之后，Claude Code 或 Codex 每次开新会话自动知道你有哪些 skills / agents / plugins / MCP servers，并且在你输入 prompt 时自动匹配到最合适的工具。
 
+当前版本还会顺带发现本机已安装的 OpenClaw / Hermes 本地 skills，让这些能力也能进入路由视野。
+
 ## 30 秒上手
 
 ```bash
@@ -45,6 +47,7 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 如果你符合下面这些情况，这个插件是合适的：
 
 - 已经在 Claude Code 或 Codex 中使用项目级或用户级 skills
+- 机器上还装有 OpenClaw 或 Hermes Agent，希望这些本地 skills 也被一起感知
 - 希望代理能看到更多本地可用能力面
 - 希望对 skills、legacy commands 和 MCP servers 加更严格的路由层
 - 能接受插件通过修改 `~/.claude/settings.json` 或 `~/.codex/hooks.json` 来安装 hooks
@@ -82,6 +85,7 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 - Claude Code：在 `~/.claude/settings.json` 中写入或更新 `SessionStart` / `UserPromptSubmit`
 - Codex：在 `~/.codex/hooks.json` 中写入或更新对应 hooks
 - 升级和卸载时保留无关 hook 条目
+- 运行时会额外扫描 `~/.openclaw/workspace/skills/` 与 `~/.hermes/skills/`（可通过 `OPENCLAW_USER_DIR` / `HERMES_USER_DIR` 覆盖）
 
 它不会做这些事：
 

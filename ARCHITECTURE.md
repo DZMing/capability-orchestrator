@@ -58,17 +58,19 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 扫描来源及稳定性
 
-| 来源                   | 路径                       | 稳定性                                |
-| ---------------------- | -------------------------- | ------------------------------------- |
-| 项目级 skills          | `.claude/skills/`          | ✅ 官方正式目录                       |
-| 项目级 agents          | `.claude/agents/`          | ✅ 官方正式目录                       |
-| 项目级 legacy commands | `.claude/commands/`        | ✅ 官方正式目录                       |
-| 用户级 skills          | `~/.claude/skills/`        | ✅ 官方正式目录                       |
-| 用户级 agents          | `~/.claude/agents/`        | ✅ 官方正式目录                       |
-| 用户级 legacy commands | `~/.claude/commands/`      | ✅ 官方正式目录                       |
-| 项目级 MCP 配置        | `.mcp.json`                | ✅ 官方正式格式                       |
-| 用户级 MCP 配置        | `~/.claude/mcp.json`       | ✅ 官方正式格式（兼容旧 `.mcp.json`） |
-| 已安装插件             | `~/.claude/plugins/cache/` | ⚠️ best-effort，目录结构未正式文档化  |
+| 来源                   | 路径                            | 稳定性                                |
+| ---------------------- | ------------------------------- | ------------------------------------- |
+| 项目级 skills          | `.claude/skills/`               | ✅ 官方正式目录                       |
+| 项目级 agents          | `.claude/agents/`               | ✅ 官方正式目录                       |
+| 项目级 legacy commands | `.claude/commands/`             | ✅ 官方正式目录                       |
+| 用户级 skills          | `~/.claude/skills/`             | ✅ 官方正式目录                       |
+| 用户级 agents          | `~/.claude/agents/`             | ✅ 官方正式目录                       |
+| 用户级 legacy commands | `~/.claude/commands/`           | ✅ 官方正式目录                       |
+| 项目级 MCP 配置        | `.mcp.json`                     | ✅ 官方正式格式                       |
+| 用户级 MCP 配置        | `~/.claude/mcp.json`            | ✅ 官方正式格式（兼容旧 `.mcp.json`） |
+| 已安装插件             | `~/.claude/plugins/cache/`      | ⚠️ best-effort，目录结构未正式文档化  |
+| OpenClaw skills        | `~/.openclaw/workspace/skills/` | ⚠️ 兼容扫描面（只读，不执行）         |
+| Hermes skills          | `~/.hermes/skills/`             | ⚠️ 兼容扫描面（只读，不执行）         |
 
 ## Token 预算
 
@@ -215,6 +217,7 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - MCP server 描述（平台只暴露 tool 名，不注入 server 级描述）
 - Agent 描述（帮助判断何时委派 vs 自己做）
 - Skill 名称 + 描述（供路由匹配使用）
+- 兼容生态本地 skills（OpenClaw / Hermes）
 - 强制路由规则（`<MANDATORY>` 包裹，要求 Claude 匹配到 skill 时必须调用）
 
 ## Future Enhancements（仅文档记录，不实现）

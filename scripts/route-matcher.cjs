@@ -14,7 +14,15 @@
 
 const path = require('path');
 const fs = require('fs');
-const { scanSkills, sanitize, scanInstalledPlugins, scanCommands, readMcpServers } = require('./lib/scan-core.cjs');
+const {
+  scanSkills,
+  sanitize,
+  scanInstalledPlugins,
+  scanCommands,
+  readMcpServers,
+  getOpenClawSkillDir,
+  getHermesSkillDir,
+} = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
 const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
@@ -383,6 +391,8 @@ function collectAllSkills(projectDir, userDir) {
 
   const projSkills = scanSkills(path.join(projectDir, pp.projectSkillsDir), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
+  const openClawSkills = scanSkills(getOpenClawSkillDir(), []);
+  const hermesSkills = scanSkills(getHermesSkillDir(), []);
   const pluginSkills = [];
   try {
     for (const p of scanInstalledPlugins(claudeUserDir, [])) {
@@ -405,7 +415,7 @@ function collectAllSkills(projectDir, userDir) {
   const seen = new Set();
   const deduped = [];
   // Skills 优先，legacy commands 最低优先
-  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...legacyCmds]) {
+  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...openClawSkills, ...hermesSkills, ...legacyCmds]) {
     if (!seen.has(s.name)) {
       seen.add(s.name);
       deduped.push(s);

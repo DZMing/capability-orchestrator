@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { resolveUserDir } = require('./user-dir.cjs');
 
 const MAX_DESC = 100;
@@ -288,6 +289,16 @@ function scanInstalledPlugins(claudeUserDir, errors) {
   return [...seen.values()];
 }
 
+function getOpenClawSkillDir() {
+  const root = process.env.OPENCLAW_USER_DIR || path.join(os.homedir(), '.openclaw');
+  return path.join(root, 'workspace', 'skills');
+}
+
+function getHermesSkillDir() {
+  const root = process.env.HERMES_USER_DIR || path.join(os.homedir(), '.hermes');
+  return path.join(root, 'skills');
+}
+
 function collectSnapshot(projectDir, userDir) {
   const cwd = projectDir || process.cwd();
   const claudeUserDir = userDir || resolveUserDir();
@@ -334,6 +345,8 @@ function collectSnapshot(projectDir, userDir) {
 
   tryCollect('用户级 Skills', '', () => scanSkills(path.join(claudeUserDir, 'skills'), errors));
   tryCollect('用户级 Subagents', '@', () => scanAgents(path.join(claudeUserDir, 'agents'), errors));
+  tryCollect('OpenClaw Skills', '', () => scanSkills(getOpenClawSkillDir(), errors));
+  tryCollect('Hermes Skills', '', () => scanSkills(getHermesSkillDir(), errors));
 
   try {
     const plugins = scanInstalledPlugins(claudeUserDir, errors);
@@ -369,11 +382,17 @@ function collectSnapshot(projectDir, userDir) {
   const projSkillNames = new Set(
     (sections.find(s => s.label === '项目级 Skills') || { items: [] }).items.map(i => i.name)
   );
+  const userSkillNames = new Set(
+    (sections.find(s => s.label === '用户级 Skills') || { items: [] }).items.map(i => i.name)
+  );
   const projAgentNames = new Set(
     (sections.find(s => s.label === '项目级 Subagents') || { items: [] }).items.map(i => i.name)
   );
   for (const s of sections) {
     if (s.label === '用户级 Skills') s.items = s.items.filter(i => !projSkillNames.has(i.name));
+    if (s.label === 'OpenClaw Skills' || s.label === 'Hermes Skills') {
+      s.items = s.items.filter(i => !projSkillNames.has(i.name) && !userSkillNames.has(i.name));
+    }
     if (s.label === '用户级 Subagents') s.items = s.items.filter(i => !projAgentNames.has(i.name));
   }
 
@@ -408,5 +427,7 @@ module.exports = {
   isPluginRoot,
   findPluginRoots,
   scanInstalledPlugins,
+  getOpenClawSkillDir,
+  getHermesSkillDir,
   collectSnapshot,
 };

@@ -34,7 +34,10 @@ function renderAwareness(snapshot) {
   const { sections, errors } = snapshot;
   const find = label => (sections.find(s => s.label === label) || { items: [] }).items;
 
-  const skillCount = find('项目级 Skills').length + find('用户级 Skills').length;
+  const skillCount = find('项目级 Skills').length
+    + find('用户级 Skills').length
+    + find('OpenClaw Skills').length
+    + find('Hermes Skills').length;
   const agentCount = find('项目级 Subagents').length + find('用户级 Subagents').length;
   const mcpItems = find('MCP Servers');
   const plugins = find('已安装插件');
@@ -68,12 +71,22 @@ function renderAwareness(snapshot) {
   }
 
   const allSkills = [...find('项目级 Skills'), ...find('用户级 Skills')];
+  const ecosystemSkills = [...find('OpenClaw Skills'), ...find('Hermes Skills')];
   if (allSkills.length > 0) {
     parts.push('### Skills');
     for (const s of allSkills.slice(0, TOP_N)) {
       parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_SKILL_DESC)}` : `- ${s.name}`);
     }
     if (allSkills.length > TOP_N) parts.push(`+${allSkills.length - TOP_N} 个`);
+    parts.push('');
+  }
+
+  if (ecosystemSkills.length > 0) {
+    parts.push('### 兼容生态 Skills');
+    for (const s of ecosystemSkills.slice(0, TOP_N)) {
+      parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_SKILL_DESC)}` : `- ${s.name}`);
+    }
+    if (ecosystemSkills.length > TOP_N) parts.push(`+${ecosystemSkills.length - TOP_N} 个`);
     parts.push('');
   }
 

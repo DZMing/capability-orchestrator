@@ -6,12 +6,17 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+const ISOLATED_ECOSYSTEM_ROOT = path.join(os.tmpdir(), `cap-ecosystem-empty-${process.pid}`);
+process.env.OPENCLAW_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'openclaw');
+process.env.HERMES_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'hermes');
 
 const {
   extractFrontmatter, getDescription, getName, sanitize,
   tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot, compareSemver, renderSection,
-  collectSnapshot, renderSnapshot, truncate,
+  collectSnapshot, renderSnapshot, truncate, getOpenClawSkillDir, getHermesSkillDir,
 } = require('../scripts/scan-environment.cjs');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -209,6 +214,35 @@ test('collectSnapshot: sections are sorted by name', () => {
     const names = s.items.map(i => i.name);
     const sorted = [...names].sort((a, b) => a.localeCompare(b, 'en'));
     assert.deepEqual(names, sorted, `${s.label} should be sorted`);
+  }
+});
+
+test('collectSnapshot: OpenClaw and Hermes skills are discovered', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecosystem-scan-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const hermesRoot = path.join(tmp, 'hermes');
+  fs.mkdirSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-skill'), { recursive: true });
+  fs.mkdirSync(path.join(hermesRoot, 'skills', 'hermes-skill'), { recursive: true });
+  fs.writeFileSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-skill', 'SKILL.md'), '---\nname: oc-skill\ndescription: OpenClaw integration skill\n---\n');
+  fs.writeFileSync(path.join(hermesRoot, 'skills', 'hermes-skill', 'SKILL.md'), '---\nname: hermes-skill\ndescription: Hermes integration skill\n---\n');
+
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedHermes = process.env.HERMES_USER_DIR;
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.HERMES_USER_DIR = hermesRoot;
+
+  try {
+    const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
+    const openClawSection = snap.sections.find(s => s.label === 'OpenClaw Skills');
+    const hermesSection = snap.sections.find(s => s.label === 'Hermes Skills');
+    assert.ok(openClawSection && openClawSection.items.some(i => i.name === 'oc-skill'));
+    assert.ok(hermesSection && hermesSection.items.some(i => i.name === 'hermes-skill'));
+  } finally {
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
+    else process.env.HERMES_USER_DIR = savedHermes;
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
 

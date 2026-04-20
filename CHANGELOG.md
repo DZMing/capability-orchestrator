@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.11.0] - 2026-04-20
+
+### Added
+
+- OpenClaw skill discovery from `~/.openclaw/workspace/skills/`
+- Hermes skill discovery from `~/.hermes/skills/`
+- OpenClaw/Hermes scan and route regression tests
+
+### Changed
+
+- Awareness snapshot now includes compatible ecosystem skills in a dedicated section
+- Route matching now includes OpenClaw and Hermes skills in the matching pool after project/user/plugin skills
+
 ## [1.10.0] - 2026-04-20
 
 ### Added

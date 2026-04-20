@@ -9,6 +9,10 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+const ISOLATED_ECOSYSTEM_ROOT = path.join(os.tmpdir(), `cap-ecosystem-empty-${process.pid}`);
+process.env.OPENCLAW_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'openclaw');
+process.env.HERMES_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'hermes');
+
 const NODE = process.execPath;
 const SCAN_SCRIPT = path.join(__dirname, '..', 'scripts', 'scan-environment.cjs');
 const ROUTE_SCRIPT = path.join(__dirname, '..', 'scripts', 'route-matcher.cjs');
