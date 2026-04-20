@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.4] - 2026-04-20
+
+### Changed
+
+- CI now uses `actions/checkout@v5` and `actions/setup-node@v6`, aligning the workflow with GitHub's current Node 24 action runtime line
+
+### Fixed
+
+- The repository no longer relies on deprecated Node 20-based GitHub Actions runtime surfaces for checkout and setup-node
+
 ## [1.11.3] - 2026-04-20
 
 ### Fixed
