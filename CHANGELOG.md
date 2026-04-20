@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.5] - 2026-04-20
+
+### Fixed
+
+- The fake-git clone path used by install smoke tests now excludes `.git`, so Linux verification no longer emits misleading `.git/objects` permission noise while exercising the same install behavior
+
 ## [1.11.4] - 2026-04-20
 
 ### Changed

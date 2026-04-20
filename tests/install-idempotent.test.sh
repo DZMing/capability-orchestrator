@@ -41,8 +41,7 @@ if [ "\$1" = "clone" ]; then
   printf '%s' "\$BRANCH" > "$TMP_GIT/last-clone-branch.txt"
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
-  cp -r "$REPO_ROOT/." "\$TARGET/"
-  rm -rf "\$TARGET/.git"
+  tar -C "$REPO_ROOT" --exclude='.git' -cf - . | tar -C "\$TARGET" -xf -
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
   git -C "\$TARGET" -c core.hooksPath=/dev/null -c user.email=t@t.com -c user.name=T commit -qm init

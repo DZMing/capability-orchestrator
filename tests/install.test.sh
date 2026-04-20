@@ -58,9 +58,7 @@ if [ "\$1" = "clone" ]; then
   # 最后一个参数是目标目录
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
-  cp -r "$REPO_ROOT/." "\$TARGET/"
-  # 清除源仓库的 .git（防止复制 hooks 等影响测试）
-  rm -rf "\$TARGET/.git"
+  tar -C "$REPO_ROOT" --exclude='.git' -cf - . | tar -C "\$TARGET" -xf -
   # 初始化一个干净的 git repo（供 pull 使用）
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
