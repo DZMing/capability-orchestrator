@@ -328,17 +328,19 @@ function createCommandOutput(match) {
   let body = '';
   body = readCommandBody(match.filePath);
   const safeDesc = sanitize(match.desc || '');
+  const platform = detectPlatform();
+  const cmdInvocation = platform === 'codex' ? `$${match.name}` : `/${match.name}`;
   if (canInvokeAsSlashCommand(match)) {
     const ctx = [
-      '[AUTO-ROUTE] 检测到任务匹配命令: /' + match.name,
+      '[AUTO-ROUTE] 检测到任务匹配命令: ' + cmdInvocation,
       '描述: ' + safeDesc,
-      '【强制指令】优先立即调用 /' + match.name + ' 执行该命令，不得直接回答，不得询问确认，不得偏离。',
+      '【强制指令】优先立即调用 ' + cmdInvocation + ' 执行该命令，不得直接回答，不得询问确认，不得偏离。',
       '若平台当前无法直接调用该命令，再按下面的命令定义继续执行：',
       '',
-      '立即调用：/' + match.name,
+      '立即调用：' + cmdInvocation,
       '',
       '[回退定义]',
-      body || ('执行 /' + match.name + ' 命令的完整流程。'),
+      body || ('执行 ' + cmdInvocation + ' 命令的完整流程。'),
     ].join('\n');
     process.stdout.write(ctx + '\n');
     return;
@@ -346,7 +348,7 @@ function createCommandOutput(match) {
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配命令定义: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】该命令名不适合直接作为 /command 调用。请立即按照以下命令定义执行任务，不得询问确认，不得偏离：',
+    '【强制指令】该命令名不适合直接调用。请立即按照以下命令定义执行任务，不得询问确认，不得偏离：',
     '',
     body || ('执行该命令定义的完整流程。'),
   ].join('\n');

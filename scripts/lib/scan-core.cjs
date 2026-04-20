@@ -164,13 +164,14 @@ function scanAgents(dir, errors) {
 function scanCommands(dir, errors) {
   return tryReadDir(dir, true, errors)
     .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
-    .map(d => {
+    .flatMap(d => {
       const name = sanitize(d.name.replace(/\.md$/, ''));
       const filePath = path.join(dir, d.name);
       const content = tryReadHead(filePath, errors);
-      const fm = extractFrontmatter(content || '');
+      if (content === null) return [];
+      const fm = extractFrontmatter(content);
       const desc = sanitize(fm.description || fm.name || '');
-      return { name, desc, filePath };
+      return [{ name, desc, filePath }];
     });
 }
 
@@ -355,11 +356,11 @@ function collectSnapshot(projectDir, userDir) {
     if (pp.projectCommandsDir) {
       const projCmds = scanCommands(path.join(cwd, pp.projectCommandsDir), errors);
       const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
-    const cmds = [
-      ...projCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy，建议迁移到 skills/' })),
-      ...userCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy' })),
-    ];
-    if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
+      const cmds = [
+        ...projCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy，建议迁移到 skills/' })),
+        ...userCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy' })),
+      ];
+      if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
     }
   } catch (e) {
     errors.push(`commands: ${e.message}`);

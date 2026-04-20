@@ -1148,7 +1148,7 @@ test('createCommandOutput: falls back to inline command definition when slash in
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'bad cmd', desc: 'fallback only', filePath: null, type: 'command' });
-    assert.ok(captured.includes('不适合直接作为 /command 调用'), 'should explain inline fallback mode');
+    assert.ok(captured.includes('不适合直接调用'), 'should explain inline fallback mode');
     assert.ok(!captured.includes('立即调用：/bad cmd'), 'should not emit unsafe slash invocation');
     assert.ok(!captured.includes('执行 /bad cmd 命令的完整流程。'), 'should not reintroduce unsafe slash syntax in fallback copy');
   } finally {
