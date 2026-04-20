@@ -31,6 +31,7 @@ trim_newline() { printf '%s' "$1" | tr -d '\r\n'; }
 MODE="install"
 CHANNEL="${CAPABILITY_INSTALL_CHANNEL:-release}"
 REF_OVERRIDE="${CAPABILITY_INSTALL_REF:-}"
+PLATFORM="${CAPABILITY_PLATFORM:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +55,18 @@ while [[ $# -gt 0 ]]; do
       CHANNEL="$2"
       shift 2
       ;;
+    --platform=*)
+      PLATFORM="${1#*=}"
+      shift
+      ;;
+    --platform)
+      if [[ $# -lt 2 ]]; then
+        red "错误：--platform 需要参数（claude 或 codex）"
+        exit 1
+      fi
+      PLATFORM="$2"
+      shift 2
+      ;;
     *)
       red "错误：未知参数 $1"
       exit 1
@@ -63,6 +76,19 @@ done
 
 if [[ "$CHANNEL" != "release" && "$CHANNEL" != "master" ]]; then
   red "错误：--channel 仅支持 release 或 master"
+  exit 1
+fi
+
+# ── 平台自动检测 ──────────────────────────────────────────────────────────
+if [[ -z "$PLATFORM" ]]; then
+  if [[ -f "$HOME/.codex/config.toml" && ! -d "$HOME/.claude" ]]; then
+    PLATFORM="codex"
+  else
+    PLATFORM="claude"
+  fi
+fi
+if [[ "$PLATFORM" != "claude" && "$PLATFORM" != "codex" ]]; then
+  red "错误：--platform 仅支持 claude 或 codex"
   exit 1
 fi
 
@@ -159,9 +185,19 @@ resolve_install_target() {
   RESOLVED_REF="$(resolve_latest_tag)"
 }
 
-# 确定用户级 Claude 目录
-CLAUDE_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
-PLUGINS_DIR="$CLAUDE_DIR/plugins/cache"
+# 确定用户级平台目录
+if [[ "$PLATFORM" == "codex" ]]; then
+  CONFIG_DIR="${CODEX_USER_DIR:-$HOME/.codex}"
+  CONFIG_DIR_ENV="CODEX_USER_DIR"
+  HOOKS_FILE="$CONFIG_DIR/hooks.json"
+  PLUGIN_DATA_ENV="CODEX_PLUGIN_DATA"
+else
+  CONFIG_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
+  CONFIG_DIR_ENV="CLAUDE_USER_DIR"
+  HOOKS_FILE=""
+  PLUGIN_DATA_ENV="CLAUDE_PLUGIN_DATA"
+fi
+PLUGINS_DIR="$CONFIG_DIR/plugins/cache"
 INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
 
 # --version 支持
@@ -174,10 +210,40 @@ fi
 if [[ "$MODE" == "uninstall" ]]; then
   bold "=== capability-orchestrator 卸载 ==="
   echo ""
-  # 清理 settings.json 中的 hook
-  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-  if [ -f "$SETTINGS_FILE" ]; then
-    node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
+  # 清理 hook 配置
+  if [[ "$PLATFORM" == "codex" ]]; then
+    if [ -f "$HOOKS_FILE" ]; then
+      node - "$HOOKS_FILE" <<'UNINSTALL_HOOKS_JS'
+const fs = require('fs');
+const hooksFile = process.argv[2];
+try {
+  const hooksConfig = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+  const marker = 'capability-orchestrator';
+  const cleanArr = (arr) => (arr || []).map(entry => {
+    const hooks = (entry.hooks || []).filter(h => !(h.command && h.command.includes(marker)));
+    return hooks.length > 0 ? { ...entry, hooks } : null;
+  }).filter(Boolean);
+  if (hooksConfig.hooks) {
+    for (const key of Object.keys(hooksConfig.hooks)) {
+      hooksConfig.hooks[key] = cleanArr(hooksConfig.hooks[key]);
+    }
+    hooksConfig.hooks = Object.fromEntries(
+      Object.entries(hooksConfig.hooks).filter(([, v]) => v.length > 0)
+    );
+    if (Object.keys(hooksConfig.hooks).length === 0) delete hooksConfig.hooks;
+  }
+  fs.writeFileSync(hooksFile, JSON.stringify(hooksConfig, null, 2) + '\n');
+  process.stdout.write('Codex hooks 已移除\n');
+} catch (e) {
+  process.stderr.write('清理 hooks 失败: ' + e.message + '\n');
+  process.exit(1);
+}
+UNINSTALL_HOOKS_JS
+    fi
+  else
+    SETTINGS_FILE="$CONFIG_DIR/settings.json"
+    if [ -f "$SETTINGS_FILE" ]; then
+      node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
 const fs = require('fs');
 const settingsFile = process.argv[2];
 try {
@@ -202,6 +268,7 @@ try {
   process.exit(1);
 }
 UNINSTALL_JS
+    fi
   fi
   # 删除插件目录（sanity check 防止空路径误删）
   if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" != *"capability-orchestrator"* ]]; then
@@ -312,19 +379,63 @@ fi
 chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
 chmod +x "$INSTALL_DIR/scripts/route-matcher.cjs"
 
-# ── 注册 SessionStart hook ────────────────────────────────────────────────────
-SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-HOOK_CMD="CLAUDE_USER_DIR=$(shell_quote "$CLAUDE_DIR") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+# ── 注册 hooks ─────────────────────────────────────────────────────────────────
 
-yellow "正在注册 SessionStart hook..."
-node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
+if [[ "$PLATFORM" == "codex" ]]; then
+  # Codex: 写入 hooks.json
+  SCAN_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+
+  yellow "正在注册 Codex hooks..."
+  node - "$HOOKS_FILE" "$SCAN_CMD" "$ROUTE_CMD" <<'CODEX_HOOKS_JS'
+const fs = require('fs');
+const path = require('path');
+const hooksFile = process.argv[2];
+const scanCmd = process.argv[3];
+const routeCmd = process.argv[4];
+const marker = 'capability-orchestrator';
+
+let hooksConfig = {};
+if (fs.existsSync(hooksFile)) {
+  try {
+    hooksConfig = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
+  } catch (e) {
+    process.stderr.write('hooks.json 解析失败: ' + e.message + '\n');
+    process.exit(1);
+  }
+}
+
+if (!hooksConfig.hooks) hooksConfig.hooks = {};
+
+// 注册 SessionStart
+const cleanHooks = (arr, cmd) => {
+  const filtered = (arr || []).filter(h => !(h.command && h.command.includes(marker)));
+  return [...filtered, { type: 'command', command: cmd, statusMessage: 'Scanning capabilities...' }];
+};
+hooksConfig.hooks.SessionStart = [{ hooks: cleanHooks(
+  (hooksConfig.hooks.SessionStart || []).flatMap(e => e.hooks || []), scanCmd
+) }];
+hooksConfig.hooks.UserPromptSubmit = [{ hooks: cleanHooks(
+  (hooksConfig.hooks.UserPromptSubmit || []).flatMap(e => e.hooks || []), routeCmd
+) }];
+
+fs.mkdirSync(path.dirname(hooksFile), { recursive: true });
+fs.writeFileSync(hooksFile, JSON.stringify(hooksConfig, null, 2) + '\n');
+process.stdout.write('Codex hooks 已注册\n');
+CODEX_HOOKS_JS
+else
+  # Claude Code: 写入 settings.json
+  SETTINGS_FILE="$CONFIG_DIR/settings.json"
+  HOOK_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+
+  yellow "正在注册 SessionStart hook..."
+  node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
 const fs = require('fs');
 const path = require('path');
 
 const settingsFile = process.argv[2];
 const hookCmd = process.argv[3];
 
-// 读取或初始化 settings.json
 let settings = {};
 if (fs.existsSync(settingsFile)) {
   try {
@@ -335,18 +446,15 @@ if (fs.existsSync(settingsFile)) {
   }
 }
 
-// 确保 hooks.SessionStart 数组存在
 if (!settings.hooks) settings.hooks = {};
 if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = [];
 
-// 检查是否已注册（避免重复）
 const marker = 'capability-orchestrator';
 const alreadyRegistered = settings.hooks.SessionStart.some(entry =>
   entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker))
 );
 
 if (alreadyRegistered) {
-  // 更新已有条目的路径（升级场景）
   for (const entry of settings.hooks.SessionStart) {
     if (!entry.hooks) continue;
     for (const h of entry.hooks) {
@@ -367,11 +475,11 @@ fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
 fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 NODEJS
 
-# ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
-ROUTE_CMD="CLAUDE_USER_DIR=$(shell_quote "$CLAUDE_DIR") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
+  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
-yellow "正在注册 UserPromptSubmit hook..."
-node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
+  yellow "正在注册 UserPromptSubmit hook..."
+  node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
 const fs = require('fs');
 const path = require('path');
 
@@ -415,16 +523,25 @@ if (alreadyRegistered) {
 
 fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 ROUTEJS
+fi
 
 echo ""
-green "✓ 安装完成：$INSTALL_DIR"
+green "✓ 安装完成：$INSTALL_DIR (平台: $PLATFORM)"
 green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
 green "✓ UserPromptSubmit hook 已注册（每条消息自动匹配 skill）"
 echo ""
 bold "使用方式："
 echo "  新会话开始时自动感知环境能力（无需手动触发）"
-echo "  /capability-orchestrator:capabilities — 查看完整能力摘要"
-echo "  /capability-orchestrator:orchestrate  — 路由复杂任务"
-echo "  /capability-orchestrator:refresh      — 对比前后能力变化"
-echo ""
-yellow "提示：重启 Claude Code 开新会话后生效"
+if [[ "$PLATFORM" == "codex" ]]; then
+  echo "  \$capabilities — 查看完整能力摘要"
+  echo "  \$orchestrate  — 路由复杂任务"
+  echo "  \$refresh      — 对比前后能力变化"
+  echo ""
+  yellow "提示：重启 Codex CLI 后生效"
+else
+  echo "  /capability-orchestrator:capabilities — 查看完整能力摘要"
+  echo "  /capability-orchestrator:orchestrate  — 路由复杂任务"
+  echo "  /capability-orchestrator:refresh      — 对比前后能力变化"
+  echo ""
+  yellow "提示：重启 Claude Code 开新会话后生效"
+fi

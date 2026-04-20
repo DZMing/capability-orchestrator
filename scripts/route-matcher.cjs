@@ -373,7 +373,11 @@ function createMcpOutput(server) {
 
 function collectAllSkills(projectDir, userDir) {
   const claudeUserDir = userDir || resolveUserDir();
-  const projSkills = scanSkills(path.join(projectDir, '.claude', 'skills'), []);
+  const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
+  const platform = detectPlatform();
+  const pp = getPlatformPaths(platform);
+
+  const projSkills = scanSkills(path.join(projectDir, pp.projectSkillsDir), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
   const pluginSkills = [];
   try {
@@ -385,10 +389,12 @@ function collectAllSkills(projectDir, userDir) {
   // Legacy /commands — 有描述才纳入匹配池，优先级低于 skills
   const legacyCmds = [];
   try {
-    const projCmds = scanCommands(path.join(projectDir, '.claude', 'commands'), []);
-    const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), []);
-    for (const c of [...projCmds, ...userCmds]) {
-      if (c.desc) legacyCmds.push({ ...c, type: 'command' });
+    if (pp.projectCommandsDir) {
+      const projCmds = scanCommands(path.join(projectDir, pp.projectCommandsDir), []);
+      const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), []);
+      for (const c of [...projCmds, ...userCmds]) {
+        if (c.desc) legacyCmds.push({ ...c, type: 'command' });
+      }
     }
   } catch { /* fault-open */ }
 
@@ -422,7 +428,7 @@ function _resolveRouteDecisionInner(input) {
   const stdinCwd = extractCwd(input);
   const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
   const { dir: inferredUserDir, source: userDirSource } = resolveUserDirWithSource();
-  const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || inferredUserDir;
+  const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || process.env.CODEX_USER_DIR || inferredUserDir;
 
   if (!prompt || prompt.length < MIN_PROMPT_LEN) {
     return {

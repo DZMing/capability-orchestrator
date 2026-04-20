@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.CAPABILITY_PLATFORM = 'claude';
+
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync, spawn } = require('child_process');

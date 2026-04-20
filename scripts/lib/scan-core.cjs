@@ -212,6 +212,7 @@ function readMcpServers(mcpFile, errors) {
 
 function isPluginRoot(dirPath) {
   if (fs.existsSync(path.join(dirPath, '.claude-plugin', 'plugin.json'))) return true;
+  if (fs.existsSync(path.join(dirPath, '.codex-plugin', 'plugin.json'))) return true;
   if (fs.existsSync(path.join(dirPath, 'plugin.json'))) return true;
   if (tryReadDir(path.join(dirPath, 'skills'), true).some(d => d.isDirectory())) return true;
   return tryReadDir(path.join(dirPath, 'agents'), true).some(d => d.isFile() && d.name.endsWith('.md'));
@@ -244,6 +245,7 @@ function scanInstalledPlugins(claudeUserDir, errors) {
       const pluginName = path.basename(pluginPath);
       const manifestContent =
         tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json'), errors) ||
+        tryRead(path.join(pluginPath, '.codex-plugin', 'plugin.json'), errors) ||
         tryRead(path.join(pluginPath, 'plugin.json'), errors);
 
       let name = sanitize(pluginName);
@@ -291,6 +293,10 @@ function collectSnapshot(projectDir, userDir) {
   const errors = [];
   const sections = [];
 
+  const { detectPlatform, getPlatformPaths } = require('./platform.cjs');
+  const platform = detectPlatform();
+  const pp = getPlatformPaths(platform);
+
   function tryCollect(label, prefix, fn) {
     try {
       const items = fn();
@@ -300,8 +306,10 @@ function collectSnapshot(projectDir, userDir) {
     }
   }
 
-  tryCollect('项目级 Skills', '', () => scanSkills(path.join(cwd, '.claude', 'skills'), errors));
-  tryCollect('项目级 Subagents', '@', () => scanAgents(path.join(cwd, '.claude', 'agents'), errors));
+  tryCollect('项目级 Skills', '', () => scanSkills(path.join(cwd, pp.projectSkillsDir), errors));
+  if (pp.projectAgentsDir) {
+    tryCollect('项目级 Subagents', '@', () => scanAgents(path.join(cwd, pp.projectAgentsDir), errors));
+  }
 
   try {
     const mcpItems = [];
@@ -344,13 +352,15 @@ function collectSnapshot(projectDir, userDir) {
   }
 
   try {
-    const projCmds = scanCommands(path.join(cwd, '.claude', 'commands'), errors);
-    const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
+    if (pp.projectCommandsDir) {
+      const projCmds = scanCommands(path.join(cwd, pp.projectCommandsDir), errors);
+      const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
     const cmds = [
       ...projCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy，建议迁移到 skills/' })),
       ...userCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy' })),
     ];
     if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
+    }
   } catch (e) {
     errors.push(`commands: ${e.message}`);
   }

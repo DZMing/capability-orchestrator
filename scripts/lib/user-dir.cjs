@@ -11,8 +11,14 @@ function resolveUserDirWithSource() {
   if (process.env.CLAUDE_USER_DIR) {
     return { dir: process.env.CLAUDE_USER_DIR, source: 'CLAUDE_USER_DIR' };
   }
+  if (process.env.CODEX_USER_DIR) {
+    return { dir: process.env.CODEX_USER_DIR, source: 'CODEX_USER_DIR' };
+  }
 
-  const linuxHome = path.join(os.homedir(), '.claude');
+  const { detectPlatform, getPlatformPaths } = require('./platform.cjs');
+  const platform = detectPlatform();
+  const p = getPlatformPaths(platform);
+  const linuxHome = path.join(os.homedir(), p.configDir);
   if (!process.env.WSL_DISTRO_NAME) {
     return { dir: linuxHome, source: 'HOME_DEFAULT' };
   }
@@ -29,9 +35,9 @@ function resolveUserDirWithSource() {
       .toString().trim().replace(/\r/g, '');
     const winProfile = execSync(`wslpath "${winRaw}"`, { timeout: 2000 })
       .toString().trim();
-    const winClaude = path.join(winProfile, '.claude');
-    fs.statSync(winClaude);
-    return { dir: winClaude, source: 'WSL_WINDOWS_USERPROFILE' };
+    const winDir = path.join(winProfile, p.configDir);
+    fs.statSync(winDir);
+    return { dir: winDir, source: 'WSL_WINDOWS_USERPROFILE' };
   } catch {
     return { dir: linuxHome, source: 'WSL_LINUX_HOME_FALLBACK' };
   }

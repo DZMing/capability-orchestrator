@@ -8,6 +8,8 @@ allowed-tools: Read Grep Glob Bash Agent
 
 !`node "${CLAUDE_SKILL_DIR}/../../scripts/scan-environment.cjs"`
 
+<!-- Codex: 如果上方命令未自动执行，请用 Bash 运行: node <plugin-dir>/scripts/scan-environment.cjs -->
+
 ---
 
 ## 路由策略

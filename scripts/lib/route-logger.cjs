@@ -2,18 +2,18 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 const MAX_LOG_SIZE = 1 * 1024 * 1024; // 1MB
 const MAX_LOG_FILES = 3;
 
 function getLogDir() {
-  // 优先使用 CLAUDE_PLUGIN_DATA（官方持久化目录，插件更新后内容保留）
-  const pluginData = process.env.CLAUDE_PLUGIN_DATA;
+  // 优先使用平台插件数据目录（插件更新后内容保留）
+  const pluginData = process.env.CLAUDE_PLUGIN_DATA || process.env.CODEX_PLUGIN_DATA;
   if (pluginData) return pluginData;
   // fallback 到插件目录下
+  const { resolveUserDir } = require('./user-dir.cjs');
   return path.join(
-    process.env.CLAUDE_USER_DIR || path.join(os.homedir(), '.claude'),
+    resolveUserDir(),
     'plugins', 'cache', 'capability-orchestrator', 'data'
   );
 }
