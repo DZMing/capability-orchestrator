@@ -45,6 +45,36 @@ test('getLogDir: falls back to plugin cache when CLAUDE_PLUGIN_DATA unset', () =
   }
 });
 
+test('getLogDir: uses CODEX_PLUGIN_DATA when set', () => {
+  const origClaude = process.env.CLAUDE_PLUGIN_DATA;
+  const origCodex = process.env.CODEX_PLUGIN_DATA;
+  delete process.env.CLAUDE_PLUGIN_DATA;
+  process.env.CODEX_PLUGIN_DATA = '/tmp/co-test-codex-data';
+  try {
+    assert.equal(getLogDir(), '/tmp/co-test-codex-data');
+  } finally {
+    if (origClaude) process.env.CLAUDE_PLUGIN_DATA = origClaude;
+    else delete process.env.CLAUDE_PLUGIN_DATA;
+    if (origCodex) process.env.CODEX_PLUGIN_DATA = origCodex;
+    else delete process.env.CODEX_PLUGIN_DATA;
+  }
+});
+
+test('getLogDir: CLAUDE_PLUGIN_DATA takes priority over CODEX_PLUGIN_DATA', () => {
+  const origClaude = process.env.CLAUDE_PLUGIN_DATA;
+  const origCodex = process.env.CODEX_PLUGIN_DATA;
+  process.env.CLAUDE_PLUGIN_DATA = '/tmp/co-claude-priority';
+  process.env.CODEX_PLUGIN_DATA = '/tmp/co-codex-secondary';
+  try {
+    assert.equal(getLogDir(), '/tmp/co-claude-priority');
+  } finally {
+    if (origClaude) process.env.CLAUDE_PLUGIN_DATA = origClaude;
+    else delete process.env.CLAUDE_PLUGIN_DATA;
+    if (origCodex) process.env.CODEX_PLUGIN_DATA = origCodex;
+    else delete process.env.CODEX_PLUGIN_DATA;
+  }
+});
+
 // ─── appendRouteLog + readLogs ───────────────────────────────────────────────
 
 test('appendRouteLog: writes JSONL entry and readLogs reads it back', () => {

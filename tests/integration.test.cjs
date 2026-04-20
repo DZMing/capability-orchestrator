@@ -425,3 +425,53 @@ test('integration: UserPromptSubmit hook writes route log to disk', () => {
 
   fs.rmSync(tmpData, { recursive: true, force: true });
 });
+
+// ─── Codex 平台集成测试 ─────────────────────────────────────────────────────
+
+test('integration: Codex platform uses CODEX_PLUGIN_DATA for log dir', () => {
+  const tmpData = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-log-'));
+  const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
+    input: JSON.stringify({
+      prompt: '测试路由',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+    env: {
+      ...process.env,
+      CAPABILITY_PLATFORM: 'codex',
+      CODEX_PLUGIN_DATA: tmpData,
+      CODEX_USER_DIR: path.join(__dirname, 'fixtures', 'user'),
+    },
+  }).trim();
+
+  const isMatch = raw.startsWith('[AUTO-ROUTE]');
+  const isPassThrough = raw.startsWith('{');
+  assert.ok(isMatch || isPassThrough, 'hook should produce valid output on codex');
+
+  const logPath = path.join(tmpData, 'route-log.jsonl');
+  assert.ok(fs.existsSync(logPath), 'route-log.jsonl should be created under CODEX_PLUGIN_DATA');
+
+  fs.rmSync(tmpData, { recursive: true, force: true });
+});
+
+test('integration: Codex platform scans .agents/skills/ for project skills', () => {
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-proj-'));
+  const agentsSkillsDir = path.join(tmpProj, '.agents', 'skills', 'my-codex-skill');
+  fs.mkdirSync(agentsSkillsDir, { recursive: true });
+  fs.writeFileSync(path.join(agentsSkillsDir, 'SKILL.md'), '---\nname: my-codex-skill\ndescription: A codex test skill\n---\n');
+
+  const { collectSnapshot, renderSnapshot } = require('../scripts/scan-environment.cjs');
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  process.env.CAPABILITY_PLATFORM = 'codex';
+  try {
+    const snap = collectSnapshot(tmpProj, path.join(__dirname, 'fixtures', 'user'));
+    const { text } = renderSnapshot(snap, 'awareness');
+    assert.ok(text.includes('my-codex-skill'), 'should find skill from .agents/skills/');
+    assert.ok(!text.includes('Legacy Commands'), 'codex should not have Legacy Commands section');
+  } finally {
+    if (savedPlatform) process.env.CAPABILITY_PLATFORM = savedPlatform;
+    else delete process.env.CAPABILITY_PLATFORM;
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});

@@ -426,7 +426,7 @@ CODEX_HOOKS_JS
 else
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
-  HOOK_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+  HOOK_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
 
   yellow "正在注册 SessionStart hook..."
   node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
@@ -476,7 +476,7 @@ fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 NODEJS
 
   # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
-  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
   yellow "正在注册 UserPromptSubmit hook..."
   node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
