@@ -57,7 +57,7 @@ function readLogs() {
   const logPath = getLogPath();
   // 读取主日志 + 轮转日志
   const files = [logPath];
-  for (let i = 0; i < MAX_LOG_FILES; i++) {
+  for (let i = 0; i < MAX_LOG_FILES - 1; i++) {
     files.push(logPath + '.' + i);
   }
   for (const f of files) {

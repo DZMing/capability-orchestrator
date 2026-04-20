@@ -212,7 +212,7 @@ if [[ "$MODE" == "uninstall" ]]; then
   echo ""
   # 清理 hook 配置
   if [[ "$PLATFORM" == "codex" ]]; then
-    if [ -f "$HOOKS_FILE" ]; then
+    if [[ -f "$HOOKS_FILE" ]]; then
       node - "$HOOKS_FILE" <<'UNINSTALL_HOOKS_JS'
 const fs = require('fs');
 const hooksFile = process.argv[2];
@@ -242,7 +242,7 @@ UNINSTALL_HOOKS_JS
     fi
   else
     SETTINGS_FILE="$CONFIG_DIR/settings.json"
-    if [ -f "$SETTINGS_FILE" ]; then
+    if [[ -f "$SETTINGS_FILE" ]]; then
       node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
 const fs = require('fs');
 const settingsFile = process.argv[2];

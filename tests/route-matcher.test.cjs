@@ -1064,6 +1064,43 @@ test('collectAllSkills: skills take priority over same-named legacy commands', (
   if (validSkill) assert.notEqual(validSkill.type, 'command', 'valid-skill should be a skill, not command');
 });
 
+test('collectAllSkills: Codex platform scans .agents/skills/ for project skills', () => {
+  const origPlatform = process.env.CAPABILITY_PLATFORM;
+  const origUserDir = process.env.CLAUDE_USER_DIR;
+  process.env.CAPABILITY_PLATFORM = 'codex';
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-skills-'));
+  const userTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-user-'));
+  process.env.CODEX_USER_DIR = userTmp;
+  delete process.env.CLAUDE_USER_DIR;
+  try {
+    // 创建 .agents/skills/ 目录结构（Codex 项目级）
+    const codexSkillsDir = path.join(tmp, '.agents', 'skills', 'codex-skill');
+    fs.mkdirSync(codexSkillsDir, { recursive: true });
+    fs.writeFileSync(path.join(codexSkillsDir, 'SKILL.md'), '---\nname: codex-skill\ndescription: A codex skill\n---\nBody');
+    // 创建 .claude/skills/ — Codex 平台不应扫这个
+    const claudeSkillsDir = path.join(tmp, '.claude', 'skills', 'claude-skill');
+    fs.mkdirSync(claudeSkillsDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeSkillsDir, 'SKILL.md'), '---\nname: claude-skill\ndescription: A claude skill\n---\nBody');
+    // 清除 require 缓存以重新检测平台
+    delete require.cache[require.resolve('../scripts/route-matcher.cjs')];
+    delete require.cache[require.resolve('../scripts/lib/platform.cjs')];
+    const { collectAllSkills: collectFresh } = require('../scripts/route-matcher.cjs');
+    const skills = collectFresh(tmp, userTmp);
+    const names = skills.map(s => s.name);
+    assert.ok(names.includes('codex-skill'), 'Codex 平台应发现 .agents/skills/ 下的 skill');
+    assert.ok(!names.includes('claude-skill'), 'Codex 平台不应发现 .claude/skills/ 下的 skill');
+  } finally {
+    process.env.CAPABILITY_PLATFORM = origPlatform;
+    if (origUserDir) process.env.CLAUDE_USER_DIR = origUserDir;
+    else delete process.env.CLAUDE_USER_DIR;
+    delete process.env.CODEX_USER_DIR;
+    delete require.cache[require.resolve('../scripts/route-matcher.cjs')];
+    delete require.cache[require.resolve('../scripts/lib/platform.cjs')];
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(userTmp, { recursive: true, force: true });
+  }
+});
+
 test('createCommandOutput: outputs plain text with AUTO-ROUTE marker', () => {
   const origWrite = process.stdout.write.bind(process.stdout);
   let captured = '';
