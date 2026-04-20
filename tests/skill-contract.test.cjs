@@ -17,6 +17,9 @@ const { execFileSync } = require('child_process');
 const REPO_ROOT = path.join(__dirname, '..');
 const SKILLS_DIR = path.join(REPO_ROOT, 'skills');
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'scan-environment.cjs');
+const PACKAGE_JSON = path.join(REPO_ROOT, 'package.json');
+const CLAUDE_PLUGIN_JSON = path.join(REPO_ROOT, '.claude-plugin', 'plugin.json');
+const CODEX_PLUGIN_JSON = path.join(REPO_ROOT, '.codex-plugin', 'plugin.json');
 const MAX_CHARS = 5000;
 
 // 从 SKILL.md 提取 !`...` 命令字符串
@@ -177,4 +180,15 @@ test('debug-route example script: does not depend on tests/fixtures paths', () =
   const fs = require('fs');
   const content = fs.readFileSync(path.join(REPO_ROOT, 'scripts', 'debug-route-example.cjs'), 'utf8');
   assert.ok(!content.includes('fixtures'), 'example script should be self-contained');
+});
+
+test('plugin manifests: Claude and Codex manifests exist and version matches package.json', () => {
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
+  const claudePlugin = JSON.parse(fs.readFileSync(CLAUDE_PLUGIN_JSON, 'utf8'));
+  const codexPlugin = JSON.parse(fs.readFileSync(CODEX_PLUGIN_JSON, 'utf8'));
+
+  assert.equal(claudePlugin.version, pkg.version, 'Claude plugin manifest version should match package.json');
+  assert.equal(codexPlugin.version, pkg.version, 'Codex plugin manifest version should match package.json');
+  assert.equal(codexPlugin.name, claudePlugin.name, 'Codex and Claude manifests should describe the same plugin');
 });

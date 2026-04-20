@@ -163,9 +163,9 @@ function scanAgents(dir, errors) {
 
 function scanCommands(dir, errors) {
   return tryReadDir(dir, true, errors)
-    .filter(d => d.isFile() && d.name.endsWith('.md'))
+    .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
     .map(d => {
-      const name = d.name.replace(/\.md$/, '');
+      const name = sanitize(d.name.replace(/\.md$/, ''));
       const filePath = path.join(dir, d.name);
       const content = tryReadHead(filePath, errors);
       const fm = extractFrontmatter(content || '');

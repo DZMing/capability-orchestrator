@@ -44,10 +44,27 @@
 - 修复：将 `scripts/route-matcher.cjs` tracked mode 改为可执行
 - 证据：幂等安装和 integration 测试通过
 
+### P1 已修复：失败重装会先删旧安装
+
+- 现象：clone / extract 失败时，旧安装会在新安装落地前被删掉
+- 修复：安装器改为 stage → swap；失败回滚保留旧安装
+- 证据：`tests/install.test.sh` 已覆盖失败重装保留旧安装
+
+### P1 已修复：Codex 自动检测与共享平台契约不一致
+
+- 现象：仅设置 `CODEX_USER_DIR` 时，安装器仍可能走 Claude 路径
+- 修复：平台自动检测改成 env-first，同时保留双安装场景下的 Claude 默认优先，并补 Codex 自动检测安装/卸载回归
+- 证据：`tests/install.test.sh` 已覆盖 `CODEX_USER_DIR` 自动检测和 dual-install 默认 Claude
+
+### P2 已修复：插件元数据版本漂移
+
+- 现象：`.claude-plugin/plugin.json` 版本落后于 `package.json`
+- 修复：同步 Claude manifest，新增 `.codex-plugin/plugin.json`，并加版本一致性测试
+- 证据：`tests/skill-contract.test.cjs` 已覆盖
+
 ## 当前剩余风险
 
-- 真实 Claude Code GUI 会话尚未做肉眼验收
-- install release tag 时，git 会输出 detached-head 提示；当前不影响正确性，但仍有体验优化空间
+- 真实 Claude Code GUI 会话尚未做肉眼验收，但功能级结论已由 clean-room CLI 的 hook 事件、输出和 debug 日志支撑
 - `OPEN_SOURCE_READINESS_AUDIT.md` 与 `ROADMAP.md` 属于研究/路线文档，不影响自用签字，但不应被误读为当前阻塞项清单
 
 ## 审核签字建议

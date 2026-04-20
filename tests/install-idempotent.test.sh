@@ -45,7 +45,7 @@ if [ "\$1" = "clone" ]; then
   rm -rf "\$TARGET/.git"
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
-  git -C "\$TARGET" -c user.email=t@t.com -c user.name=T commit -qm init
+  git -C "\$TARGET" -c core.hooksPath=/dev/null -c user.email=t@t.com -c user.name=T commit -qm init
 elif [ "\$1" = "-C" ] && [ "\$3" = "pull" ]; then
   echo "Already up to date."
 else

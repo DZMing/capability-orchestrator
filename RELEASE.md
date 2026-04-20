@@ -21,7 +21,7 @@
 
 1. `README.md`、`SECURITY.md`、`SUPPORT.md`、`RELEASE.md`、
    `CONTRIBUTING.md` 和 issue 模板之间没有互相矛盾。
-2. `package.json` 和 `.claude-plugin/plugin.json` 中的版本号已同步。
+2. `package.json`、`.claude-plugin/plugin.json` 和 `.codex-plugin/plugin.json` 中的版本号已同步。
 3. `CHANGELOG.md` 已更新。
 4. 安装、升级、卸载和回滚说明仍然和仓库真实行为一致。
 5. 工作区除了本次 release 需要的改动外保持干净。
@@ -34,6 +34,7 @@
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
+npm run verify:release
 ```
 
 任一命令失败，都不要打 release tag。

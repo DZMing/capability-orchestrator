@@ -25,7 +25,7 @@
 - README、SECURITY、SUPPORT、RELEASE、CONTRIBUTING、CLAUDE 契约已补齐。
 - 默认安装渠道已切到最新 release，支持模型与文档一致。
 - legacy command 已升级为“优先 slash command、必要时安全回退”。
-- 自动化测试当前为 `273` 项全绿。
+- 自动化测试当前为 `333` 项全绿。
 - clean-room Claude CLI 已证明：
   - `SessionStart` 真实触发
   - skill 路由真实触发
@@ -35,17 +35,16 @@
 
 这些不足不影响你长期自用，但会影响公开项目成熟度：
 
-- 还没有 GUI 手工验收记录
+- 还没有 GUI 手工验收记录；但功能签字已经有 clean-room CLI 的命令 + hook/log 证据
 - 还没有对外用户流量下的 support / security 真实运营验证
 - 没有演示资产、案例页、传播材料
-- release 安装虽然已正确，但 tag 安装仍有 detached-head 提示噪音
 
 ## 分项评分
 
 | 维度             | 评分 | 当前状态                                                            |
 | ---------------- | ---- | ------------------------------------------------------------------- |
 | 产品可用性       | `A-` | 安装、升级、回滚、卸载、排障、支持路径已成型                        |
-| 稳定性与回归防护 | `A`  | `273` 项自动化 + clean-room Claude CLI                              |
+| 稳定性与回归防护 | `A`  | `333` 项自动化 + clean-room Claude CLI                              |
 | 安全与信任       | `B`  | 边界和支持策略已写清，但缺真实外部漏洞运营经验                      |
 | 文档与上手体验   | `A-` | README 已够完整，但仍缺外部导向的演示材料                           |
 | 发布与维护治理   | `B+` | release-first 模型、政策文档、CODEOWNERS 已有，仍缺更成熟的发布体验 |

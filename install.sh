@@ -9,7 +9,7 @@ PLUGIN_NAME="capability-orchestrator"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="unknown"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
-  for VERSION_FILE in "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/.claude-plugin/plugin.json"; do
+  for VERSION_FILE in "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/.claude-plugin/plugin.json" "$SCRIPT_DIR/.codex-plugin/plugin.json"; do
     if [[ -f "$VERSION_FILE" ]]; then
       PARSED_VERSION="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$VERSION_FILE" | head -n 1)"
       if [[ -n "${PARSED_VERSION:-}" ]]; then
@@ -81,7 +81,13 @@ fi
 
 # ── 平台自动检测 ──────────────────────────────────────────────────────────
 if [[ -z "$PLATFORM" ]]; then
-  if [[ -f "$HOME/.codex/config.toml" && ! -d "$HOME/.claude" ]]; then
+  if [[ -n "${CLAUDE_USER_DIR:-}" || -n "${CLAUDE_PLUGIN_DATA:-}" ]]; then
+    PLATFORM="claude"
+  elif [[ -n "${CODEX_USER_DIR:-}" || -n "${CODEX_PLUGIN_DATA:-}" ]]; then
+    PLATFORM="codex"
+  elif [[ -d "$HOME/.claude" ]]; then
+    PLATFORM="claude"
+  elif [[ -f "$HOME/.codex/config.toml" ]]; then
     PLATFORM="codex"
   else
     PLATFORM="claude"
@@ -323,6 +329,28 @@ echo ""
 
 # ── 安装/更新 ─────────────────────────────────────────────────────────────────
 mkdir -p "$PLUGINS_DIR"
+TMP_ZIP=""
+TMP_DIR=""
+STAGE_DIR=""
+BACKUP_PATH=""
+
+cleanup_install_artifacts() {
+  local status=$?
+  if [[ $status -ne 0 && -n "${BACKUP_PATH:-}" && -e "$BACKUP_PATH" ]]; then
+    rm -rf "$INSTALL_DIR"
+    mv "$BACKUP_PATH" "$INSTALL_DIR" 2>/dev/null || true
+  elif [[ -n "${BACKUP_PATH:-}" && -e "$BACKUP_PATH" ]]; then
+    rm -rf "$BACKUP_PATH"
+  fi
+
+  [[ -n "${STAGE_DIR:-}" && -d "$STAGE_DIR" ]] && rm -rf "$STAGE_DIR"
+  [[ -n "${TMP_ZIP:-}" && -e "$TMP_ZIP" ]] && rm -f "$TMP_ZIP"
+  [[ -n "${TMP_DIR:-}" && -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+
+  return $status
+}
+
+trap cleanup_install_artifacts EXIT
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   if [[ -n "$(git -C "$INSTALL_DIR" status --porcelain)" ]]; then
@@ -330,22 +358,18 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
     exit 1
   fi
   yellow "检测到已安装（git），正在按目标 ref 重装..."
-  if [[ -L "$INSTALL_DIR" ]]; then
-    rm "$INSTALL_DIR"
-  elif [[ -d "$INSTALL_DIR" ]]; then
-    rm -rf "$INSTALL_DIR"
-  fi
 fi
 
+STAGE_DIR=$(mktemp -d "$PLUGINS_DIR/.cap-orch-stage-XXXXXX")
+STAGED_INSTALL_DIR="$STAGE_DIR/$PLUGIN_NAME"
+
 if [[ "$USE_GIT" -eq 1 ]]; then
-  if [[ -L "$INSTALL_DIR" ]]; then
-    rm "$INSTALL_DIR"
-  elif [[ -d "$INSTALL_DIR" ]]; then
-    rm -rf "$INSTALL_DIR"
-  fi
-  yellow "正在克隆到 $INSTALL_DIR ..."
+  yellow "正在克隆到 $STAGED_INSTALL_DIR ..."
+  GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0=advice.detachedHead \
+  GIT_CONFIG_VALUE_0=false \
   git clone --depth=1 --branch "$RESOLVED_REF" \
-    "https://github.com/$REPO.git" "$INSTALL_DIR"
+    "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
 else
   if ! command -v unzip >/dev/null 2>&1; then
     red "错误：curl 下载方式需要 unzip，请先安装或改用 git"
@@ -354,7 +378,6 @@ else
   yellow "正在下载（无 git，使用 curl）..."
   TMP_ZIP=$(mktemp /tmp/cap-orch-XXXXXX.zip)
   TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "$TMP_ZIP" "$TMP_DIR"' EXIT
   if [[ "$RESOLVED_KIND" == "tag" ]]; then
     ZIP_REF="refs/tags/$RESOLVED_REF"
   else
@@ -362,22 +385,21 @@ else
   fi
   curl -fsSL "https://github.com/$REPO/archive/$ZIP_REF.zip" -o "$TMP_ZIP"
   unzip -q "$TMP_ZIP" -d "$TMP_DIR"
-  # 目标目录可能存在（升级场景），先清理再移入
-  if [[ -L "$INSTALL_DIR" ]]; then
-    rm "$INSTALL_DIR"
-  elif [[ -d "$INSTALL_DIR" ]]; then
-    rm -rf "$INSTALL_DIR"
-  fi
-  # GitHub zip 内部目录名可能随仓库名变化，取第一个子目录（安全写法）
   EXTRACTED=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
-  mv "$EXTRACTED" "$INSTALL_DIR"
-  rm -rf "$TMP_ZIP" "$TMP_DIR"
-  trap - EXIT
+  mv "$EXTRACTED" "$STAGED_INSTALL_DIR"
 fi
 
 # 确保脚本可执行
-chmod +x "$INSTALL_DIR/scripts/scan-environment.cjs"
-chmod +x "$INSTALL_DIR/scripts/route-matcher.cjs"
+chmod +x "$STAGED_INSTALL_DIR/scripts/scan-environment.cjs"
+chmod +x "$STAGED_INSTALL_DIR/scripts/route-matcher.cjs"
+
+if [[ -L "$INSTALL_DIR" || -d "$INSTALL_DIR" ]]; then
+  BACKUP_PATH="$PLUGINS_DIR/.cap-orch-backup-$(date +%s)-$$"
+  mv "$INSTALL_DIR" "$BACKUP_PATH"
+fi
+mv "$STAGED_INSTALL_DIR" "$INSTALL_DIR"
+rm -rf "$STAGE_DIR"
+STAGE_DIR=""
 
 # ── 注册 hooks ─────────────────────────────────────────────────────────────────
 

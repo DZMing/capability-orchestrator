@@ -28,7 +28,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`273`
+- 当前自动化总数：`333`
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
@@ -44,6 +44,9 @@ bash tests/install-idempotent.test.sh
 - `--explain` 对 skill / command / mcp / no-match / escaped / too-short 的稳定 JSON 输出
 - `install.sh` 默认 release 渠道
 - `install.sh` 显式 `master` 渠道
+- 失败重装保留旧安装
+- `CODEX_USER_DIR` 自动检测走 Codex hooks 路径
+- Claude / Codex plugin manifest 版本一致
 - `/debug-route` skill 合约测试
 
 ## 安装链路验证
@@ -160,10 +163,53 @@ I need a valid test skill for this important task
 
 这证明当前工作区里的 legacy command 新契约已经在真实 Claude CLI 行为中生效。
 
+## 5. 2026-04-20 命令 + 日志级复验
+
+做法：
+
+- 重新创建隔离 `CLAUDE_USER_DIR`
+- 用当前工作区版本安装插件
+- 运行真实 `claude -p --verbose --output-format stream-json --include-hook-events --debug-file ...`
+- 读取 stream-json 输出与 debug 尾日志
+
+结果：
+
+- 真实出现多条 `SessionStart` hook 事件
+- stream 输出中出现 capability-orchestrator 注入的 awareness 内容
+- `UserPromptSubmit` 真实触发，输出里能看到 `[AUTO-ROUTE]` 与 `valid-skill`
+- 这条 live run 在 20s 窗口内没有完整结束，但 hook 证据已经落出
+
+观察到的额外噪音：
+
+- debug 尾日志里有用户环境中的 `plugin:github:github` MCP 认证格式错误重试
+- 该噪音不影响 capability-orchestrator 的 `SessionStart` / `UserPromptSubmit` 证据判定，但说明真实用户环境仍可能夹带外部 MCP 干扰项
+
+## 6. 仓库内置 live 验收脚本
+
+当前仓库已提供：
+
+```bash
+npm run verify:live:claude
+npm run verify:live:codex
+npm run verify:release
+```
+
+说明：
+
+- `verify:live:claude`：隔离 `CLAUDE_USER_DIR`，调用真实 `claude` CLI，检查 `[AUTO-ROUTE]` 和目标 skill 命中，并输出 debug 摘要
+- `verify:live:codex`：隔离 `CODEX_USER_DIR`，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并尽量自动解析当前机器的 Codex wrapper / real binary
+- `verify:release`：用于发布前检查版本同步与 changelog 顶部版本；当前不会强制要求最新 git tag 与工作树版本完全一致，但会显式报告该状态
+
+注意：
+
+- 这两个 live 脚本的通过标准都是“目标路由证据已经出现”，不是要求所有 hook 或 route-log 侧信号在每台机器上都完全一致
+- Claude live 验收更稳定地依赖 stream-json 中出现 `[AUTO-ROUTE]` 和目标 skill
+- Codex live 验收更稳定地依赖真实 `codex exec` 已进入目标 skill 工作流，route log 仍视为 best-effort 证据
+
 ## 未完成的部分
 
 - 没有直接打开 Claude Code 桌面 GUI 做肉眼会话验收
-- 当前真实行为签字建立在 clean-room Claude CLI 上，而不是 GUI 会话
+- 但当前功能级签字建立在 clean-room CLI + stream-json hook 事件 + debug 日志上；GUI 不再是功能正确性的前置条件
 
 ## 最终结论
 

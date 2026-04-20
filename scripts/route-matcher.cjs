@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const { scanSkills, sanitize, scanInstalledPlugins, scanCommands, readMcpServers } = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
+const { detectPlatform } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
@@ -23,7 +24,7 @@ const { expandSynonyms } = require('./synonyms.cjs');
 const STDIN_TIMEOUT = 3000;
 const MIN_PROMPT_LEN = 5;
 const MIN_KEYWORD_OVERLAP = 2;
-const MIN_CONFIDENCE = 0.35;
+const MIN_CONFIDENCE = 0.3;
 const SHORT_SINGLE_KEYWORD_LEN = 20;
 const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
@@ -259,14 +260,16 @@ function findBestMatch(prompt, skills) {
 
 // skill 路由：注入明确的调用指令，避免泄漏未渲染的 !command 原文
 function createOutput(match) {
+  const platform = detectPlatform();
+  const skillInvocation = platform === 'codex' ? `$${match.name}` : `/${match.name}`;
   const safeDesc = sanitize(match.desc || '');
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即调用 /' + match.name + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。',
+    '【强制指令】立即调用 ' + skillInvocation + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。',
     '若平台支持 Skill tool，则等同于立刻执行该 skill 的完整流程。',
     '',
-    '立即调用：/' + match.name,
+    '立即调用：' + skillInvocation,
   ].join('\n');
   process.stdout.write(ctx + '\n');
 }

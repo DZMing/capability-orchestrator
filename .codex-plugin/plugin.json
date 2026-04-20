@@ -1,6 +1,6 @@
 {
   "name": "capability-orchestrator",
-  "description": "能力感知 + 路由引导：实时扫描环境中所有可用 skills、subagents、plugins 和 MCP servers，注入路由策略引导 Claude 自动选择最优执行路径。",
+  "description": "Capability awareness and routing guidance for Claude Code and Codex. Scans local skills, subagents, plugins, commands, and MCP servers, then injects routing context so the agent picks the right execution path.",
   "version": "1.9.0",
   "keywords": [
     "capability",
@@ -8,7 +8,8 @@
     "skills",
     "agents",
     "discovery",
-    "environment"
+    "environment",
+    "codex"
   ],
   "author": {
     "name": "Zhiming Deng"

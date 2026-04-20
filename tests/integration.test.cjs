@@ -476,6 +476,37 @@ test('integration: Codex platform scans .agents/skills/ for project skills', () 
   }
 });
 
+test('integration: Codex auto-route emits $skill invocation instead of slash command', () => {
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-route-'));
+  const tmpUser = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-user-'));
+  const agentsSkillsDir = path.join(tmpProj, '.agents', 'skills', 'my-codex-skill');
+  fs.mkdirSync(agentsSkillsDir, { recursive: true });
+  fs.writeFileSync(path.join(agentsSkillsDir, 'SKILL.md'), '---\nname: my-codex-skill\ndescription: Handles codex routing tasks\n---\n');
+
+  try {
+    const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
+      input: JSON.stringify({
+        prompt: 'Please handle this codex routing task',
+        cwd: tmpProj,
+      }),
+      encoding: 'utf-8',
+      timeout: 10000,
+      env: {
+        ...process.env,
+        CAPABILITY_PLATFORM: 'codex',
+        CODEX_USER_DIR: tmpUser,
+      },
+    }).trim();
+
+    assert.ok(raw.startsWith('[AUTO-ROUTE]'), 'codex route should produce auto-route output');
+    assert.ok(raw.includes('立即调用：$my-codex-skill'), 'codex route should use $skill syntax');
+    assert.ok(!raw.includes('立即调用：/my-codex-skill'), 'codex route should not use slash command syntax');
+  } finally {
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+    fs.rmSync(tmpUser, { recursive: true, force: true });
+  }
+});
+
 test('integration: Codex hooks.json registration preserves existing matcher fields', () => {
   const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'co-codex-hooks-'));
   const codexDir = path.join(tmpHome, '.codex');

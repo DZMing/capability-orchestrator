@@ -32,6 +32,10 @@ cat > "$FAKE_GIT" <<GITEOF
 #!/usr/bin/env bash
 # fake git: 把 clone 替换为从本地 repo 复制
 if [ "\$1" = "clone" ]; then
+  if [ -n "\${FAKE_GIT_FAIL_CLONE:-}" ]; then
+    echo "simulated clone failure" >&2
+    exit 1
+  fi
   BRANCH=""
   for ((i=1; i<=\$#; i++)); do
     if [ "\${!i}" = "--branch" ]; then
@@ -50,7 +54,7 @@ if [ "\$1" = "clone" ]; then
   # 初始化一个干净的 git repo（供 pull 使用）
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
-  git -C "\$TARGET" -c user.email=t@t.com -c user.name=T commit -qm init
+  git -C "\$TARGET" -c core.hooksPath=/dev/null -c user.email=t@t.com -c user.name=T commit -qm init
 elif [ "\$1" = "-C" ] && [ "\$3" = "pull" ]; then
   echo "Already up to date."
 else
@@ -150,6 +154,54 @@ CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_CHANNEL=master 
   bash "$REPO_ROOT/install.sh" 2>&1 | sed 's/^/  /'
 
 assert "显式 master 渠道仍可用" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "master" ]
+
+# ── 失败重装不应删除旧安装 ───────────────────────────────────────────────────
+PRESERVE_HOME=$(mktemp -d)
+mkdir -p "$PRESERVE_HOME/plugins/cache/capability-orchestrator"
+echo "stable-install" > "$PRESERVE_HOME/plugins/cache/capability-orchestrator/keep.txt"
+
+if CLAUDE_USER_DIR="$PRESERVE_HOME" PATH="$FAKE_PATH" FAKE_GIT_FAIL_CLONE=1 \
+  bash "$REPO_ROOT/install.sh" >/tmp/cap-orch-install-fail.log 2>&1; then
+  red "失败重装场景应返回非零退出码"; FAIL=$((FAIL + 1))
+else
+  green "失败重装场景返回非零退出码"; PASS=$((PASS + 1))
+fi
+assert_file "失败重装后旧安装仍保留" "$PRESERVE_HOME/plugins/cache/capability-orchestrator/keep.txt"
+rm -rf "$PRESERVE_HOME" /tmp/cap-orch-install-fail.log
+
+# ── 自动检测应优先识别 CODEX_USER_DIR ───────────────────────────────────────
+AUTO_HOME=$(mktemp -d)
+AUTO_CODEX="$AUTO_HOME/custom-codex"
+mkdir -p "$AUTO_HOME/.claude" "$AUTO_CODEX"
+HOME="$AUTO_HOME" CODEX_USER_DIR="$AUTO_CODEX" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" >/tmp/cap-orch-codex-auto.log 2>&1
+
+assert_file "CODEX_USER_DIR 自动检测写入 hooks.json" "$AUTO_CODEX/hooks.json"
+assert "CODEX_USER_DIR 自动检测不会写 Claude settings.json" test ! -f "$AUTO_HOME/.claude/settings.json"
+
+HOME="$AUTO_HOME" CODEX_USER_DIR="$AUTO_CODEX" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" --uninstall >/tmp/cap-orch-codex-uninstall.log 2>&1
+
+assert "自动检测的 Codex 卸载会清理 capability hooks" node -e "
+  const hooks = JSON.parse(require('fs').readFileSync('$AUTO_CODEX/hooks.json', 'utf8'));
+  const entries = (hooks.hooks || {}).SessionStart || [];
+  process.exit(entries.some(e => e.hooks && e.hooks.some(h => (h.command || '').includes('capability-orchestrator'))) ? 1 : 0);
+"
+rm -rf "$AUTO_HOME" /tmp/cap-orch-codex-auto.log /tmp/cap-orch-codex-uninstall.log
+
+# ── 同时存在 Claude + Codex 时，默认仍应保持 Claude 优先 ────────────────────
+DUAL_HOME=$(mktemp -d)
+mkdir -p "$DUAL_HOME/.claude" "$DUAL_HOME/.codex"
+cat > "$DUAL_HOME/.codex/config.toml" <<'EOF'
+model = "gpt-5.4"
+EOF
+
+HOME="$DUAL_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" >/tmp/cap-orch-dual-auto.log 2>&1
+
+assert_file "双安装默认检测仍写 Claude settings.json" "$DUAL_HOME/.claude/settings.json"
+assert "双安装默认检测不会误写 Codex hooks.json" test ! -f "$DUAL_HOME/.codex/hooks.json"
+rm -rf "$DUAL_HOME" /tmp/cap-orch-dual-auto.log
 
 # ── 验证卸载 ─────────────────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \

@@ -9,6 +9,7 @@ function detectPlatform() {
   if (process.env.CLAUDE_USER_DIR || process.env.CLAUDE_PLUGIN_DATA) return 'claude';
   if (process.env.CODEX_USER_DIR || process.env.CODEX_PLUGIN_DATA) return 'codex';
   const home = os.homedir();
+  if (fs.existsSync(path.join(home, '.claude'))) return 'claude';
   if (fs.existsSync(path.join(home, '.codex', 'config.toml'))) return 'codex';
   return 'claude';
 }

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This repository targets both Claude Code and Codex. This file is the maintainer contract for the shared implementation.
 
 ## Commands
 
@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm test                    # 全部自动化基线
 npm run test:install        # 安装/卸载/重装循环集成测试
 npm run test:all            # 上两者全跑
+npm run verify:live:claude  # 真实 Claude CLI + hook/log 验收
+npm run verify:live:codex   # 真实 Codex exec 验收（ASCII 临时路径）
+npm run verify:release      # 检查 package / plugin manifests / changelog / tag 状态
 
 # 单个测试文件
 node --test tests/route-matcher.test.cjs
@@ -29,7 +32,7 @@ cp scripts/lib/*.cjs ~/.claude/plugins/cache/capability-orchestrator/scripts/lib
 
 ## 架构
 
-两个 hook，两个脚本：
+两个 hook 面，两个核心脚本：
 
 ```
 SessionStart hook
@@ -43,7 +46,12 @@ UserPromptSubmit hook
 
 ### scan-environment.cjs
 
-扫描来源：`.claude/skills/`、`.claude/agents/`、`.claude/commands/`（项目级 + 用户级）、`~/.claude/plugins/cache/`（已安装插件）、`.mcp.json`。
+扫描来源按平台区分：
+
+- Claude：`.claude/skills/`、`.claude/agents/`、`.claude/commands/`
+- Codex：`.agents/skills/`、`.agents/agents/`
+- 已安装插件：`~/.claude/plugins/cache/` 或 `~/.codex/plugins/cache/`
+- MCP：项目级 `.mcp.json` + 用户级 `mcp.json` / `.mcp.json`
 
 三种渲染模式（`--mode`）：
 
@@ -64,7 +72,7 @@ UserPromptSubmit hook
 
 输出规则：
 
-- 匹配 skill → 纯文本 `[AUTO-ROUTE] ... 【强制指令】立即调用 /<skill-name>`
+- 匹配 skill → Claude 输出 `/<skill-name>`；Codex 输出 `$<skill-name>`
 - 匹配 legacy command → 优先输出 `/<command>` 调用指令；仅在命令名不适合 slash 调用时回退命令定义
 - 匹配 MCP → 纯文本 `[AUTO-ROUTE] ... mcp__server__*`
 - 无匹配 → JSON `{"continue":true}`
@@ -93,7 +101,7 @@ UserPromptSubmit hook
 | `fuzz.test.cjs`           | sanitize/extractKeywords/passThrough/findBestMatch 随机输入 property 测试 |
 | `stress.test.cjs`         | 大规模 skills、超长 prompt、畸形 SKILL.md、MCP JSON 边界                  |
 | `integration.test.cjs`    | 完整 hook 流程 E2E + golden snapshot + 安装卸载循环 + 日志写入验证        |
-| `skill-contract.test.cjs` | skills/ 目录下每个 skill 的 frontmatter 结构契约                          |
+| `skill-contract.test.cjs` | skills/ 合约 + Claude/Codex plugin manifest 版本一致性                    |
 
 ## 关键约束
 

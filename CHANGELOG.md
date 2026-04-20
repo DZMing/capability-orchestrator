@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.9.0] - 2026-04-20
+
+### Added
+
+- `.codex-plugin/plugin.json`，让 Codex 路径具备一等插件元数据
+- plugin manifest 与 `package.json` 版本一致性测试
+- 安装失败保留旧安装、Codex 自动检测、Codex skill 调用格式等回归测试
+
+### Changed
+
+- 仓库元数据升级为 Claude Code + Codex 双平台描述
+- 文档契约同步到当前的 Codex 路由与安装行为
+
+### Fixed
+
+- 安装器失败重装会先删旧安装的问题
+- `CODEX_USER_DIR` 自动检测与共享平台契约不一致的问题
+- release tag 安装时的 detached-head 提示噪音
+- `.claude-plugin/plugin.json` 版本落后于 `package.json` 的元数据漂移
+
 ## [1.7.0] - 2026-04-17
 
 ### Added

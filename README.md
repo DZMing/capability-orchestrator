@@ -1,12 +1,12 @@
 # capability-orchestrator
 
-> Auto-routing plugin for Claude Code. Automatically matches user prompts to
+> Auto-routing plugin for Claude Code and Codex. Automatically matches user prompts to
 > the right skill, command, or MCP tool using semantic + literal + cross-language
 > matching. Zero config, zero dependencies.
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
-**一句话**：装上之后，Claude Code 每次开新会话自动知道你有哪些 skills / agents / plugins / MCP servers，并且在你输入 prompt 时自动匹配到最合适的工具。
+**一句话**：装上之后，Claude Code 或 Codex 每次开新会话自动知道你有哪些 skills / agents / plugins / MCP servers，并且在你输入 prompt 时自动匹配到最合适的工具。
 
 ## 30 秒上手
 
@@ -14,9 +14,9 @@
 # 1. 安装（需要 Node.js 18+）
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
 
-# 2. 重启 Claude Code，开一个新会话
+# 2. 重启 Claude Code 或 Codex，开一个新会话
 
-# 3. 完成。你会看到 Claude 自动感知环境能力，并根据你的 prompt 自动路由到对应 skill。
+# 3. 完成。你会看到代理自动感知环境能力，并根据你的 prompt 自动路由到对应 skill。
 ```
 
 **装完后效果**：
@@ -38,10 +38,10 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 
 如果你符合下面这些情况，这个插件是合适的：
 
-- 已经在 Claude Code 中使用项目级或用户级 skills
-- 希望 Claude 能看到更多本地可用能力面
+- 已经在 Claude Code 或 Codex 中使用项目级或用户级 skills
+- 希望代理能看到更多本地可用能力面
 - 希望对 skills、legacy commands 和 MCP servers 加更严格的路由层
-- 能接受插件通过修改 `~/.claude/settings.json` 来安装 hooks
+- 能接受插件通过修改 `~/.claude/settings.json` 或 `~/.codex/hooks.json` 来安装 hooks
 
 ## 不适用对象
 
@@ -49,31 +49,32 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 
 - 需要 Windows 原生支持
 - 需要 GUI 配置流程
-- 不能接受安装器修改 Claude Code 的 hook 设置
+- 不能接受安装器修改本地代理的 hook 设置
 - 希望得到托管服务、远程控制面或依赖遥测的产品
 
 ## 兼容性
 
 下面的兼容声明刻意保守，只反映当前仓库里已经文档化或验证过的事实。
 
-| 维度              | 状态   | 说明                                            |
-| ----------------- | ------ | ----------------------------------------------- |
-| Node.js           | 支持   | `>=18`                                          |
-| macOS             | 支持   | CI 和本地验证覆盖                               |
-| Linux             | 支持   | CI 覆盖                                         |
-| WSL               | 实验性 | `ARCHITECTURE.md` 已文档化；仅 best effort      |
-| Windows 原生      | 不支持 | 不假设 Claude Code 原生支持 Windows             |
-| Claude Code hooks | 必需   | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks |
+| 维度              | 状态   | 说明                                                             |
+| ----------------- | ------ | ---------------------------------------------------------------- |
+| Node.js           | 支持   | `>=18`                                                           |
+| macOS             | 支持   | CI 和本地验证覆盖                                                |
+| Linux             | 支持   | CI 覆盖                                                          |
+| WSL               | 实验性 | `ARCHITECTURE.md` 已文档化；仅 best effort                       |
+| Windows 原生      | 不支持 | 不假设 Claude Code / Codex 原生支持 Windows                      |
+| Claude Code hooks | 支持   | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks                  |
+| Codex hooks       | 支持   | 依赖 `hooks.json` 和 `.agents/skills`；自动检测 `CODEX_USER_DIR` |
 
 ## 安装会改什么
 
-安装器会拉取仓库内容，并注册两个 Claude Code hooks。
+安装器会拉取仓库内容，并为当前平台注册两个 hooks。
 
 它会做这些事：
 
-- 安装到 `~/.claude/plugins/cache/capability-orchestrator`
-- 在 `~/.claude/settings.json` 中写入或更新一条 `SessionStart` hook
-- 在 `~/.claude/settings.json` 中写入或更新一条 `UserPromptSubmit` hook
+- 安装到 `~/.claude/plugins/cache/capability-orchestrator` 或 `~/.codex/plugins/cache/capability-orchestrator`
+- Claude Code：在 `~/.claude/settings.json` 中写入或更新 `SessionStart` / `UserPromptSubmit`
+- Codex：在 `~/.codex/hooks.json` 中写入或更新对应 hooks
 - 升级和卸载时保留无关 hook 条目
 
 它不会做这些事：
@@ -94,6 +95,9 @@ git clone --branch vX.Y.Z --depth=1 https://github.com/DZMing/capability-orchest
 
 # 安装未发布的 master 分支
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --channel=master
+
+# 显式安装到 Codex
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=codex
 ```
 
 ## 验证
@@ -116,9 +120,24 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."
 
 - awareness 输出中包含环境能力分区
 - explain 输出返回稳定 JSON
-- skill 命中结果是明确的 `/skill-name` 指令，而不是原始 `!command`
+- Claude skill 命中结果是明确的 `/<skill-name>` 指令，Codex 则是 `$skill-name`
+- 结果不会泄漏原始 `!command`
 
 更完整的验证记录见 [VERIFICATION.md](VERIFICATION.md)。
+
+如果要跑仓库内置的 live 验收脚本：
+
+```bash
+npm run verify:live:claude
+npm run verify:live:codex
+npm run verify:release
+```
+
+说明：
+
+- `verify:live:claude` 会在隔离 `CLAUDE_USER_DIR` 下安装当前工作区版本，然后用真实 `claude` CLI 抓取 stream-json 与 debug 日志；通过标准是出现目标路由证据，而不是强依赖所有 hook 事件都完整返回
+- `verify:live:codex` 会在隔离 `CODEX_USER_DIR` 下安装当前工作区版本，并使用 ASCII 临时工作区别名执行真实 `codex exec`；脚本会尽量自动解析当前机器的 Codex wrapper / real binary
+- `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并报告当前工作树版本是否已经与最新 git tag 对齐
 
 ## 升级
 
@@ -156,12 +175,20 @@ git clone --branch vX.Y.Z --depth=1 https://github.com/DZMing/capability-orchest
   ~/.claude/plugins/cache/capability-orchestrator
 ```
 
+Codex 安装把路径中的 `~/.claude` 替换成 `~/.codex` 即可。
+
 把 `vX.Y.Z` 替换成你要回滚到的实际 tag。回滚后请重新执行上面的验证命令。
 
 ## 卸载
 
 ```bash
 bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
+```
+
+Codex 安装则执行：
+
+```bash
+bash ~/.codex/plugins/cache/capability-orchestrator/install.sh --uninstall
 ```
 
 它会删除已安装的插件目录，并移除由 `capability-orchestrator` 注册的 hook 条目。

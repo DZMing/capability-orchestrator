@@ -1311,6 +1311,35 @@ test('resolveRouteDecision: no match returns pass/no-match', () => {
   assert.equal(decision.explain.reason, 'no-match');
 });
 
+test('resolveRouteDecision: confidence at documented threshold still routes', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-resolve-threshold-'));
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-resolve-threshold-proj-'));
+  const savedUserDir = process.env.CLAUDE_USER_DIR;
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  try {
+    const skillDir = path.join(tmpHome, 'skills', 'alpha-skill');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: alpha-skill\ndescription: alpha beta gamma\n---\n');
+    process.env.CLAUDE_USER_DIR = tmpHome;
+    process.env.CAPABILITY_PLATFORM = 'claude';
+    const decision = resolveRouteDecision(JSON.stringify({
+      prompt: 'alpha beta gamma one two three four five six',
+      cwd: tmpProj,
+    }));
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.targetType, 'skill');
+    assert.equal(decision.match.name, 'alpha-skill');
+    assert.ok(decision.match.confidence >= 0.3 && decision.match.confidence < 0.35);
+  } finally {
+    if (savedUserDir === undefined) delete process.env.CLAUDE_USER_DIR;
+    else process.env.CLAUDE_USER_DIR = savedUserDir;
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
 // ─── P2-2: _tokenizeStemmed unit tests ──────────────────────────────────────
 
 const { _tokenizeStemmed } = require('../scripts/route-matcher.cjs');

@@ -154,6 +154,20 @@ test('scanCommands: empty dir returns []', () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+test('scanCommands: skips hidden files and sanitizes markdown-like filenames', () => {
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cmds-'));
+  try {
+    fs.writeFileSync(path.join(tmp, '.secret.md'), '---\ndescription: hidden\n---\n');
+    fs.writeFileSync(path.join(tmp, '## injected heading.md'), '---\ndescription: visible\n---\n');
+    const cmds = scanCommands(tmp);
+    assert.equal(cmds.length, 1);
+    assert.equal(cmds[0].name, 'injected heading');
+    assert.equal(cmds[0].desc, 'visible');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 // ─── readMcpServers ──────────────────────────────────────────────────────────
 
 test('readMcpServers: reads mcpServers key with name and desc', () => {

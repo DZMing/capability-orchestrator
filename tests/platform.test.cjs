@@ -2,6 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('assert/strict');
+const fs = require('fs');
 const path = require('path');
 
 const {
@@ -30,6 +31,7 @@ describe('platform', () => {
   }
 
   const envKeys = ['CAPABILITY_PLATFORM', 'CLAUDE_USER_DIR', 'CLAUDE_PLUGIN_DATA', 'CODEX_USER_DIR', 'CODEX_PLUGIN_DATA'];
+  const savedExistsSync = fs.existsSync;
 
   describe('detectPlatform', () => {
     it('respects CAPABILITY_PLATFORM=codex', () => {
@@ -68,6 +70,21 @@ describe('platform', () => {
       process.env.CLAUDE_USER_DIR = '/home/.claude';
       process.env.CODEX_USER_DIR = '/home/.codex';
       assert.equal(detectPlatform(), 'claude');
+      restoreEnv(envKeys);
+    });
+
+    it('defaults to claude when both .claude and .codex config exist', () => {
+      saveEnv(envKeys);
+      const savedHome = process.env.HOME;
+      process.env.HOME = '/tmp/dual-install-home-' + Date.now();
+      fs.existsSync = (target) => {
+        if (target === path.join(process.env.HOME, '.claude')) return true;
+        if (target === path.join(process.env.HOME, '.codex', 'config.toml')) return true;
+        return savedExistsSync(target);
+      };
+      assert.equal(detectPlatform(), 'claude');
+      fs.existsSync = savedExistsSync;
+      process.env.HOME = savedHome;
       restoreEnv(envKeys);
     });
   });
