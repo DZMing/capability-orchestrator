@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.8] - 2026-04-20
+
+### Fixed
+
+- Raw and piped `install.sh --version` now report the current published version again by keeping the installer fallback aligned with the release version
+
 ## [1.11.7] - 2026-04-20
 
 ### Fixed

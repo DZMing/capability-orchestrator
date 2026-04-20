@@ -27,6 +27,7 @@ trap 'rm -rf "$TMP_HOME" "$TMP_GIT"' EXIT
 LATEST_TAG=$(/usr/bin/git -C "$REPO_ROOT" tag --list 'v*' | sort -V | tail -n 1)
 LATEST_TAG_OBJ=$(/usr/bin/git -C "$REPO_ROOT" rev-parse "$LATEST_TAG")
 LATEST_TAG_COMMIT=$(/usr/bin/git -C "$REPO_ROOT" rev-parse "$LATEST_TAG^{}")
+PACKAGE_VERSION=$(node -p "require('$REPO_ROOT/package.json').version")
 
 # 生成一个 fake git 脚本：保留当前工作区内容复制，同时模拟 annotated tag clone 噪音
 FAKE_GIT="$TMP_GIT/git"
@@ -170,7 +171,7 @@ assert "release tag 安装不会打印 detached HEAD 提示" \
 assert "scan script 可直接 node 执行" \
   node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=awareness
 assert "管道执行 install.sh --version 仍返回已发布版本" \
-  bash -lc 'OUT=$(bash <(cat "$1") --version); [ "$OUT" = "capability-orchestrator 1.11.6" ]' _ "$REPO_ROOT/install.sh"
+  bash -lc 'OUT=$(bash <(cat "$1") --version); [ "$OUT" = "capability-orchestrator '"$PACKAGE_VERSION"'" ]' _ "$REPO_ROOT/install.sh"
 
 # ── 验证管道执行的安装脚本也能完成真实安装 ─────────────────────────────────
 PIPE_HOME=$(mktemp -d)
