@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.9.2] - 2026-04-20
+
+### Added
+
+- `tests/release-readiness-check.test.cjs`，锁定 release report 对 GitHub Release 就绪状态的判定
+
+### Changed
+
+- `verify:release` 现在会查询最新 tag 对应的 GitHub Release，并报告 release URL / publishedAt / draft / prerelease / ready 状态
+- release 文档与模板同步到新的 release report 字段，不再把 GitHub Release 存在性留给人工脑补
+
+### Fixed
+
+- 发布后 `verify:release` 现在能直接发现“tag 已对齐但 GitHub Release 缺失或未发布”的状态
+
 ## [1.9.1] - 2026-04-20
 
 ### Added

@@ -139,7 +139,7 @@ npm run verify:release
 
 - `verify:live:claude` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，然后用真实 `claude` CLI 抓取 stream-json 与 debug 日志；通过标准是同一条 `UserPromptSubmit` hook 响应里出现目标路由证据
 - `verify:live:codex` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，并使用 ASCII 临时工作区别名执行真实 `codex exec`；通过标准是 fresh `route-log.jsonl` 里出现目标 skill 路由条目
-- `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并显式报告 `HEAD` 与最新 tag、以及工作树 clean/dirty 状态；发布前需要人工检查这些字段，不只看退出码
+- `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并显式报告 `HEAD` 与最新 tag、工作树 clean/dirty 状态，以及最新 tag 对应的 GitHub Release 是否已真正发布；发布前需要人工检查这些字段，不只看退出码
 
 ## 升级
 

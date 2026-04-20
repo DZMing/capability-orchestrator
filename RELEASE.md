@@ -44,6 +44,7 @@ npm run verify:release
 - `versionSyncOk` 和 `changelogSyncOk` 必须为 `true`
 - 打 tag 之前，`worktreeClean` 必须为 `true`
 - 打 tag 并 push 完之后，重新执行一次，确认 `headMatchesLatestTag` 变为 `true`
+- GitHub Release 创建完成后，重新执行一次，确认 `githubReleaseExists=true`、`githubReleaseReady=true`
 
 ## 打 tag 与发布
 
