@@ -92,12 +92,15 @@ function summarizeClaude(stdout, targetName = 'valid-skill') {
     if (!line.trim()) continue;
     try {
       const obj = JSON.parse(line);
-      const type = String(obj.type || '').toLowerCase();
-      const blob = JSON.stringify(obj, null, 0);
-      if (type.includes('hook')) summary.hookEvents += 1;
+      const subtype = String(obj.subtype || '').toLowerCase();
+      if (subtype.startsWith('hook_')) summary.hookEvents += 1;
       if (String(obj.subtype || '').toLowerCase() === 'hook_response' &&
           String(obj.hook_event || '').toLowerCase() === 'userpromptsubmit') {
-        const hookOutput = `${obj.output || ''}\n${obj.stdout || ''}`;
+        const output = String(obj.output || '');
+        const stdoutText = String(obj.stdout || '');
+        const hookOutput = output === stdoutText || !stdoutText
+          ? output
+          : `${output}\n${stdoutText}`;
         const hasAutoRoute = hookOutput.includes('[AUTO-ROUTE]');
         const hasTarget = hookOutput.includes(targetName);
         if (hasAutoRoute) summary.autoRouteSeen = true;

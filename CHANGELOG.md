@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.9.3] - 2026-04-20
+
+### Added
+
+- Claude live-verify 汇总新增 hook 事件计数断言，避免再出现“明明有 hook 事件却汇总为 0”的回归
+
+### Changed
+
+- CI coverage 命令补入 `tests/release-readiness-check.test.cjs`
+
+### Fixed
+
+- `verify:live:claude` 现在按 `hook_*` subtype 统计真实 hook 事件，而不是错误地从顶层 `type` 字段判断
+- `verify:live:claude` 的 `matchedRouteSample` 不再把相同的 `output` / `stdout` 内容重复拼接
+
 ## [1.9.2] - 2026-04-20
 
 ### Added

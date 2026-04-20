@@ -12,6 +12,11 @@ test('summarizeClaude: only passes when the same UserPromptSubmit hook response 
   const positive = [
     JSON.stringify({
       type: 'system',
+      subtype: 'hook_started',
+      hook_event: 'SessionStart',
+    }),
+    JSON.stringify({
+      type: 'system',
       subtype: 'hook_response',
       hook_event: 'UserPromptSubmit',
       output: '[AUTO-ROUTE] 立即调用：/valid-skill',
@@ -33,7 +38,11 @@ test('summarizeClaude: only passes when the same UserPromptSubmit hook response 
     }),
   ].join('\n');
 
-  assert.equal(summarizeClaude(positive).matchedRouteSeen, true);
+  const positiveSummary = summarizeClaude(positive);
+  assert.equal(positiveSummary.hookEvents, 2);
+  assert.equal(positiveSummary.matchedRouteSeen, true);
+  assert.match(positiveSummary.matchedRouteSample, /立即调用：\/valid-skill/);
+
   assert.equal(summarizeClaude(negative).matchedRouteSeen, false);
 });
 
@@ -50,6 +59,18 @@ test('summarizeClaude: unrelated UserPromptSubmit route does not satisfy target-
   assert.equal(summary.autoRouteSeen, true);
   assert.equal(summary.validSkillSeen, false);
   assert.equal(summary.matchedRouteSeen, false);
+});
+
+test('summarizeClaude: avoids duplicating matchedRouteSample when output and stdout are identical', () => {
+  const stream = JSON.stringify({
+    type: 'system',
+    subtype: 'hook_response',
+    hook_event: 'UserPromptSubmit',
+    output: '[AUTO-ROUTE] 立即调用：/valid-skill',
+    stdout: '[AUTO-ROUTE] 立即调用：/valid-skill',
+  });
+
+  assert.equal(summarizeClaude(stream).matchedRouteSample, '[AUTO-ROUTE] 立即调用：/valid-skill');
 });
 
 test('summarizeCodexRouteLog: requires a real route entry to the target skill', () => {

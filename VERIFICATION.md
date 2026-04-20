@@ -28,7 +28,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`342`
+- 当前自动化总数：`343`
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
