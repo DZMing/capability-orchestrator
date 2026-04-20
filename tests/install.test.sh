@@ -169,6 +169,8 @@ assert "release tag 安装不会打印 detached HEAD 提示" \
 # ── 验证安装后脚本能运行 ──────────────────────────────────────────────────────
 assert "scan script 可直接 node 执行" \
   node "$PLUGIN_DIR/scripts/scan-environment.cjs" --mode=awareness
+assert "管道执行 install.sh --version 仍返回已发布版本" \
+  bash -lc 'OUT=$(bash <(cat "$1") --version); [ "$OUT" = "capability-orchestrator 1.11.6" ]' _ "$REPO_ROOT/install.sh"
 
 # ── 验证显式 master 渠道 ─────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_CHANNEL=master CAPABILITY_INSTALL_REF=master \

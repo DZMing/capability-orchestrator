@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.6] - 2026-04-20
+
+### Fixed
+
+- `install.sh --version` now returns the published version even when the script is executed via a raw pipe instead of from a checked-out directory
+
 ## [1.11.5] - 2026-04-20
 
 ### Fixed
