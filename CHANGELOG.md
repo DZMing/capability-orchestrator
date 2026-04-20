@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.9] - 2026-04-20
+
+### Fixed
+
+- Install smoke tests now report piped-install failures explicitly instead of aborting silently under `set -e`, keeping macOS CI failures diagnosable without changing installer behavior
+
 ## [1.11.8] - 2026-04-20
 
 ### Fixed
