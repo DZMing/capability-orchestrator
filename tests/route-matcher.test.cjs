@@ -806,16 +806,25 @@ test('e2e: multi-chunk stdin correctly assembled', () => {
   const mid = Math.floor(json.length / 2);
   const chunk1 = json.slice(0, mid);
   const chunk2 = json.slice(mid);
+  const scriptLiteral = JSON.stringify(SCRIPT);
 
   // Use a wrapper script that writes in two chunks
   const wrapperScript = `
     const { spawn } = require('child_process');
-    const child = spawn(process.execPath, ['${SCRIPT.replace(/'/g, "\\'")}'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [${scriptLiteral}], { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
+    let err = '';
     child.stdout.on('data', d => out += d);
-    child.on('close', () => { process.stdout.write(out); });
+    child.stderr.on('data', d => err += d);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        process.stderr.write(err || ('child exited with code ' + code));
+        process.exit(code || 1);
+      }
+      process.stdout.write(out);
+    });
     child.stdin.write(${JSON.stringify(chunk1)});
-    setTimeout(() => { child.stdin.write(${JSON.stringify(chunk2)}); child.stdin.end(); }, 50);
+    setTimeout(() => { child.stdin.end(${JSON.stringify(chunk2)}); }, 50);
   `;
   const raw = execFileSync(NODE, ['-e', wrapperScript], {
     encoding: 'utf-8',
