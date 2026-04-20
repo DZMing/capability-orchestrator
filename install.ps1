@@ -12,14 +12,19 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'DZMing/capability-orchestrator'
 $RepoUrl = if ($env:CAPABILITY_INSTALL_REPO_URL) { $env:CAPABILITY_INSTALL_REPO_URL } else { "https://github.com/$Repo.git" }
 $PluginName = 'capability-orchestrator'
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$VersionValue = 'unknown'
+$VersionFallback = '1.11.12'
+$ScriptPath = $MyInvocation.MyCommand.Path
+$ScriptDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { $null }
+if ($ScriptDir -and ($ScriptDir -like '/dev/fd*' -or $ScriptDir -like '/proc/*/fd*')) {
+  $ScriptDir = $null
+}
+$VersionValue = $VersionFallback
 foreach ($VersionFile in @(
-  (Join-Path $ScriptDir 'package.json'),
-  (Join-Path $ScriptDir '.claude-plugin\plugin.json'),
-  (Join-Path $ScriptDir '.codex-plugin\plugin.json')
+  $(if ($ScriptDir) { Join-Path $ScriptDir 'package.json' }),
+  $(if ($ScriptDir) { Join-Path $ScriptDir '.claude-plugin\plugin.json' }),
+  $(if ($ScriptDir) { Join-Path $ScriptDir '.codex-plugin\plugin.json' })
 )) {
-  if (Test-Path $VersionFile) {
+  if ($VersionFile -and (Test-Path $VersionFile)) {
     $Parsed = (Get-Content $VersionFile -Raw | ConvertFrom-Json).version
     if ($Parsed) {
       $VersionValue = $Parsed
@@ -77,8 +82,18 @@ function New-ClaudewHookCommand([string]$ScriptPath, [string[]]$Args = @()) {
   return 'cmd.exe /d /s /c "' + $Invocation + '"'
 }
 
+function Resolve-HelperScript {
+  if ($InstallDir -and (Test-Path (Join-Path $InstallDir 'scripts\install-hooks.cjs'))) {
+    return (Join-Path $InstallDir 'scripts\install-hooks.cjs')
+  }
+  if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'scripts\install-hooks.cjs'))) {
+    return (Join-Path $ScriptDir 'scripts\install-hooks.cjs')
+  }
+  throw '错误：找不到 install-hooks.cjs'
+}
+
 function Invoke-InstallHooks([string]$Mode, [string]$File, [string]$ScanCmd = '', [string]$RouteCmd = '') {
-  $Args = @((Join-Path $ScriptDir 'scripts\install-hooks.cjs'), '--mode', $Mode, '--file', $File)
+  $Args = @((Resolve-HelperScript), '--mode', $Mode, '--file', $File)
   if ($ScanCmd) { $Args += @('--scan-cmd', $ScanCmd) }
   if ($RouteCmd) { $Args += @('--route-cmd', $RouteCmd) }
   $Output = & node @Args

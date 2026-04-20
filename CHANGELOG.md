@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.12] - 2026-04-20
+
+### Fixed
+
+- Raw/piped `install.ps1` now resolves version and hook helper paths without relying on `$MyInvocation.MyCommand.Path`, so PowerShell one-liner installs complete correctly
+
 ## [1.11.11] - 2026-04-20
 
 ### Fixed
