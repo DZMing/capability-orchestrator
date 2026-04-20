@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.1] - 2026-04-20
+
+### Changed
+
+- OpenClaw and Hermes ecosystem skills now honor declared platform metadata before entering the awareness snapshot or routing pool
+
+### Fixed
+
+- Windows-only or Linux-only external skills no longer bleed into incompatible hosts and create false routing candidates
+
 ## [1.11.0] - 2026-04-20
 
 ### Added
