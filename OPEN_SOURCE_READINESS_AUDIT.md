@@ -25,7 +25,7 @@
 - README、SECURITY、SUPPORT、RELEASE、CONTRIBUTING、CLAUDE 契约已补齐。
 - 默认安装渠道已切到最新 release，支持模型与文档一致。
 - legacy command 已升级为“优先 slash command、必要时安全回退”。
-- 自动化测试当前为 `343` 项全绿。
+- 自动化测试当前为 `347` 项全绿。
 - live verifier 现在验证的是当前工作区快照，而不是某个旧 release 安装副本。
 - clean-room Claude CLI 已证明：
   - `SessionStart` 真实触发
@@ -45,7 +45,7 @@
 | 维度             | 评分 | 当前状态                                                            |
 | ---------------- | ---- | ------------------------------------------------------------------- |
 | 产品可用性       | `A-` | 安装、升级、回滚、卸载、排障、支持路径已成型                        |
-| 稳定性与回归防护 | `A`  | `343` 项自动化 + clean-room Claude CLI                              |
+| 稳定性与回归防护 | `A`  | `347` 项自动化 + clean-room Claude CLI + Windows install smoke      |
 | 安全与信任       | `B`  | 边界和支持策略已写清，但缺真实外部漏洞运营经验                      |
 | 文档与上手体验   | `A-` | README 已够完整，但仍缺外部导向的演示材料                           |
 | 发布与维护治理   | `B+` | release-first 模型、政策文档、CODEOWNERS 已有，仍缺更成熟的发布体验 |

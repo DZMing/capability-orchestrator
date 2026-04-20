@@ -19,6 +19,12 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 # 3. 完成。你会看到代理自动感知环境能力，并根据你的 prompt 自动路由到对应 skill。
 ```
 
+Windows Claude Code 原生环境：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
 **装完后效果**：
 
 - 开新会话时，Claude 自动收到一份”能力清单”（你装的 skills、plugins、MCP servers）
@@ -56,15 +62,15 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 
 下面的兼容声明刻意保守，只反映当前仓库里已经文档化或验证过的事实。
 
-| 维度              | 状态   | 说明                                                             |
-| ----------------- | ------ | ---------------------------------------------------------------- |
-| Node.js           | 支持   | `>=18`                                                           |
-| macOS             | 支持   | CI 和本地验证覆盖                                                |
-| Linux             | 支持   | CI 覆盖                                                          |
-| WSL               | 实验性 | `ARCHITECTURE.md` 已文档化；仅 best effort                       |
-| Windows 原生      | 不支持 | 不假设 Claude Code / Codex 原生支持 Windows                      |
-| Claude Code hooks | 支持   | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks                  |
-| Codex hooks       | 支持   | 依赖 `hooks.json` 和 `.agents/skills`；自动检测 `CODEX_USER_DIR` |
+| 维度              | 状态     | 说明                                            |
+| ----------------- | -------- | ----------------------------------------------- |
+| Node.js           | 支持     | `>=18`                                          |
+| macOS             | 支持     | CI 和本地验证覆盖                               |
+| Linux             | 支持     | CI 覆盖                                         |
+| WSL               | 支持     | Codex on Windows 的推荐路径                     |
+| Windows 原生      | 部分支持 | Claude Code 原生安装支持；Codex 请使用 WSL2     |
+| Claude Code hooks | 支持     | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks |
+| Codex hooks       | 支持     | Linux / macOS 原生支持；Windows 走 WSL2         |
 
 ## 安装会改什么
 
@@ -101,6 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 ```
 
 注意：单纯把仓库 `git clone` 到插件目录只会落文件，不会注册 hooks。需要活跃安装时，请通过 `install.sh` 完成。
+Windows 原生安装器当前只覆盖 Claude Code。Codex on Windows 请在 WSL2 内使用 `install.sh`。
 
 ## 验证
 

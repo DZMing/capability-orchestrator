@@ -48,13 +48,13 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 平台兼容矩阵
 
-| 平台           | 支持状态  | 用户目录                                                              | 已知限制                                            |
-| -------------- | --------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| macOS          | ✅ 完整   | `~/.claude/`                                                          | 无                                                  |
-| Linux          | ✅ 完整   | `~/.claude/`                                                          | 无                                                  |
-| WSL (Windows)  | ✅ 实验   | Linux `~/.claude/` 优先；不存在时尝试 Windows `%USERPROFILE%\.claude` | 需要 `wslpath` + `cmd.exe` 可访问；超时 2s fallback |
-| Windows (原生) | ❌ 不支持 | —                                                                     | Claude Code 目前不支持 Windows 原生运行             |
-| CI / Docker    | ✅ 部分   | 通过 `--user-dir` 或环境变量指定                                      | 插件缓存目录通常为空，MCP 配置需手动挂载            |
+| 平台           | 支持状态 | 用户目录                         | 已知限制                                                 |
+| -------------- | -------- | -------------------------------- | -------------------------------------------------------- |
+| macOS          | ✅ 完整  | `~/.claude/`                     | 无                                                       |
+| Linux          | ✅ 完整  | `~/.claude/`                     | 无                                                       |
+| WSL (Windows)  | ✅ 推荐  | Linux `~/.claude/` / `~/.codex`  | Codex on Windows 推荐通过 WSL2 使用                      |
+| Windows (原生) | ⚠️ 部分  | `%USERPROFILE%\.claude`          | 当前仓库仅对 Claude Code 提供原生安装器；Codex 请走 WSL2 |
+| CI / Docker    | ✅ 部分  | 通过 `--user-dir` 或环境变量指定 | 插件缓存目录通常为空，MCP 配置需手动挂载                 |
 
 ## 扫描来源及稳定性
 
@@ -108,7 +108,7 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 
 ## SessionStart Hook 机制
 
-安装脚本在 `~/.claude/settings.json` 中注册一个 `SessionStart` hook：
+POSIX 安装脚本在 `~/.claude/settings.json` 中注册一个 `SessionStart` hook：
 
 ```json
 {
@@ -129,6 +129,8 @@ skills/refresh/      →  ../../scripts/scan-environment.cjs
 ```
 
 每次 Claude Code 开启新会话时，hook 自动执行扫描脚本，将能力摘要 + 强制路由规则注入到会话上下文。
+
+Windows 原生 Claude 安装器会把 hook 命令写成 `cmd.exe /d /s /c ""...\scripts\scan-environment.cmd" ..."` 和 `route-matcher.cmd`，由 `.cmd` wrapper 负责反推 `%USERPROFILE%\.claude` 与插件 `data` 目录，再调用现有 `.cjs` 脚本。
 
 选择 `--mode=awareness` 是因为它提供了最高的性价比：
 

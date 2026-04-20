@@ -10,7 +10,7 @@
 ## 环境
 
 - 本机 Node：`v25.8.1`
-- CI 矩阵：`ubuntu-latest` / `macos-latest` + `Node 18/20/22`
+- CI 矩阵：`ubuntu-latest` / `macos-latest` + `Node 18/20/22`，另有 `windows-latest` 的 PowerShell 安装冒烟
 - 本机无 `nvm/fnm/mise/asdf` 等版本管理器，因此未在本机重复跑 `18/20/22`
 
 ## 自动化测试
@@ -28,7 +28,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`343`
+- 当前自动化总数：`347`
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 

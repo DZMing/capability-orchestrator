@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.10.0] - 2026-04-20
+
+### Added
+
+- `install.ps1` and `install.cmd` for Windows Claude Code native installation
+- Windows `.cmd` wrappers for `scan-environment` and `route-matcher`
+- `scripts/install-hooks.cjs` as a shared hook-config core used by installers
+- `tests/install-hooks.test.cjs` and `tests/install.windows.ps1`
+- `windows-latest` CI smoke coverage for the PowerShell installer
+
+### Changed
+
+- Compatibility matrix now treats Linux as fully supported, Windows Claude Code as native-install capable, and Windows Codex as WSL2-first
+- `install.sh` now reuses the shared hook-config helper and supports `CAPABILITY_INSTALL_REPO_URL` for local/custom clone sources
+
+### Fixed
+
+- The project no longer depends on a POSIX-only installer path for Windows Claude users
+- Hook registration semantics are now shared across Bash and PowerShell installers instead of drifting by shell
+
 ## [1.9.4] - 2026-04-20
 
 ### Added

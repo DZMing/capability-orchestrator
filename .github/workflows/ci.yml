@@ -31,3 +31,20 @@ jobs:
         run: bash tests/install.test.sh
       - name: Install idempotency test
         run: bash tests/install-idempotent.test.sh
+
+  windows-compat:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check scripts/*.cjs scripts/lib/*.cjs
+      - name: Release metadata report
+        run: npm run verify:release
+      - name: Unit tests
+        run: npm test
+      - name: Windows install smoke test
+        shell: pwsh
+        run: ./tests/install.windows.ps1

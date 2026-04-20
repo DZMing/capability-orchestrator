@@ -5,6 +5,7 @@
 set -euo pipefail
 
 REPO="DZMing/capability-orchestrator"
+REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="unknown"
@@ -219,73 +220,14 @@ if [[ "$MODE" == "uninstall" ]]; then
   # 清理 hook 配置
   if [[ "$PLATFORM" == "codex" ]]; then
     if [[ -f "$HOOKS_FILE" ]]; then
-      node - "$HOOKS_FILE" <<'UNINSTALL_HOOKS_JS'
-const fs = require('fs');
-const hooksFile = process.argv[2];
-const ownedMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
-  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
-  'capability-orchestrator/scripts/scan-environment.cjs',
-  'capability-orchestrator/scripts/route-matcher.cjs',
-];
-const isOwnedHook = (command = '') => ownedMarkers.some(marker => command.includes(marker));
-try {
-  const hooksConfig = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
-  const cleanArr = (arr) => (arr || []).map(entry => {
-    const hooks = (entry.hooks || []).filter(h => !(h.command && isOwnedHook(h.command)));
-    return hooks.length > 0 ? { ...entry, hooks } : null;
-  }).filter(Boolean);
-  if (hooksConfig.hooks) {
-    for (const key of Object.keys(hooksConfig.hooks)) {
-      hooksConfig.hooks[key] = cleanArr(hooksConfig.hooks[key]);
-    }
-    hooksConfig.hooks = Object.fromEntries(
-      Object.entries(hooksConfig.hooks).filter(([, v]) => v.length > 0)
-    );
-    if (Object.keys(hooksConfig.hooks).length === 0) delete hooksConfig.hooks;
-  }
-  fs.writeFileSync(hooksFile, JSON.stringify(hooksConfig, null, 2) + '\n');
-  process.stdout.write('Codex hooks 已移除\n');
-} catch (e) {
-  process.stderr.write('清理 hooks 失败: ' + e.message + '\n');
-  process.exit(1);
-}
-UNINSTALL_HOOKS_JS
+      node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode codex-uninstall --file "$HOOKS_FILE"
+      echo "Codex hooks 已移除"
     fi
   else
     SETTINGS_FILE="$CONFIG_DIR/settings.json"
     if [[ -f "$SETTINGS_FILE" ]]; then
-      node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
-const fs = require('fs');
-const settingsFile = process.argv[2];
-const ownedMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
-  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
-  'capability-orchestrator/scripts/scan-environment.cjs',
-  'capability-orchestrator/scripts/route-matcher.cjs',
-];
-const isOwnedHook = (command = '') => ownedMarkers.some(marker => command.includes(marker));
-try {
-  const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-  if (!settings.hooks) settings.hooks = {};
-  const filterHooks = (arr) => (arr || [])
-    .map(entry => {
-      const hooks = (entry.hooks || []).filter(h => !(h.command && isOwnedHook(h.command)));
-      return hooks.length > 0 ? { ...entry, hooks } : null;
-    })
-    .filter(Boolean);
-  settings.hooks.SessionStart = filterHooks(settings.hooks.SessionStart);
-  settings.hooks.UserPromptSubmit = filterHooks(settings.hooks.UserPromptSubmit);
-  if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
-  if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
-  if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
-  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-  process.stdout.write('hook 已移除\n');
-} catch (e) {
-  process.stderr.write('清理 hook 失败: ' + e.message + '\n');
-  process.exit(1);
-}
-UNINSTALL_JS
+      node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode claude-uninstall --file "$SETTINGS_FILE"
+      echo "hook 已移除"
     fi
   fi
   # 删除插件目录（sanity check 防止空路径误删）
@@ -379,7 +321,7 @@ if [[ "$USE_GIT" -eq 1 ]]; then
   yellow "正在克隆到 $STAGED_INSTALL_DIR ..."
   if [[ "$RESOLVED_KIND" == "tag" ]]; then
     git clone --depth=1 \
-      "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
+      "$REPO_URL" "$STAGED_INSTALL_DIR"
     git -C "$STAGED_INSTALL_DIR" fetch --depth=1 origin "refs/tags/$RESOLVED_REF:refs/tags/$RESOLVED_REF"
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0=advice.detachedHead \
@@ -387,9 +329,13 @@ if [[ "$USE_GIT" -eq 1 ]]; then
     git -C "$STAGED_INSTALL_DIR" checkout -q "$RESOLVED_REF"
   else
     git clone --depth=1 --branch "$RESOLVED_REF" \
-      "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
+      "$REPO_URL" "$STAGED_INSTALL_DIR"
   fi
 else
+  if [[ -n "${CAPABILITY_INSTALL_REPO_URL:-}" ]]; then
+    red "错误：本地/自定义 CAPABILITY_INSTALL_REPO_URL 需要 git clone，当前环境未找到 git"
+    exit 1
+  fi
   if ! command -v unzip >/dev/null 2>&1; then
     red "错误：curl 下载方式需要 unzip，请先安装或改用 git"
     exit 1
@@ -428,174 +374,23 @@ if [[ "$PLATFORM" == "codex" ]]; then
   ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
   yellow "正在注册 Codex hooks..."
-  node - "$HOOKS_FILE" "$SCAN_CMD" "$ROUTE_CMD" <<'CODEX_HOOKS_JS'
-const fs = require('fs');
-const path = require('path');
-const hooksFile = process.argv[2];
-const scanCmd = process.argv[3];
-const routeCmd = process.argv[4];
-const scanMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
-  'capability-orchestrator/scripts/scan-environment.cjs',
-];
-const routeMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
-  'capability-orchestrator/scripts/route-matcher.cjs',
-];
-const matchesMarkers = (command = '', markers = []) => markers.some(marker => command.includes(marker));
-
-let hooksConfig = {};
-if (fs.existsSync(hooksFile)) {
-  try {
-    hooksConfig = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
-  } catch (e) {
-    process.stderr.write('hooks.json 解析失败: ' + e.message + '\n');
-    process.exit(1);
-  }
-}
-
-if (!hooksConfig.hooks) hooksConfig.hooks = {};
-
-// 注册 hooks：查找已有 marker 条目则更新，否则追加（保留 matcher 等字段）
-const registerHookEntry = (entries, cmd, statusMsg, markers) => {
-  if (!Array.isArray(entries)) entries = [];
-  let found = false;
-  for (const entry of entries) {
-    if (!entry.hooks) continue;
-    for (const h of entry.hooks) {
-      if (h.command && matchesMarkers(h.command, markers)) {
-        h.command = cmd;
-        if (statusMsg) h.statusMessage = statusMsg;
-        found = true;
-      }
-    }
-  }
-  if (!found) {
-    entries.push({
-      hooks: [{ type: 'command', command: cmd, statusMessage: statusMsg || 'Scanning capabilities...' }]
-    });
-  }
-  return entries;
-};
-hooksConfig.hooks.SessionStart = registerHookEntry(
-  hooksConfig.hooks.SessionStart, scanCmd, 'Scanning capabilities...', scanMarkers
-);
-hooksConfig.hooks.UserPromptSubmit = registerHookEntry(
-  hooksConfig.hooks.UserPromptSubmit, routeCmd, 'Routing prompt...', routeMarkers
-);
-
-fs.mkdirSync(path.dirname(hooksFile), { recursive: true });
-fs.writeFileSync(hooksFile, JSON.stringify(hooksConfig, null, 2) + '\n');
-process.stdout.write('Codex hooks 已注册\n');
-CODEX_HOOKS_JS
+  node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD"
+  echo "Codex hooks 已注册"
 else
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
   HOOK_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+  ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  CLAUDE_INSTALL_JSON=$(node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode claude-install --file "$SETTINGS_FILE" --scan-cmd "$HOOK_CMD" --route-cmd "$ROUTE_CMD")
+  SESSION_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.sessionStatus)")
+  ROUTE_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.routeStatus)")
 
   yellow "正在注册 SessionStart hook..."
-  node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
-const fs = require('fs');
-const path = require('path');
-
-const settingsFile = process.argv[2];
-const hookCmd = process.argv[3];
-
-let settings = {};
-if (fs.existsSync(settingsFile)) {
-  try {
-    settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-  } catch (e) {
-    process.stderr.write('settings.json 解析失败: ' + e.message + '\n');
-    process.exit(1);
-  }
-}
-
-if (!settings.hooks) settings.hooks = {};
-if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = [];
-
-const scanMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
-  'capability-orchestrator/scripts/scan-environment.cjs',
-];
-const isOwnedScanHook = (command = '') => scanMarkers.some(marker => command.includes(marker));
-const alreadyRegistered = settings.hooks.SessionStart.some(entry =>
-  entry.hooks && entry.hooks.some(h => h.command && isOwnedScanHook(h.command))
-);
-
-if (alreadyRegistered) {
-  for (const entry of settings.hooks.SessionStart) {
-    if (!entry.hooks) continue;
-    for (const h of entry.hooks) {
-      if (h.command && isOwnedScanHook(h.command)) {
-        h.command = hookCmd;
-      }
-    }
-  }
-  process.stdout.write('updated\n');
-} else {
-  settings.hooks.SessionStart.push({
-    hooks: [{ type: 'command', command: hookCmd, timeout: 10 }]
-  });
-  process.stdout.write('added\n');
-}
-
-fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
-fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-NODEJS
+  echo "$SESSION_STATUS"
 
   # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
-  ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
-
   yellow "正在注册 UserPromptSubmit hook..."
-  node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
-const fs = require('fs');
-const path = require('path');
-
-const settingsFile = process.argv[2];
-const hookCmd = process.argv[3];
-
-let settings = {};
-if (fs.existsSync(settingsFile)) {
-  try {
-    settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-  } catch (e) {
-    process.stderr.write('settings.json 解析失败: ' + e.message + '\n');
-    process.exit(1);
-  }
-}
-
-if (!settings.hooks) settings.hooks = {};
-if (!Array.isArray(settings.hooks.UserPromptSubmit)) settings.hooks.UserPromptSubmit = [];
-
-const routeMarkers = [
-  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
-  'capability-orchestrator/scripts/route-matcher.cjs',
-];
-const isOwnedRouteHook = (command = '') => routeMarkers.some(marker => command.includes(marker));
-const alreadyRegistered = settings.hooks.UserPromptSubmit.some(entry =>
-  entry.hooks && entry.hooks.some(h => h.command && isOwnedRouteHook(h.command))
-);
-
-if (alreadyRegistered) {
-  for (const entry of settings.hooks.UserPromptSubmit) {
-    if (!entry.hooks) continue;
-    for (const h of entry.hooks) {
-      if (h.command && isOwnedRouteHook(h.command)) {
-        h.command = hookCmd;
-      }
-    }
-  }
-  process.stdout.write('updated\n');
-} else {
-  settings.hooks.UserPromptSubmit.push({
-    hooks: [{ type: 'command', command: hookCmd, timeout: 5 }]
-  });
-  process.stdout.write('added\n');
-}
-
-fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-ROUTEJS
+  echo "$ROUTE_STATUS"
 fi
 
 echo ""
