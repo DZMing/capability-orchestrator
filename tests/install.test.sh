@@ -172,6 +172,22 @@ assert "scan script 可直接 node 执行" \
 assert "管道执行 install.sh --version 仍返回已发布版本" \
   bash -lc 'OUT=$(bash <(cat "$1") --version); [ "$OUT" = "capability-orchestrator 1.11.6" ]' _ "$REPO_ROOT/install.sh"
 
+# ── 验证管道执行的安装脚本也能完成真实安装 ─────────────────────────────────
+PIPE_HOME=$(mktemp -d)
+PIPE_LOG="$PIPE_HOME/install-piped.log"
+CLAUDE_USER_DIR="$PIPE_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REPO_URL="$REPO_ROOT" \
+  bash <(cat "$REPO_ROOT/install.sh") >"$PIPE_LOG" 2>&1
+
+assert_file "管道执行 install.sh 能写入 settings.json" "$PIPE_HOME/settings.json"
+PIPE_HOOK_COUNT=$(node -e "
+  const s = JSON.parse(require('fs').readFileSync('$PIPE_HOME/settings.json','utf8'));
+  const hooks = (s.hooks || {}).SessionStart || [];
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=session-start'))).length;
+  process.stdout.write(String(n));
+")
+assert "管道执行 install.sh 会注册 SessionStart hook" [ "$PIPE_HOOK_COUNT" -eq 1 ]
+rm -rf "$PIPE_HOME"
+
 # ── 验证显式 master 渠道 ─────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_CHANNEL=master CAPABILITY_INSTALL_REF=master \
   bash "$REPO_ROOT/install.sh" 2>&1 | sed 's/^/  /'

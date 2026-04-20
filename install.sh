@@ -22,6 +22,18 @@ if [[ -n "${SCRIPT_DIR:-}" ]]; then
   done
 fi
 
+resolve_helper_script() {
+  if [[ -f "$INSTALL_DIR/scripts/install-hooks.cjs" ]]; then
+    printf '%s' "$INSTALL_DIR/scripts/install-hooks.cjs"
+    return
+  fi
+  if [[ -n "${SCRIPT_DIR:-}" && -f "$SCRIPT_DIR/scripts/install-hooks.cjs" ]]; then
+    printf '%s' "$SCRIPT_DIR/scripts/install-hooks.cjs"
+    return
+  fi
+  return 1
+}
+
 # ── 颜色输出（必须在所有分支之前定义）────────────────────────────────────────
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
@@ -218,16 +230,17 @@ fi
 if [[ "$MODE" == "uninstall" ]]; then
   bold "=== capability-orchestrator 卸载 ==="
   echo ""
+  HELPER_SCRIPT="$(resolve_helper_script || true)"
   # 清理 hook 配置
   if [[ "$PLATFORM" == "codex" ]]; then
-    if [[ -f "$HOOKS_FILE" ]]; then
-      node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode codex-uninstall --file "$HOOKS_FILE"
+    if [[ -f "$HOOKS_FILE" && -n "${HELPER_SCRIPT:-}" ]]; then
+      node "$HELPER_SCRIPT" --mode codex-uninstall --file "$HOOKS_FILE"
       echo "Codex hooks 已移除"
     fi
   else
     SETTINGS_FILE="$CONFIG_DIR/settings.json"
-    if [[ -f "$SETTINGS_FILE" ]]; then
-      node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode claude-uninstall --file "$SETTINGS_FILE"
+    if [[ -f "$SETTINGS_FILE" && -n "${HELPER_SCRIPT:-}" ]]; then
+      node "$HELPER_SCRIPT" --mode claude-uninstall --file "$SETTINGS_FILE"
       echo "hook 已移除"
     fi
   fi
@@ -373,16 +386,18 @@ if [[ "$PLATFORM" == "codex" ]]; then
   # Codex: 写入 hooks.json
   SCAN_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
   ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  HELPER_SCRIPT="$(resolve_helper_script)"
 
   yellow "正在注册 Codex hooks..."
-  node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD"
+  node "$HELPER_SCRIPT" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD"
   echo "Codex hooks 已注册"
 else
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
   HOOK_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
   ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
-  CLAUDE_INSTALL_JSON=$(node "$SCRIPT_DIR/scripts/install-hooks.cjs" --mode claude-install --file "$SETTINGS_FILE" --scan-cmd "$HOOK_CMD" --route-cmd "$ROUTE_CMD")
+  HELPER_SCRIPT="$(resolve_helper_script)"
+  CLAUDE_INSTALL_JSON=$(node "$HELPER_SCRIPT" --mode claude-install --file "$SETTINGS_FILE" --scan-cmd "$HOOK_CMD" --route-cmd "$ROUTE_CMD")
   SESSION_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.sessionStatus)")
   ROUTE_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.routeStatus)")
 

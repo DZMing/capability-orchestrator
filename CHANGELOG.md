@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.7] - 2026-04-20
+
+### Fixed
+
+- Raw piped installs from `install.sh` now resolve `install-hooks.cjs` from the staged/installed plugin instead of `/dev/fd`, so `bash <(curl .../install.sh)` completes hook registration correctly
+
 ## [1.11.6] - 2026-04-20
 
 ### Fixed
