@@ -16,6 +16,11 @@ const latestTag = execFileSync('git', ['tag', '--list', 'v*'], { cwd: root, enco
   .filter(Boolean)
   .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
   .pop() || '';
+const headCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const latestTagCommit = latestTag
+  ? execFileSync('git', ['rev-list', '-n', '1', latestTag], { cwd: root, encoding: 'utf8' }).trim()
+  : '';
+const worktreeDirty = execFileSync('git', ['status', '--short'], { cwd: root, encoding: 'utf8' }).trim().length > 0;
 
 const topChangelog = (changelog.match(/^## \[([^\]]+)\]/m) || [null, ''])[1];
 const status = {
@@ -24,9 +29,13 @@ const status = {
   codexManifestVersion: codex.version,
   topChangelogVersion: topChangelog,
   latestGitTag: latestTag,
+  headCommit,
+  latestTagCommit,
   versionSyncOk: pkg.version === claude.version && pkg.version === codex.version,
   changelogSyncOk: topChangelog === pkg.version,
   latestTagMatchesPackage: latestTag === `v${pkg.version}`,
+  headMatchesLatestTag: !!latestTagCommit && latestTagCommit === headCommit,
+  worktreeClean: !worktreeDirty,
 };
 
 console.log(JSON.stringify(status, null, 2));

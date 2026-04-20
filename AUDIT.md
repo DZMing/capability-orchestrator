@@ -62,9 +62,40 @@
 - 修复：同步 Claude manifest，新增 `.codex-plugin/plugin.json`，并加版本一致性测试
 - 证据：`tests/skill-contract.test.cjs` 已覆盖
 
+### P1 已修复：live verifier 可误判为通过
+
+- 现象：Claude 只要任意 JSON 行里同时出现 `[AUTO-ROUTE]` 与 `valid-skill` 就会通过；Codex 只要 stdout 提到 `valid-skill` 就会通过
+- 修复：Claude 必须在同一条 `UserPromptSubmit` hook 响应里看到目标路由；Codex 必须在 fresh `route-log.jsonl` 中看到目标 skill 路由条目
+- 证据：新增 `tests/live-verify.test.cjs`，并已重跑 `npm run verify:live:claude` / `npm run verify:live:codex`
+
+### P1 已修复：live verifier 原先验证的不是当前工作区
+
+- 现象：live verifier 先装远端 ref，再直接执行真实 CLI，无法证明当前未发版工作区代码
+- 修复：保留 `install.sh` 注册 hooks 的真实链路，但在隔离安装目录里覆盖成当前工作区快照后再跑真实 CLI
+- 证据：本轮 live 验收输出显示最小 fixture 环境，且 route 证据来自当前工作区快照
+
+### P2 已修复：release tag 安装仍会打印 annotated-tag / detached HEAD 噪音
+
+- 现象：`git clone --branch vX.Y.Z` 安装 annotated tag 时会打印 `is not a commit` 与 detached HEAD 提示
+- 修复：tag 安装改成 `clone default -> fetch tag -> quiet checkout`
+- 证据：`tests/install.test.sh` 已新增断言，锁定 release tag 安装日志不得再出现上述噪音
+
+### P2 已修复：git worktree 脏改动会绕过安装器保护
+
+- 现象：原保护条件只检查 `.git/` 目录，git worktree 的 `.git` 文件会绕过 dirty guard
+- 修复：改为检测 `.git` 文件或目录，并补 worktree 脏改动回归测试
+- 证据：`tests/install.test.sh` 新增 worktree 场景，当前通过
+
+### P2 已修复：hook 所有权识别过宽
+
+- 现象：安装/卸载只要命令字符串包含 `capability-orchestrator` 就认定归本插件所有，可能误伤用户自定义 wrapper
+- 修复：切换为精确的 hook marker（`CAPABILITY_ORCHESTRATOR_HOOK=*`）与 legacy 脚本路径双轨识别
+- 证据：`tests/install-idempotent.test.sh` 现在覆盖带 `capability-orchestrator-helper.js` 的无关 hook 保留
+
 ## 当前剩余风险
 
 - 真实 Claude Code GUI 会话尚未做肉眼验收，但功能级结论已由 clean-room CLI 的 hook 事件、输出和 debug 日志支撑
+- 当前机器上的 Claude OAuth 令牌在 live run 中返回 `401 authentication_failed`；路由证据已在重试前落出，这属于本机凭证噪音，不是插件路由缺陷
 - `OPEN_SOURCE_READINESS_AUDIT.md` 与 `ROADMAP.md` 属于研究/路线文档，不影响自用签字，但不应被误读为当前阻塞项清单
 
 ## 审核签字建议

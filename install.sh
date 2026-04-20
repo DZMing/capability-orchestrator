@@ -222,11 +222,17 @@ if [[ "$MODE" == "uninstall" ]]; then
       node - "$HOOKS_FILE" <<'UNINSTALL_HOOKS_JS'
 const fs = require('fs');
 const hooksFile = process.argv[2];
+const ownedMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
+  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
+  'capability-orchestrator/scripts/scan-environment.cjs',
+  'capability-orchestrator/scripts/route-matcher.cjs',
+];
+const isOwnedHook = (command = '') => ownedMarkers.some(marker => command.includes(marker));
 try {
   const hooksConfig = JSON.parse(fs.readFileSync(hooksFile, 'utf8'));
-  const marker = 'capability-orchestrator';
   const cleanArr = (arr) => (arr || []).map(entry => {
-    const hooks = (entry.hooks || []).filter(h => !(h.command && h.command.includes(marker)));
+    const hooks = (entry.hooks || []).filter(h => !(h.command && isOwnedHook(h.command)));
     return hooks.length > 0 ? { ...entry, hooks } : null;
   }).filter(Boolean);
   if (hooksConfig.hooks) {
@@ -252,13 +258,19 @@ UNINSTALL_HOOKS_JS
       node - "$SETTINGS_FILE" <<'UNINSTALL_JS'
 const fs = require('fs');
 const settingsFile = process.argv[2];
+const ownedMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
+  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
+  'capability-orchestrator/scripts/scan-environment.cjs',
+  'capability-orchestrator/scripts/route-matcher.cjs',
+];
+const isOwnedHook = (command = '') => ownedMarkers.some(marker => command.includes(marker));
 try {
   const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
   if (!settings.hooks) settings.hooks = {};
-  const marker = 'capability-orchestrator';
   const filterHooks = (arr) => (arr || [])
     .map(entry => {
-      const hooks = (entry.hooks || []).filter(h => !(h.command && h.command.includes(marker)));
+      const hooks = (entry.hooks || []).filter(h => !(h.command && isOwnedHook(h.command)));
       return hooks.length > 0 ? { ...entry, hooks } : null;
     })
     .filter(Boolean);
@@ -352,7 +364,7 @@ cleanup_install_artifacts() {
 
 trap cleanup_install_artifacts EXIT
 
-if [[ -d "$INSTALL_DIR/.git" ]]; then
+if [[ -e "$INSTALL_DIR/.git" ]]; then
   if [[ -n "$(git -C "$INSTALL_DIR" status --porcelain)" ]]; then
     red "更新失败（检测到已安装副本有本地修改），请手动处理：cd $INSTALL_DIR && git status"
     exit 1
@@ -365,11 +377,18 @@ STAGED_INSTALL_DIR="$STAGE_DIR/$PLUGIN_NAME"
 
 if [[ "$USE_GIT" -eq 1 ]]; then
   yellow "正在克隆到 $STAGED_INSTALL_DIR ..."
-  GIT_CONFIG_COUNT=1 \
-  GIT_CONFIG_KEY_0=advice.detachedHead \
-  GIT_CONFIG_VALUE_0=false \
-  git clone --depth=1 --branch "$RESOLVED_REF" \
-    "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
+  if [[ "$RESOLVED_KIND" == "tag" ]]; then
+    git clone --depth=1 \
+      "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
+    git -C "$STAGED_INSTALL_DIR" fetch --depth=1 origin "refs/tags/$RESOLVED_REF:refs/tags/$RESOLVED_REF"
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=advice.detachedHead \
+    GIT_CONFIG_VALUE_0=false \
+    git -C "$STAGED_INSTALL_DIR" checkout -q "$RESOLVED_REF"
+  else
+    git clone --depth=1 --branch "$RESOLVED_REF" \
+      "https://github.com/$REPO.git" "$STAGED_INSTALL_DIR"
+  fi
 else
   if ! command -v unzip >/dev/null 2>&1; then
     red "错误：curl 下载方式需要 unzip，请先安装或改用 git"
@@ -405,8 +424,8 @@ STAGE_DIR=""
 
 if [[ "$PLATFORM" == "codex" ]]; then
   # Codex: 写入 hooks.json
-  SCAN_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
-  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  SCAN_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+  ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
   yellow "正在注册 Codex hooks..."
   node - "$HOOKS_FILE" "$SCAN_CMD" "$ROUTE_CMD" <<'CODEX_HOOKS_JS'
@@ -415,7 +434,15 @@ const path = require('path');
 const hooksFile = process.argv[2];
 const scanCmd = process.argv[3];
 const routeCmd = process.argv[4];
-const marker = 'capability-orchestrator';
+const scanMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
+  'capability-orchestrator/scripts/scan-environment.cjs',
+];
+const routeMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
+  'capability-orchestrator/scripts/route-matcher.cjs',
+];
+const matchesMarkers = (command = '', markers = []) => markers.some(marker => command.includes(marker));
 
 let hooksConfig = {};
 if (fs.existsSync(hooksFile)) {
@@ -430,13 +457,13 @@ if (fs.existsSync(hooksFile)) {
 if (!hooksConfig.hooks) hooksConfig.hooks = {};
 
 // 注册 hooks：查找已有 marker 条目则更新，否则追加（保留 matcher 等字段）
-const registerHookEntry = (entries, cmd, statusMsg) => {
+const registerHookEntry = (entries, cmd, statusMsg, markers) => {
   if (!Array.isArray(entries)) entries = [];
   let found = false;
   for (const entry of entries) {
     if (!entry.hooks) continue;
     for (const h of entry.hooks) {
-      if (h.command && h.command.includes(marker)) {
+      if (h.command && matchesMarkers(h.command, markers)) {
         h.command = cmd;
         if (statusMsg) h.statusMessage = statusMsg;
         found = true;
@@ -451,10 +478,10 @@ const registerHookEntry = (entries, cmd, statusMsg) => {
   return entries;
 };
 hooksConfig.hooks.SessionStart = registerHookEntry(
-  hooksConfig.hooks.SessionStart, scanCmd, 'Scanning capabilities...'
+  hooksConfig.hooks.SessionStart, scanCmd, 'Scanning capabilities...', scanMarkers
 );
 hooksConfig.hooks.UserPromptSubmit = registerHookEntry(
-  hooksConfig.hooks.UserPromptSubmit, routeCmd, 'Routing prompt...'
+  hooksConfig.hooks.UserPromptSubmit, routeCmd, 'Routing prompt...', routeMarkers
 );
 
 fs.mkdirSync(path.dirname(hooksFile), { recursive: true });
@@ -464,7 +491,7 @@ CODEX_HOOKS_JS
 else
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
-  HOOK_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
+  HOOK_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
 
   yellow "正在注册 SessionStart hook..."
   node - "$SETTINGS_FILE" "$HOOK_CMD" <<'NODEJS'
@@ -487,16 +514,20 @@ if (fs.existsSync(settingsFile)) {
 if (!settings.hooks) settings.hooks = {};
 if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = [];
 
-const marker = 'capability-orchestrator';
+const scanMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
+  'capability-orchestrator/scripts/scan-environment.cjs',
+];
+const isOwnedScanHook = (command = '') => scanMarkers.some(marker => command.includes(marker));
 const alreadyRegistered = settings.hooks.SessionStart.some(entry =>
-  entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker))
+  entry.hooks && entry.hooks.some(h => h.command && isOwnedScanHook(h.command))
 );
 
 if (alreadyRegistered) {
   for (const entry of settings.hooks.SessionStart) {
     if (!entry.hooks) continue;
     for (const h of entry.hooks) {
-      if (h.command && h.command.includes(marker)) {
+      if (h.command && isOwnedScanHook(h.command)) {
         h.command = hookCmd;
       }
     }
@@ -514,7 +545,7 @@ fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 NODEJS
 
   # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
-  ROUTE_CMD="$CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
 
   yellow "正在注册 UserPromptSubmit hook..."
   node - "$SETTINGS_FILE" "$ROUTE_CMD" <<'ROUTEJS'
@@ -537,16 +568,20 @@ if (fs.existsSync(settingsFile)) {
 if (!settings.hooks) settings.hooks = {};
 if (!Array.isArray(settings.hooks.UserPromptSubmit)) settings.hooks.UserPromptSubmit = [];
 
-const marker = 'capability-orchestrator';
+const routeMarkers = [
+  'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
+  'capability-orchestrator/scripts/route-matcher.cjs',
+];
+const isOwnedRouteHook = (command = '') => routeMarkers.some(marker => command.includes(marker));
 const alreadyRegistered = settings.hooks.UserPromptSubmit.some(entry =>
-  entry.hooks && entry.hooks.some(h => h.command && h.command.includes(marker))
+  entry.hooks && entry.hooks.some(h => h.command && isOwnedRouteHook(h.command))
 );
 
 if (alreadyRegistered) {
   for (const entry of settings.hooks.UserPromptSubmit) {
     if (!entry.hooks) continue;
     for (const h of entry.hooks) {
-      if (h.command && h.command.includes(marker)) {
+      if (h.command && isOwnedRouteHook(h.command)) {
         h.command = hookCmd;
       }
     }

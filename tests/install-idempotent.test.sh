@@ -46,6 +46,12 @@ if [ "\$1" = "clone" ]; then
   git -C "\$TARGET" init -q
   git -C "\$TARGET" add -A
   git -C "\$TARGET" -c core.hooksPath=/dev/null -c user.email=t@t.com -c user.name=T commit -qm init
+elif [ "\$1" = "-C" ] && [ "\$3" = "fetch" ]; then
+  TARGET="\$2"
+  REFSPEC="\${@: -1}"
+  FETCH_TAG="\${REFSPEC#refs/tags/}"
+  FETCH_TAG="\${FETCH_TAG%%:*}"
+  /usr/bin/git -C "\$TARGET" tag -f "\$FETCH_TAG" >/dev/null 2>&1
 elif [ "\$1" = "-C" ] && [ "\$3" = "pull" ]; then
   echo "Already up to date."
 else
@@ -64,7 +70,7 @@ cat > "$SETTINGS" <<'JSON'
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{ "type": "command", "command": "node /some/other/hook.js", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "node /some/other/capability-orchestrator-helper.js", "timeout": 5 }]
       }
     ]
   }
@@ -77,29 +83,35 @@ echo ""
 
 # ── 第一次安装 ────────────────────────────────────────────────────────────────
 echo "--- 第一次安装 ---"
+INSTALL1_LOG="$TMP_HOME/install-1.log"
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
-  bash "$REPO_ROOT/install.sh" 2>&1 | grep -E '✓|错误|hook' | sed 's/^/  /'
+  bash "$REPO_ROOT/install.sh" >"$INSTALL1_LOG" 2>&1
+grep -E '✓|错误|hook' "$INSTALL1_LOG" | sed 's/^/  /' || true
 
 COUNT1=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks||{}).SessionStart||[];
-  process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('capability-orchestrator'))).length));
+  process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=session-start'))).length));
 ")
 assert "第一次安装后 hook 数量为 1" [ "$COUNT1" -eq 1 ]
-assert "第一次安装默认使用 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
+assert "第一次安装默认使用 release tag" \
+  node -e "const s=require('fs').readFileSync('$INSTALL1_LOG','utf8'); process.exit(s.includes('安装目标：$LATEST_TAG')?0:1)"
 
 # ── 第二次安装（模拟 upgrade）─────────────────────────────────────────────────
 echo "--- 第二次安装 ---"
+INSTALL2_LOG="$TMP_HOME/install-2.log"
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
-  bash "$REPO_ROOT/install.sh" 2>&1 | grep -E '✓|错误|hook' | sed 's/^/  /'
+  bash "$REPO_ROOT/install.sh" >"$INSTALL2_LOG" 2>&1
+grep -E '✓|错误|hook' "$INSTALL2_LOG" | sed 's/^/  /' || true
 
 COUNT2=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks||{}).SessionStart||[];
-  process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('capability-orchestrator'))).length));
+  process.stdout.write(String(hooks.filter(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=session-start'))).length));
 ")
 assert "第二次安装后 hook 数量仍为 1（无重复）" [ "$COUNT2" -eq 1 ]
-assert "第二次安装仍使用相同 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
+assert "第二次安装仍使用相同 release tag" \
+  node -e "const s=require('fs').readFileSync('$INSTALL2_LOG','utf8'); process.exit(s.includes('安装目标：$LATEST_TAG')?0:1)"
 
 # ── 断言无关 settings 未被破坏 ───────────────────────────────────────────────
 assert "model 字段保留" node -e "
@@ -110,10 +122,10 @@ assert "permissions 字段保留" node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   process.exit((s.permissions&&s.permissions.allow) ? 0 : 1);
 "
-assert "原有 other/hook.js 未被删除" node -e "
+assert "原有 capability-orchestrator-helper.js 未被删除" node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks||{}).SessionStart||[];
-  const found = hooks.some(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('other/hook.js')));
+  const found = hooks.some(e=>e.hooks&&e.hooks.some(h=>h.command&&h.command.includes('capability-orchestrator-helper.js')));
   process.exit(found ? 0 : 1);
 "
 

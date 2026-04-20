@@ -28,7 +28,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`333`
+- 当前自动化总数：`337`
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
@@ -196,9 +196,9 @@ npm run verify:release
 
 说明：
 
-- `verify:live:claude`：隔离 `CLAUDE_USER_DIR`，调用真实 `claude` CLI，检查 `[AUTO-ROUTE]` 和目标 skill 命中，并输出 debug 摘要
-- `verify:live:codex`：隔离 `CODEX_USER_DIR`，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并尽量自动解析当前机器的 Codex wrapper / real binary
-- `verify:release`：用于发布前检查版本同步与 changelog 顶部版本；当前不会强制要求最新 git tag 与工作树版本完全一致，但会显式报告该状态
+- `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
+- `verify:live:codex`：隔离 `HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并要求 fresh `route-log.jsonl` 里出现目标 skill 路由条目
+- `verify:release`：用于发布前检查版本/manifest/changelog 同步，并显式报告 `HEAD` 是否已经等于最新 tag、以及工作树是否 clean；这些状态需要人工检查，不能只看退出码
 
 注意：
 

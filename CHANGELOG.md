@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.9.1] - 2026-04-20
+
+### Added
+
+- `tests/live-verify.test.cjs`，锁定 Claude/Codex live verifier 的正反例判定
+- install smoke 新增 release tag 噪音回归与 git worktree 脏改动保护回归
+
+### Changed
+
+- `verify:live:claude` / `verify:live:codex` 先用 `install.sh` 注册隔离 hooks，再覆盖成当前工作区快照后执行真实 CLI
+- `verify:release` 现在显式报告 `HEAD` / latest tag / worktree 状态，CI 与 PR 模板文案同步到这个真实语义
+- CONTRIBUTING 切换到 Lore commit protocol，公开治理文档与当前仓库要求对齐
+
+### Fixed
+
+- release tag 安装不再打印 annotated-tag / detached HEAD 噪音
+- live verifier 不再因为任意 stdout 子串而误判通过
+- git worktree 安装副本的脏改动现在也会阻止覆盖升级
+- hook 所有权识别从宽泛子串匹配收紧到 marker + legacy 脚本路径
+- README 中“安装指定版本”现在会真正完成 hook 注册，而不是只落文件
+
 ## [1.9.0] - 2026-04-20
 
 ### Added

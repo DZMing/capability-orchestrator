@@ -39,6 +39,12 @@ npm run verify:release
 
 任一命令失败，都不要打 release tag。
 
+另外，`npm run verify:release` 的 JSON 输出必须人工检查：
+
+- `versionSyncOk` 和 `changelogSyncOk` 必须为 `true`
+- 打 tag 之前，`worktreeClean` 必须为 `true`
+- 打 tag 并 push 完之后，重新执行一次，确认 `headMatchesLatestTag` 变为 `true`
+
 ## 打 tag 与发布
 
 标准流程：
@@ -63,6 +69,8 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."
 ```
 
 同时确认最新 release 文档仍然指向当前 tag，README 里的安装说明没有漂移。
+
+如果发布验证依赖 `verify:live:claude` / `verify:live:codex`，应确认它们验证的是“当前工作区快照”，而不是某个旧 release 安装副本。
 
 ## 回滚策略
 

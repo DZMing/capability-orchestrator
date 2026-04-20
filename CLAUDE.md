@@ -10,7 +10,7 @@ npm run test:install        # 安装/卸载/重装循环集成测试
 npm run test:all            # 上两者全跑
 npm run verify:live:claude  # 真实 Claude CLI + hook/log 验收
 npm run verify:live:codex   # 真实 Codex exec 验收（ASCII 临时路径）
-npm run verify:release      # 检查 package / plugin manifests / changelog / tag 状态
+npm run verify:release      # 检查 package / plugin manifests / changelog / HEAD-tag/worktree 状态
 
 # 单个测试文件
 node --test tests/route-matcher.test.cjs

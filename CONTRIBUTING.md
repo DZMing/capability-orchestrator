@@ -60,7 +60,7 @@ npm run verify:live:codex
 说明：
 
 - `verify:live:*` 是功能级 CLI 验收，不是 CI 基线；它依赖本机已登录的 Claude / Codex 客户端
-- 如果改动触及安装行为、hooks、平台检测、路由输出或公开契约，至少应运行 `npm run verify:release`
+- 如果改动触及安装行为、hooks、平台检测、路由输出或公开契约，至少应运行 `npm run verify:release`，并人工检查其中的 `headMatchesLatestTag` / `worktreeClean` 字段
 
 ## 维护预期
 
@@ -74,20 +74,29 @@ npm run verify:live:codex
 
 ## 提交风格
 
+所有 commit message 必须遵循 Lore protocol。
+
 格式：
 
 ```text
-<type>(<scope>): <description>
+<intent line: why the change was made, not what changed>
+
+<body: context / constraints / rationale>
+
+Constraint: <external constraint that shaped the decision>
+Rejected: <alternative considered> | <reason for rejection>
+Confidence: <low|medium|high>
+Scope-risk: <narrow|moderate|broad>
+Directive: <forward-looking warning for future modifiers>
+Tested: <what was verified>
+Not-tested: <known verification gaps>
 ```
 
-推荐类型：
+要求：
 
-- `feat`
-- `fix`
-- `refactor`
-- `test`
-- `docs`
-- `chore`
+- 第一行写“为什么改”，不要写纯 diff 描述
+- trailer 用 git-native `Key: value` 形式
+- `Rejected:`、`Tested:`、`Not-tested:` 尽量写全，避免未来重复踩坑
 
 ## 代码风格
 

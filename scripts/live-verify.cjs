@@ -8,6 +8,7 @@ const { spawnSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const REAL_HOME = process.env.REAL_HOME || os.homedir();
+const LIVE_VERIFY_ROOT = path.join(REAL_HOME, '.capability-orchestrator-live');
 const CLAUDE_AUTH = path.join(REAL_HOME, '.claude', '.credentials.json');
 const CODEX_AUTH = path.join(REAL_HOME, '.codex', 'auth.json');
 const CODEX_CONFIG = path.join(REAL_HOME, '.codex', 'config.toml');
@@ -42,11 +43,29 @@ function parseArgs(argv) {
 }
 
 function makeTempDir(prefix) {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  ensureDir(LIVE_VERIFY_ROOT);
+  return fs.mkdtempSync(path.join(LIVE_VERIFY_ROOT, prefix));
 }
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+function syncWorktreeSnapshot(installDir) {
+  fs.rmSync(installDir, { recursive: true, force: true });
+  fs.cpSync(REPO_ROOT, installDir, {
+    recursive: true,
+    filter(src) {
+      const rel = path.relative(REPO_ROOT, src);
+      if (!rel) return true;
+      const top = rel.split(path.sep)[0];
+      return top !== '.git' && top !== '.omx' && top !== 'node_modules';
+    },
+  });
+  for (const relPath of ['scripts/scan-environment.cjs', 'scripts/route-matcher.cjs']) {
+    const scriptPath = path.join(installDir, relPath);
+    if (fs.existsSync(scriptPath)) fs.chmodSync(scriptPath, 0o755);
+  }
 }
 
 function maybeCopy(src, dest) {
@@ -61,11 +80,13 @@ function run(cmd, args, options = {}) {
   });
 }
 
-function summarizeClaude(stdout) {
+function summarizeClaude(stdout, targetName = 'valid-skill') {
   const summary = {
     hookEvents: 0,
     autoRouteSeen: false,
     validSkillSeen: false,
+    matchedRouteSeen: false,
+    matchedRouteSample: '',
   };
   for (const line of stdout.split('\n')) {
     if (!line.trim()) continue;
@@ -74,12 +95,46 @@ function summarizeClaude(stdout) {
       const type = String(obj.type || '').toLowerCase();
       const blob = JSON.stringify(obj, null, 0);
       if (type.includes('hook')) summary.hookEvents += 1;
-      if (blob.includes('[AUTO-ROUTE]')) summary.autoRouteSeen = true;
-      if (blob.includes('valid-skill')) summary.validSkillSeen = true;
+      if (String(obj.subtype || '').toLowerCase() === 'hook_response' &&
+          String(obj.hook_event || '').toLowerCase() === 'userpromptsubmit') {
+        const hookOutput = `${obj.output || ''}\n${obj.stdout || ''}`;
+        const hasAutoRoute = hookOutput.includes('[AUTO-ROUTE]');
+        const hasTarget = hookOutput.includes(targetName);
+        if (hasAutoRoute) summary.autoRouteSeen = true;
+        if (hasTarget) summary.validSkillSeen = true;
+        if (hasAutoRoute && hasTarget) {
+          summary.matchedRouteSeen = true;
+          if (!summary.matchedRouteSample) {
+            summary.matchedRouteSample = hookOutput.trim().slice(0, 400);
+          }
+        }
+      }
     } catch {
       continue;
     }
   }
+  return summary;
+}
+
+function summarizeCodexRouteLog(routeLog, targetName = 'valid-skill') {
+  const summary = {
+    matchedRouteSeen: false,
+    matchedRouteEntry: null,
+  };
+
+  for (const line of routeLog.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.action === 'route' && entry.targetType === 'skill' && entry.targetName === targetName) {
+        summary.matchedRouteSeen = true;
+        summary.matchedRouteEntry = entry;
+      }
+    } catch {
+      continue;
+    }
+  }
+
   return summary;
 }
 
@@ -93,13 +148,14 @@ function verifyClaude(timeoutSec) {
   ensureDir(claudeDir);
   maybeCopy(CLAUDE_AUTH, path.join(claudeDir, '.credentials.json'));
 
-  const installEnv = { ...process.env, CLAUDE_USER_DIR: claudeDir };
+  const installEnv = { ...process.env, HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
   const install = run('bash', [path.join(REPO_ROOT, 'install.sh')], { env: installEnv });
   if (install.status !== 0) throw new Error(`install failed: ${install.stderr || install.stdout}`);
+  syncWorktreeSnapshot(path.join(claudeDir, 'plugins', 'cache', 'capability-orchestrator'));
 
   const fixture = path.join(REPO_ROOT, 'tests', 'fixtures', 'project');
   const debugFile = path.join(tmpHome, 'claude-debug.log');
-  const env = { ...process.env, CLAUDE_USER_DIR: claudeDir };
+  const env = { ...process.env, HOME: tmpHome, CLAUDE_USER_DIR: claudeDir };
   const proc = run('claude', [
     '-p',
     '--verbose',
@@ -126,6 +182,8 @@ function verifyClaude(timeoutSec) {
     hookEvents: summary.hookEvents,
     autoRouteSeen: summary.autoRouteSeen,
     validSkillSeen: summary.validSkillSeen,
+    matchedRouteSeen: summary.matchedRouteSeen,
+    matchedRouteSample: summary.matchedRouteSample,
     stdoutHead: (proc.stdout || '').split('\n').slice(0, 20).join('\n'),
     debugTail,
   };
@@ -144,10 +202,10 @@ function verifyCodex(timeoutSec) {
   const installEnv = {
     ...process.env,
     CODEX_USER_DIR: codexDir,
-    CAPABILITY_INSTALL_REF: 'master',
   };
   const install = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=codex'], { env: installEnv });
   if (install.status !== 0) throw new Error(`install failed: ${install.stderr || install.stdout}`);
+  syncWorktreeSnapshot(path.join(codexDir, 'plugins', 'cache', 'capability-orchestrator'));
 
   const project = path.join(tmpRoot, 'project');
   const skillDir = path.join(project, '.agents', 'skills', 'valid-skill');
@@ -184,6 +242,7 @@ function verifyCodex(timeoutSec) {
   const routeLog = fs.existsSync(routeLogPath) ? fs.readFileSync(routeLogPath, 'utf8') : '';
   const stdout = proc.stdout || '';
   const stderr = proc.stderr || '';
+  const routeSummary = summarizeCodexRouteLog(routeLog);
 
   const summary = {
     platform: 'codex',
@@ -191,7 +250,8 @@ function verifyCodex(timeoutSec) {
     exitStatus: proc.status,
     timedOut: !!proc.error && proc.error.code === 'ETIMEDOUT',
     validSkillSeen: stdout.includes('valid-skill'),
-    routeLogSeen: routeLog.includes('valid-skill') || routeLog.includes('targetName'),
+    routeLogSeen: routeSummary.matchedRouteSeen,
+    routeLogEntry: routeSummary.matchedRouteEntry,
     utf8HeaderErrorSeen: stderr.includes('x-codex-turn-metadata') || stdout.includes('x-codex-turn-metadata'),
     stdoutHead: stdout.split('\n').slice(0, 20).join('\n'),
     stderrHead: stderr.split('\n').slice(0, 20).join('\n'),
@@ -217,11 +277,18 @@ function main() {
   console.log(JSON.stringify(result, null, 2));
 
   if (platform === 'claude') {
-    if (!(result.autoRouteSeen && result.validSkillSeen)) process.exit(1);
+    if (!result.matchedRouteSeen) process.exit(1);
     return;
   }
 
-  if (!(result.validSkillSeen && !result.utf8HeaderErrorSeen)) process.exit(1);
+  if (!(result.routeLogSeen && !result.utf8HeaderErrorSeen)) process.exit(1);
 }
 
-main();
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    summarizeClaude,
+    summarizeCodexRouteLog,
+  };
+}

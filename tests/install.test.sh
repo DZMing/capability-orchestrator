@@ -25,8 +25,10 @@ TMP_HOME=$(mktemp -d)
 TMP_GIT=$(mktemp -d)
 trap 'rm -rf "$TMP_HOME" "$TMP_GIT"' EXIT
 LATEST_TAG=$(/usr/bin/git -C "$REPO_ROOT" tag --list 'v*' | sort -V | tail -n 1)
+LATEST_TAG_OBJ=$(/usr/bin/git -C "$REPO_ROOT" rev-parse "$LATEST_TAG")
+LATEST_TAG_COMMIT=$(/usr/bin/git -C "$REPO_ROOT" rev-parse "$LATEST_TAG^{}")
 
-# 生成一个 fake git 脚本，让 clone 变成 cp（避免网络请求）
+# 生成一个 fake git 脚本：保留当前工作区内容复制，同时模拟 annotated tag clone 噪音
 FAKE_GIT="$TMP_GIT/git"
 cat > "$FAKE_GIT" <<GITEOF
 #!/usr/bin/env bash
@@ -37,14 +39,22 @@ if [ "\$1" = "clone" ]; then
     exit 1
   fi
   BRANCH=""
+  SAW_BRANCH=0
   for ((i=1; i<=\$#; i++)); do
     if [ "\${!i}" = "--branch" ]; then
       j=\$((i + 1))
       BRANCH="\${!j}"
+      SAW_BRANCH=1
       break
     fi
   done
   printf '%s' "\$BRANCH" > "$TMP_GIT/last-clone-branch.txt"
+  if [ "\$SAW_BRANCH" -eq 1 ] && [ "\$BRANCH" = "$LATEST_TAG" ]; then
+    echo "warning: refs/tags/$LATEST_TAG $LATEST_TAG_OBJ is not a commit!" >&2
+    echo "Note: switching to '$LATEST_TAG_COMMIT'." >&2
+    echo "" >&2
+    echo "You are in 'detached HEAD' state." >&2
+  fi
   # 最后一个参数是目标目录
   TARGET="\${@: -1}"
   mkdir -p "\$TARGET"
@@ -57,6 +67,12 @@ if [ "\$1" = "clone" ]; then
   git -C "\$TARGET" -c core.hooksPath=/dev/null -c user.email=t@t.com -c user.name=T commit -qm init
 elif [ "\$1" = "-C" ] && [ "\$3" = "pull" ]; then
   echo "Already up to date."
+elif [ "\$1" = "-C" ] && [ "\$3" = "fetch" ]; then
+  TARGET="\$2"
+  REFSPEC="\${@: -1}"
+  FETCH_TAG="\${REFSPEC#refs/tags/}"
+  FETCH_TAG="\${FETCH_TAG%%:*}"
+  /usr/bin/git -C "\$TARGET" tag -f "\$FETCH_TAG" >/dev/null 2>&1
 else
   # 其他 git 命令透传
   /usr/bin/git "\$@"
@@ -79,8 +95,10 @@ echo "=== install.sh smoke test ==="
 echo "CLAUDE_USER_DIR=$TMP_HOME"
 echo ""
 
+INSTALL_LOG="$TMP_HOME/install-release.log"
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \
-  bash "$REPO_ROOT/install.sh" 2>&1 | sed 's/^/  /'
+  bash "$REPO_ROOT/install.sh" >"$INSTALL_LOG" 2>&1
+sed 's/^/  /' "$INSTALL_LOG"
 
 # 验证符号链接被替换为真实目录，且原目标未被 rm -rf
 assert "安装后是真实目录而非符号链接" test -d "$PLUGIN_DIR_PRE" -a ! -L "$PLUGIN_DIR_PRE"
@@ -113,7 +131,7 @@ assert "settings.json 是合法 JSON" \
 HOOK_COUNT=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks || {}).SessionStart || [];
-  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=session-start'))).length;
   process.stdout.write(String(n));
 ")
 assert "SessionStart hook 已注册" [ "$HOOK_COUNT" -eq 1 ]
@@ -122,7 +140,7 @@ assert "SessionStart hook 已注册" [ "$HOOK_COUNT" -eq 1 ]
 ROUTE_COUNT=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks || {}).UserPromptSubmit || [];
-  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit'))).length;
   process.stdout.write(String(n));
 ")
 assert "UserPromptSubmit hook 已注册" [ "$ROUTE_COUNT" -eq 1 ]
@@ -143,7 +161,12 @@ assert "hook 命令含 scan-environment.cjs" \
   node -e "process.exit('$HOOK_CMD'.includes('scan-environment.cjs')?0:1)"
 assert "hook 命令含 --mode=awareness" \
   node -e "process.exit('$HOOK_CMD'.includes('--mode=awareness')?0:1)"
-assert "默认安装渠道使用最新 release tag" [ "$(cat "$TMP_GIT/last-clone-branch.txt")" = "$LATEST_TAG" ]
+assert "默认安装渠道使用最新 release tag" \
+  node -e "const s=require('fs').readFileSync('$INSTALL_LOG','utf8'); process.exit(s.includes('安装目标：$LATEST_TAG')?0:1)"
+assert "release tag 安装不会打印 annotated-tag 警告" \
+  node -e "const s=require('fs').readFileSync('$INSTALL_LOG','utf8'); process.exit(s.includes('is not a commit!')?1:0)"
+assert "release tag 安装不会打印 detached HEAD 提示" \
+  node -e "const s=require('fs').readFileSync('$INSTALL_LOG','utf8'); process.exit(s.includes('detached HEAD')?1:0)"
 
 # ── 验证安装后脚本能运行 ──────────────────────────────────────────────────────
 assert "scan script 可直接 node 执行" \
@@ -168,6 +191,24 @@ else
 fi
 assert_file "失败重装后旧安装仍保留" "$PRESERVE_HOME/plugins/cache/capability-orchestrator/keep.txt"
 rm -rf "$PRESERVE_HOME" /tmp/cap-orch-install-fail.log
+
+# ── git worktree 也必须阻止带脏改动的覆盖升级 ────────────────────────────────
+WORKTREE_REPO=$(mktemp -d)
+WORKTREE_HOME=$(mktemp -d)
+git clone -q "$REPO_ROOT" "$WORKTREE_REPO/source"
+mkdir -p "$WORKTREE_HOME/plugins/cache"
+git -C "$WORKTREE_REPO/source" worktree add -q "$WORKTREE_HOME/plugins/cache/capability-orchestrator" HEAD
+echo "# dirty change" >> "$WORKTREE_HOME/plugins/cache/capability-orchestrator/README.md"
+
+if CLAUDE_USER_DIR="$WORKTREE_HOME" PATH="$FAKE_PATH" \
+  bash "$REPO_ROOT/install.sh" >/tmp/cap-orch-worktree-dirty.log 2>&1; then
+  red "git worktree 脏改动场景应返回非零退出码"; FAIL=$((FAIL + 1))
+else
+  green "git worktree 脏改动场景返回非零退出码"; PASS=$((PASS + 1))
+fi
+assert "git worktree 脏改动仍保留原文件" \
+  node -e "const s=require('fs').readFileSync('$WORKTREE_HOME/plugins/cache/capability-orchestrator/README.md','utf8'); process.exit(s.includes('# dirty change')?0:1)"
+rm -rf "$WORKTREE_REPO" "$WORKTREE_HOME" /tmp/cap-orch-worktree-dirty.log
 
 # ── 自动检测应优先识别 CODEX_USER_DIR ───────────────────────────────────────
 AUTO_HOME=$(mktemp -d)
@@ -212,7 +253,7 @@ assert "卸载后插件目录已删除" test ! -d "$PLUGIN_DIR"
 HOOK_AFTER=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks || {}).SessionStart || [];
-  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=session-start'))).length;
   process.stdout.write(String(n));
 ")
 assert "卸载后 SessionStart hook 已移除" [ "$HOOK_AFTER" -eq 0 ]
@@ -220,7 +261,7 @@ assert "卸载后 SessionStart hook 已移除" [ "$HOOK_AFTER" -eq 0 ]
 ROUTE_AFTER=$(node -e "
   const s = JSON.parse(require('fs').readFileSync('$SETTINGS','utf8'));
   const hooks = (s.hooks || {}).UserPromptSubmit || [];
-  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('capability-orchestrator'))).length;
+  const n = hooks.filter(e => e.hooks && e.hooks.some(h => h.command && h.command.includes('CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit'))).length;
   process.stdout.write(String(n));
 ")
 assert "卸载后 UserPromptSubmit hook 已移除" [ "$ROUTE_AFTER" -eq 0 ]

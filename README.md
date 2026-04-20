@@ -89,9 +89,9 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 默认安装命令见上方"30 秒上手"。以下为高级场景：
 
 ```bash
-# 安装指定版本
-git clone --branch vX.Y.Z --depth=1 https://github.com/DZMing/capability-orchestrator.git \
-  ~/.claude/plugins/cache/capability-orchestrator
+# 安装指定版本（会完成 hook 注册）
+CAPABILITY_INSTALL_REF=vX.Y.Z \
+  curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash
 
 # 安装未发布的 master 分支
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --channel=master
@@ -99,6 +99,8 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 # 显式安装到 Codex
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=codex
 ```
+
+注意：单纯把仓库 `git clone` 到插件目录只会落文件，不会注册 hooks。需要活跃安装时，请通过 `install.sh` 完成。
 
 ## 验证
 
@@ -135,9 +137,9 @@ npm run verify:release
 
 说明：
 
-- `verify:live:claude` 会在隔离 `CLAUDE_USER_DIR` 下安装当前工作区版本，然后用真实 `claude` CLI 抓取 stream-json 与 debug 日志；通过标准是出现目标路由证据，而不是强依赖所有 hook 事件都完整返回
-- `verify:live:codex` 会在隔离 `CODEX_USER_DIR` 下安装当前工作区版本，并使用 ASCII 临时工作区别名执行真实 `codex exec`；脚本会尽量自动解析当前机器的 Codex wrapper / real binary
-- `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并报告当前工作树版本是否已经与最新 git tag 对齐
+- `verify:live:claude` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，然后用真实 `claude` CLI 抓取 stream-json 与 debug 日志；通过标准是同一条 `UserPromptSubmit` hook 响应里出现目标路由证据
+- `verify:live:codex` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，并使用 ASCII 临时工作区别名执行真实 `codex exec`；通过标准是 fresh `route-log.jsonl` 里出现目标 skill 路由条目
+- `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并显式报告 `HEAD` 与最新 tag、以及工作树 clean/dirty 状态；发布前需要人工检查这些字段，不只看退出码
 
 ## 升级
 
