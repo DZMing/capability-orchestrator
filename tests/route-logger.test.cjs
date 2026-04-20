@@ -114,14 +114,18 @@ test('appendRouteLog: appends multiple entries in order', () => {
 
 test('appendRouteLog: failure does not throw', () => {
   const orig = process.env.CLAUDE_PLUGIN_DATA;
-  // point to a path that can't be created (root-owned)
-  process.env.CLAUDE_PLUGIN_DATA = '/proc/nonexistent/path';
+  const tmp = makeTempDir();
+  const blockedPath = path.join(tmp, 'not-a-directory');
+  // Use a regular file as the "plugin data dir" so mkdirSync fails fast on every OS.
+  fs.writeFileSync(blockedPath, 'blocked');
+  process.env.CLAUDE_PLUGIN_DATA = blockedPath;
   try {
     // should not throw
     appendRouteLog({ action: 'route', reason: 'test', confidence: 0.5 });
   } finally {
     if (orig) process.env.CLAUDE_PLUGIN_DATA = orig;
     else delete process.env.CLAUDE_PLUGIN_DATA;
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
 

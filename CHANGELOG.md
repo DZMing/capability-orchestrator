@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.3] - 2026-04-20
+
+### Fixed
+
+- Linux no longer hangs in `tests/route-logger.test.cjs`; the failure-path test now uses a stable file-path conflict instead of `/proc/nonexistent/path`
+- Linux container verification now confirms both `npm test` and `npm run test:all` complete, matching the intended Ubuntu CI gate
+
 ## [1.11.2] - 2026-04-20
 
 ### Changed
