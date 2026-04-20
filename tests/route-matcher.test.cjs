@@ -892,6 +892,38 @@ test('collectAllSkills: includes OpenClaw and Hermes skills in matching pool', (
   }
 });
 
+test('collectAllSkills: platform-incompatible Hermes/OpenClaw skills are excluded', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecosystem-platform-route-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const hermesRoot = path.join(tmp, 'hermes');
+  fs.mkdirSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-win-only'), { recursive: true });
+  fs.mkdirSync(path.join(hermesRoot, 'skills', 'hermes-win-only'), { recursive: true });
+  fs.writeFileSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-win-only', 'SKILL.md'), '---\nname: oc-win-only\ndescription: OpenClaw windows only skill\nmetadata:\n  openclaw:\n    os: [windows]\n---\n');
+  fs.writeFileSync(path.join(hermesRoot, 'skills', 'hermes-win-only', 'SKILL.md'), '---\nname: hermes-win-only\ndescription: Hermes windows only skill\nplatforms: [windows]\n---\n');
+
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedHermes = process.env.HERMES_USER_DIR;
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.HERMES_USER_DIR = hermesRoot;
+  try {
+    const skills = collectAllSkills(FIXTURE_PROJECT, path.join(__dirname, 'fixtures', 'user'));
+    const names = skills.map(s => s.name);
+    if (process.platform === 'win32') {
+      assert.ok(names.includes('oc-win-only'));
+      assert.ok(names.includes('hermes-win-only'));
+    } else {
+      assert.ok(!names.includes('oc-win-only'));
+      assert.ok(!names.includes('hermes-win-only'));
+    }
+  } finally {
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
+    else process.env.HERMES_USER_DIR = savedHermes;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 // ─── Session 4: 突变测试断言加固 ──────────────────────────────────────────
 
 // 4a: MIN_KEYWORD_OVERLAP boundary — exactly 2 keywords overlap must match

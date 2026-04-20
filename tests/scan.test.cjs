@@ -17,6 +17,7 @@ const {
   tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot, compareSemver, renderSection,
   collectSnapshot, renderSnapshot, truncate, getOpenClawSkillDir, getHermesSkillDir,
+  parsePlatformList, extractSupportedPlatforms, isPlatformCompatible,
 } = require('../scripts/scan-environment.cjs');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -244,6 +245,19 @@ test('collectSnapshot: OpenClaw and Hermes skills are discovered', () => {
     else process.env.HERMES_USER_DIR = savedHermes;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('platform metadata: Hermes platforms and OpenClaw metadata.openclaw.os are parsed and filtered', () => {
+  assert.deepEqual(parsePlatformList('[windows, linux]'), ['windows', 'linux']);
+
+  const hermesSkill = '---\nname: hermes-skill\ndescription: Hermes skill\nplatforms: [macos, linux]\n---\n';
+  const openClawSkill = '---\nname: oc-skill\ndescription: OpenClaw skill\nmetadata:\n  openclaw:\n    os: [windows]\n---\n';
+
+  assert.deepEqual(extractSupportedPlatforms(hermesSkill, 'hermes'), ['macos', 'linux']);
+  assert.deepEqual(extractSupportedPlatforms(openClawSkill, 'openclaw'), ['windows']);
+
+  const expectCurrent = process.platform === 'win32';
+  assert.equal(isPlatformCompatible(openClawSkill, 'openclaw'), expectCurrent);
 });
 
 // ─── renderSnapshot 截断 ─────────────────────────────────────────────────────

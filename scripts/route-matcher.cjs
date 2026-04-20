@@ -22,6 +22,7 @@ const {
   readMcpServers,
   getOpenClawSkillDir,
   getHermesSkillDir,
+  scanCompatibleSkills,
 } = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
 const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
@@ -391,8 +392,8 @@ function collectAllSkills(projectDir, userDir) {
 
   const projSkills = scanSkills(path.join(projectDir, pp.projectSkillsDir), []);
   const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
-  const openClawSkills = scanSkills(getOpenClawSkillDir(), []);
-  const hermesSkills = scanSkills(getHermesSkillDir(), []);
+  const openClawSkills = scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', []);
+  const hermesSkills = scanCompatibleSkills(getHermesSkillDir(), 'hermes', []);
   const pluginSkills = [];
   try {
     for (const p of scanInstalledPlugins(claudeUserDir, [])) {
