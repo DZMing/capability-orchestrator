@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.10] - 2026-04-20
+
+### Fixed
+
+- Raw piped installs now ignore transient `/dev/fd` script locations when resolving local repo metadata, preventing the installer from treating the process-substitution path as a real checkout
+
 ## [1.11.9] - 2026-04-20
 
 ### Fixed

@@ -7,9 +7,16 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="1.11.9"
+VERSION_FALLBACK="1.11.10"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
+if [[ -n "${SCRIPT_DIR:-}" ]]; then
+  case "$SCRIPT_DIR" in
+    /dev/fd*|/proc/*/fd*)
+      SCRIPT_DIR=""
+      ;;
+  esac
+fi
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
   for VERSION_FILE in "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/.claude-plugin/plugin.json" "$SCRIPT_DIR/.codex-plugin/plugin.json"; do
     if [[ -f "$VERSION_FILE" ]]; then
@@ -162,7 +169,7 @@ NODE
 resolve_latest_tag() {
   local tag=""
   if command -v git >/dev/null 2>&1; then
-    if git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [[ -n "${SCRIPT_DIR:-}" ]] && git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
       tag="$(git -C "$SCRIPT_DIR" tag --list 'v*' | sort -V | tail -n 1)"
     fi
   fi
