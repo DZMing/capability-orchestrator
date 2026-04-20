@@ -51,8 +51,8 @@ function truncate(str, max) {
 }
 
 function compareSemver(a, b) {
-  const pa = a.replace(/^v/i, '').split('.').map(Number);
-  const pb = b.replace(/^v/i, '').split('.').map(Number);
+  const pa = a.replace(/^v/i, '').split('.').map(v => Number(v) || 0);
+  const pb = b.replace(/^v/i, '').split('.').map(v => Number(v) || 0);
   const len = Math.max(pa.length, pb.length, 3);
   for (let i = 0; i < len; i++) {
     const diff = (pa[i] || 0) - (pb[i] || 0);
@@ -211,17 +211,17 @@ function readMcpServers(mcpFile, errors) {
   }
 }
 
-function isPluginRoot(dirPath) {
+function isPluginRoot(dirPath, errors) {
   if (fs.existsSync(path.join(dirPath, '.claude-plugin', 'plugin.json'))) return true;
   if (fs.existsSync(path.join(dirPath, '.codex-plugin', 'plugin.json'))) return true;
   if (fs.existsSync(path.join(dirPath, 'plugin.json'))) return true;
-  if (tryReadDir(path.join(dirPath, 'skills'), true).some(d => d.isDirectory())) return true;
-  return tryReadDir(path.join(dirPath, 'agents'), true).some(d => d.isFile() && d.name.endsWith('.md'));
+  if (tryReadDir(path.join(dirPath, 'skills'), true, errors).some(d => d.isDirectory())) return true;
+  return tryReadDir(path.join(dirPath, 'agents'), true, errors).some(d => d.isFile() && d.name.endsWith('.md'));
 }
 
 function findPluginRoots(dir, maxDepth, errors) {
   if (maxDepth <= 0) return [];
-  if (isPluginRoot(dir)) return [dir];
+  if (isPluginRoot(dir, errors)) return [dir];
   const roots = [];
   for (const d of tryReadDir(dir, true, errors)) {
     if (!d.isDirectory() || d.name.startsWith('.')) continue;

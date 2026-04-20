@@ -8,7 +8,7 @@ allowed-tools: Bash Read
 
 !`node "${CLAUDE_SKILL_DIR}/../../scripts/debug-route-example.cjs"`
 
-<!-- Codex: 如果上方命令未自动执行，请用 Bash 运行: node <plugin-dir>/scripts/debug-route-example.cjs -->
+<!-- Codex: 如果上方命令未自动执行，请用 Bash 运行: node ~/.codex/plugins/cache/capability-orchestrator/scripts/debug-route-example.cjs -->
 
 ---
 

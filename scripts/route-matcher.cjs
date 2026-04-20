@@ -16,7 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const { scanSkills, sanitize, scanInstalledPlugins, scanCommands, readMcpServers } = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
-const { detectPlatform } = require('./lib/platform.cjs');
+const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
@@ -378,7 +378,6 @@ function createMcpOutput(server) {
 
 function collectAllSkills(projectDir, userDir) {
   const claudeUserDir = userDir || resolveUserDir();
-  const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
   const platform = detectPlatform();
   const pp = getPlatformPaths(platform);
 
