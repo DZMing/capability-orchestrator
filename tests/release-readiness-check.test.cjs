@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  buildGitHubHeaders,
   buildStatus,
   readRepoSlug,
 } = require('../scripts/release-readiness-check.cjs');
@@ -26,6 +27,18 @@ test('readRepoSlug: extracts owner/name from git URL', () => {
   assert.equal(readRepoSlug({
     repository: { url: 'https://github.com/DZMing/capability-orchestrator.git' },
   }), 'DZMing/capability-orchestrator');
+});
+
+test('buildGitHubHeaders: adds bearer token only when provided', () => {
+  assert.deepEqual(buildGitHubHeaders('secret-token'), {
+    'User-Agent': 'capability-orchestrator-release-check',
+    'Accept': 'application/vnd.github+json',
+    Authorization: 'Bearer secret-token',
+  });
+  assert.deepEqual(buildGitHubHeaders(''), {
+    'User-Agent': 'capability-orchestrator-release-check',
+    'Accept': 'application/vnd.github+json',
+  });
 });
 
 test('buildStatus: requires published GitHub release when package version matches latest tag', () => {

@@ -24,6 +24,8 @@ jobs:
       - name: Syntax check
         run: node --check scripts/*.cjs scripts/lib/*.cjs
       - name: Release metadata report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run verify:release
       - name: Unit tests
         run: npm test
@@ -49,6 +51,8 @@ jobs:
         shell: bash
         run: node --check scripts/*.cjs scripts/lib/*.cjs
       - name: Release metadata report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run verify:release
       - name: Windows-safe unit tests
         shell: bash

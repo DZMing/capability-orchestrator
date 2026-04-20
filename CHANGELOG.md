@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.2] - 2026-04-20
+
+### Changed
+
+- `verify:release` now uses `GITHUB_TOKEN` when present so CI matrix jobs can authenticate release lookups instead of sharing the unauthenticated rate bucket
+
+### Fixed
+
+- Release metadata checks no longer fail sporadically on GitHub Actions due to unauthenticated GitHub API rate limits
+
 ## [1.11.1] - 2026-04-20
 
 ### Changed

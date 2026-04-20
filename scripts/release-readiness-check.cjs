@@ -22,6 +22,16 @@ function runGit(args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
+function buildGitHubHeaders(token) {
+  const headers = {
+    'User-Agent': 'capability-orchestrator-release-check',
+    'Accept': 'application/vnd.github+json',
+  };
+
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 function fetchReleaseByTag(repo, tag) {
   if (!repo || !tag) return Promise.resolve({ ok: false, skipped: true, error: 'missing repo or tag' });
 
@@ -29,10 +39,7 @@ function fetchReleaseByTag(repo, tag) {
     const req = https.get({
       hostname: 'api.github.com',
       path: `/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`,
-      headers: {
-        'User-Agent': 'capability-orchestrator-release-check',
-        'Accept': 'application/vnd.github+json',
-      },
+      headers: buildGitHubHeaders(process.env.GITHUB_TOKEN),
     }, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
@@ -42,7 +49,12 @@ function fetchReleaseByTag(repo, tag) {
           return;
         }
         if (res.statusCode !== 200) {
-          resolve({ ok: false, exists: false, error: `GitHub API ${res.statusCode}` });
+          let detail = '';
+          try {
+            const parsed = JSON.parse(body);
+            detail = parsed && parsed.message ? `: ${parsed.message}` : '';
+          } catch {}
+          resolve({ ok: false, exists: false, error: `GitHub API ${res.statusCode}${detail}` });
           return;
         }
         try {
@@ -144,6 +156,7 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    buildGitHubHeaders,
     buildStatus,
     fetchReleaseByTag,
     readRepoSlug,
