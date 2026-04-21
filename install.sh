@@ -7,7 +7,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="1.11.18"
+VERSION_FALLBACK="1.11.19"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then

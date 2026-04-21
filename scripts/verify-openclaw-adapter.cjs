@@ -86,9 +86,28 @@ async function main() {
     infoRemoved,
     configPath: cfg,
   };
+
+  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-openclaw-pack-'));
+  const adapterPackOutput = run('npm', ['pack', '--pack-destination', packDir], { cwd: ADAPTER_DIR });
+  const hookPackOutput = run('npm', ['pack', '--pack-destination', packDir], { cwd: HOOK_PACK_DIR });
+  const adapterTarball = path.join(packDir, adapterPackOutput.trim().split(/\r?\n/).pop());
+  const hookTarball = path.join(packDir, hookPackOutput.trim().split(/\r?\n/).pop());
+  const packCfg = path.join(packDir, 'openclaw-pack.json');
+  fs.writeFileSync(packCfg, '{}\n');
+  const packEnv = { ...process.env, OPENCLAW_CONFIG_PATH: packCfg };
+  run('openclaw', ['plugins', 'install', adapterTarball], { env: packEnv });
+  run('openclaw', ['plugins', 'install', hookTarball], { env: packEnv });
+  const packInspect = run('openclaw', ['plugins', 'inspect', 'capability-orchestrator'], { env: packEnv });
+  const packHookInfo = run('openclaw', ['hooks', 'info', 'capability-orchestrator-bootstrap'], { env: packEnv });
+  const packHookImport = await import(pathToFileURL(path.join(packDir, 'hooks', 'openclaw-hook-pack', 'capability-orchestrator-bootstrap', 'handler.js')).href)
+    .then(() => true)
+    .catch(() => false);
+  result.adapterTarballLoads = /Status:\s+loaded/i.test(packInspect)
+    && /Commands:\s*[\s\S]*capability-orchestrator-awareness/i.test(packInspect);
+  result.hookPackTarballLoads = /capability-orchestrator-bootstrap/.test(packHookInfo) && packHookImport;
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 
-  if (!result.installSucceeded || !result.pluginInstallSucceeded || !result.infoRecognized || !result.installed || !result.enabled || !result.awarenessInjected || !result.adapterLoaded || !result.adapterCommandsExposed || !result.uninstallCalled || !result.infoRemoved) {
+  if (!result.installSucceeded || !result.pluginInstallSucceeded || !result.infoRecognized || !result.installed || !result.enabled || !result.awarenessInjected || !result.adapterLoaded || !result.adapterCommandsExposed || !result.uninstallCalled || !result.infoRemoved || !result.adapterTarballLoads || !result.hookPackTarballLoads) {
     process.exit(1);
   }
 }

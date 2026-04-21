@@ -4,18 +4,41 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const bridge = require("../../scripts/host-adapter-bridge.cjs");
 const adapterDir = dirname(fileURLToPath(import.meta.url));
+const coreRoot = resolve(adapterDir, "../..");
+
+function loadBridge() {
+  try {
+    return require("../../scripts/host-adapter-bridge.cjs");
+  } catch (error) {
+    return {
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+}
+
+function bridgeUnavailableText(error) {
+  return [
+    "capability-orchestrator host bridge is installed, but the shared core was not found.",
+    "Install through the main capability-orchestrator installer, or place this adapter inside the full repository cache.",
+    `Core root: ${coreRoot}`,
+    `Error: ${error}`,
+  ].join("\n");
+}
 
 function renderStatus(cwd) {
+  const bridge = loadBridge();
+  if (bridge.error) return bridgeUnavailableText(bridge.error);
   return bridge.buildStatus({
     platform: "openclaw",
     cwd: cwd || process.cwd(),
-    coreRoot: resolve(adapterDir, "../.."),
+    coreRoot,
   });
 }
 
 function renderAwareness(cwd) {
+  const bridge = loadBridge();
+  if (bridge.error) return bridgeUnavailableText(bridge.error);
   return bridge.renderAwareness({
     platform: "openclaw",
     cwd: cwd || process.cwd(),
@@ -24,6 +47,8 @@ function renderAwareness(cwd) {
 }
 
 function renderRoute(prompt, cwd) {
+  const bridge = loadBridge();
+  if (bridge.error) return bridgeUnavailableText(bridge.error);
   return bridge.renderRoute({
     platform: "openclaw",
     cwd: cwd || process.cwd(),

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.19] - 2026-04-21
+
+### Fixed
+
+- OpenClaw adapter and hook-pack no longer fail at module load time when
+  installed from standalone `.tgz` packages without the full repository tree
+- `verify:host:openclaw` now packs and installs both OpenClaw artifacts as
+  tarballs, proving release-package loadability in addition to linked installs
+
 ## [1.11.18] - 2026-04-21
 
 ### Added

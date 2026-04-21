@@ -1,6 +1,6 @@
 {
   "name": "@capability-orchestrator/openclaw-adapter",
-  "version": "1.11.18",
+  "version": "1.11.19",
   "private": true,
   "description": "OpenClaw adapter for capability-orchestrator",
   "type": "module",
