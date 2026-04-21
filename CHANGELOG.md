@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.11.22] - 2026-04-21
+
+### Fixed
+
+- `release-readiness-check.cjs` now requires all six version surfaces
+  (`package`, Claude manifest, Codex manifest, OpenClaw adapter, OpenClaw
+  hook-pack, Hermes plugin) to be present and exactly synchronized
+- `verify:host:lifecycle` now cleans temporary directories even when a lifecycle
+  assertion throws before the normal result path
+- removed duplicate `isEscaped()` changelog entry from `v1.11.20`
+
 ## [1.11.21] - 2026-04-21
 
 ### Fixed
@@ -18,7 +29,6 @@
 - **Security**: Hermes `_run_bridge` now uses `--` terminator before prompt arg, preventing CLI arg injection via user input
 - OpenClaw hook-pack `handler.js` now searches multiple candidate paths for bridge module, fixing tarball install mode where hardcoded relative path was broken
 - `verify-host-lifecycle` and `verify-openclaw-adapter` now set `OPENCLAW_STATE_DIR` to isolate from global gateway state
-- `isEscaped()` no longer skips routing for CJK questions ending with `?`; threshold narrowed to English-only prompts under 15 chars
 - `isEscaped()` no longer skips routing for CJK questions ending with `?`; threshold narrowed to English-only prompts under 15 chars
 - `readCommandBody` truncates file before applying frontmatter regex, preventing catastrophic backtracking on large files
 - `openclaw-runtime.cjs` removed dead duplicate `scanOpenClawRuntimePluginCommands` definition

@@ -86,3 +86,37 @@ test('buildStatus: published non-draft release satisfies release audit', () => {
   assert.equal(status.githubReleaseReady, true);
   assert.equal(status.releaseAuditOk, true);
 });
+
+test('buildStatus: requires every adapter version to be present and synced', () => {
+  const missingHermes = buildStatus({
+    pkg: { version: '1.9.1' },
+    claude: { version: '1.9.1' },
+    codex: { version: '1.9.1' },
+    openclaw: { version: '1.9.1' },
+    openclawHookPack: { version: '1.9.1' },
+    hermesYaml: '',
+    changelog: '# Changelog\n\n## [1.9.1] - 2026-04-20\n',
+    latestTag: 'v1.9.1',
+    headCommit: 'abc123',
+    latestTagCommit: 'abc123',
+    worktreeDirty: false,
+    releaseProbe: { ok: true, exists: true, tagName: 'v1.9.1' },
+  });
+  assert.equal(missingHermes.versionSyncOk, false);
+
+  const mismatchedOpenClaw = buildStatus({
+    pkg: { version: '1.9.1' },
+    claude: { version: '1.9.1' },
+    codex: { version: '1.9.1' },
+    openclaw: { version: '1.9.0' },
+    openclawHookPack: { version: '1.9.1' },
+    hermesYaml: '1.9.1',
+    changelog: '# Changelog\n\n## [1.9.1] - 2026-04-20\n',
+    latestTag: 'v1.9.1',
+    headCommit: 'abc123',
+    latestTagCommit: 'abc123',
+    worktreeDirty: false,
+    releaseProbe: { ok: true, exists: true, tagName: 'v1.9.1' },
+  });
+  assert.equal(mismatchedOpenClaw.versionSyncOk, false);
+});

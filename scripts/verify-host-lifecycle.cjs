@@ -160,24 +160,27 @@ function cleanup() {
 }
 
 function main() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-source-'));
-  cleanupDirs.push(tmp);
-  copyRepoToTemp(tmp);
+  try {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-source-'));
+    cleanupDirs.push(tmp);
+    copyRepoToTemp(tmp);
 
-  const result = {
-    sourceRepo: tmp,
-    openclaw: hasCommand('openclaw') ? verifyOpenClaw(tmp) : { skipped: true },
-    hermes: hasCommand('hermes') ? verifyHermes(tmp) : { skipped: true },
-  };
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    const result = {
+      sourceRepo: tmp,
+      openclaw: hasCommand('openclaw') ? verifyOpenClaw(tmp) : { skipped: true },
+      hermes: hasCommand('hermes') ? verifyHermes(tmp) : { skipped: true },
+    };
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 
-  cleanup();
-
-  if (result.openclaw.skipped || result.hermes.skipped) {
-    process.exit(1);
-  }
-  if (!allTrue(result.openclaw) || !allTrue(result.hermes)) {
-    process.exit(1);
+    if (result.openclaw.skipped || result.hermes.skipped) {
+      process.exitCode = 1;
+      return;
+    }
+    if (!allTrue(result.openclaw) || !allTrue(result.hermes)) {
+      process.exitCode = 1;
+    }
+  } finally {
+    cleanup();
   }
 }
 

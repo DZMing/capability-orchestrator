@@ -1,6 +1,6 @@
 {
   "name": "@capability-orchestrator/openclaw-hook-pack",
-  "version": "1.11.21",
+  "version": "1.11.22",
   "private": true,
   "type": "module",
   "description": "OpenClaw hook pack bridge for capability-orchestrator",

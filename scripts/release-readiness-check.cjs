@@ -100,8 +100,8 @@ function buildStatus({ pkg, claude, codex, openclaw, openclawHookPack, hermesYam
   const allVersions = [
     pkg.version, claude.version, codex.version,
     openclaw.version, openclawHookPack.version, hermesYaml,
-  ].filter(Boolean);
-  const versionSyncOk = allVersions.length >= 4 && allVersions.every(v => v === allVersions[0]);
+  ];
+  const versionSyncOk = allVersions.every(Boolean) && allVersions.every(v => v === pkg.version);
 
   return {
     packageVersion: pkg.version,
