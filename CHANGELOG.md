@@ -5,6 +5,10 @@
 ### Fixed
 
 - `install.sh` platform detection no longer overridden by globally inherited host env vars (e.g. `OPENCLAW_CONFIG_PATH`) when `$HOME/.claude` exists; Claude-first detection restored in dual-install scenarios
+- **Security**: Hermes `_run_bridge` now uses `--` terminator before prompt arg, preventing CLI arg injection via user input
+- OpenClaw hook-pack `handler.js` now searches multiple candidate paths for bridge module, fixing tarball install mode where hardcoded relative path was broken
+- `verify-host-lifecycle` and `verify-openclaw-adapter` now set `OPENCLAW_STATE_DIR` to isolate from global gateway state
+- `isEscaped()` no longer skips routing for CJK questions ending with `?`; threshold narrowed to English-only prompts under 15 chars
 - `isEscaped()` no longer skips routing for CJK questions ending with `?`; threshold narrowed to English-only prompts under 15 chars
 - `readCommandBody` truncates file before applying frontmatter regex, preventing catastrophic backtracking on large files
 - `openclaw-runtime.cjs` removed dead duplicate `scanOpenClawRuntimePluginCommands` definition

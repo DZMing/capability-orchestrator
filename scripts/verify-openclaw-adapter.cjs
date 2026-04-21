@@ -34,7 +34,7 @@ async function main() {
 async function _main(tmp, packDir) {
   const cfg = path.join(tmp, 'openclaw.json');
   fs.writeFileSync(cfg, '{}\n');
-  const env = { ...process.env, OPENCLAW_CONFIG_PATH: cfg };
+  const env = { ...process.env, OPENCLAW_CONFIG_PATH: cfg, OPENCLAW_STATE_DIR: tmp };
 
   const install = run('openclaw', ['plugins', 'install', HOOK_PACK_DIR, '--link'], { env });
   const pluginInstall = run('openclaw', ['plugins', 'install', ADAPTER_DIR, '--link'], { env });
@@ -104,7 +104,7 @@ async function _main(tmp, packDir) {
   const hookTarball = path.join(packDir, hookPackOutput.trim().split(/\r?\n/).pop());
   const packCfg = path.join(packDir, 'openclaw-pack.json');
   fs.writeFileSync(packCfg, '{}\n');
-  const packEnv = { ...process.env, OPENCLAW_CONFIG_PATH: packCfg };
+  const packEnv = { ...process.env, OPENCLAW_CONFIG_PATH: packCfg, OPENCLAW_STATE_DIR: packDir };
   run('openclaw', ['plugins', 'install', adapterTarball], { env: packEnv });
   run('openclaw', ['plugins', 'install', hookTarball], { env: packEnv });
   const packInspect = run('openclaw', ['plugins', 'inspect', 'capability-orchestrator'], { env: packEnv });

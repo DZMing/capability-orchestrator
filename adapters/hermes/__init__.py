@@ -46,6 +46,7 @@ def _run_bridge(mode: str, prompt: str = "", cwd: str | None = None) -> str:
         cwd or os.getcwd(),
     ]
     if prompt:
+        cmd.append("--")
         cmd.extend(["--prompt", prompt])
     env = dict(os.environ)
     proc = subprocess.run(
@@ -58,7 +59,9 @@ def _run_bridge(mode: str, prompt: str = "", cwd: str | None = None) -> str:
         env=env,
     )
     if proc.returncode != 0:
-      return (proc.stderr or proc.stdout or "capability-orchestrator bridge failed").strip()
+        return (
+            proc.stderr or proc.stdout or "capability-orchestrator bridge failed"
+        ).strip()
     return (proc.stdout or "").strip()
 
 

@@ -63,6 +63,7 @@ function verifyOpenClaw(sourceRepo) {
   const env = installEnv(sourceRepo, {
     OPENCLAW_USER_DIR: tmp,
     OPENCLAW_CONFIG_PATH: cfg,
+    OPENCLAW_STATE_DIR: tmp,
   });
 
   const install1 = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=openclaw'], { env });
