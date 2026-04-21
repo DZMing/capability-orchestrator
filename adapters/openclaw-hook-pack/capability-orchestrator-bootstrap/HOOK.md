@@ -1,6 +1,6 @@
 ---
 name: capability-orchestrator-bootstrap
-description: "Capability Orchestrator bootstrap hook skeleton for OpenClaw."
+description: "Capability Orchestrator bootstrap hook for OpenClaw."
 metadata:
   {
     "openclaw":
@@ -12,7 +12,7 @@ metadata:
             {
               "id": "capability-orchestrator",
               "kind": "path",
-              "label": "Capability Orchestrator hook-pack skeleton",
+              "label": "Capability Orchestrator hook-pack bridge",
             },
           ],
       },
@@ -21,8 +21,5 @@ metadata:
 
 # Capability Orchestrator Bootstrap Hook
 
-This is a minimal OpenClaw hook-pack skeleton used to prove the install shape
-for capability-orchestrator.
-
-It is intentionally non-functional. The real implementation still needs the
-host-native integration path to be completed.
+This hook injects capability awareness into OpenClaw agent bootstrap sessions by
+bridging into the shared capability-orchestrator scan core.

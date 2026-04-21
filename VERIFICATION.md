@@ -6,7 +6,7 @@
 - 安装/卸载/幂等安装链路
 - `SessionStart` / `UserPromptSubmit` 的 CLI 级等价验证
 - clean-room Claude CLI 真实行为验证
-- OpenClaw / Hermes 实验宿主安装验证
+- OpenClaw / Hermes 实验宿主 bridge 验证
 
 ## 环境
 
@@ -29,7 +29,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`349`
+- 当前自动化总数：`387`
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
@@ -203,14 +203,20 @@ npm run verify:release
 - `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，并继承真实 `settings.json` 中的 `model + env` 运行时配置，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
 - `verify:live:codex`：隔离 `HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并要求 fresh `route-log.jsonl` 里出现目标 skill 路由条目
 - `verify:release`：用于发布前检查版本/manifest/changelog 同步，并显式报告 `HEAD` 是否已经等于最新 tag、以及工作树是否 clean；这些状态需要人工检查，不能只看退出码
-- `verify:host:openclaw`：在隔离 `OPENCLAW_CONFIG_PATH` 下安装最小 hook-pack skeleton，并验证：
-  - `plugins install` 返回成功
+- `verify:host:openclaw`：在隔离 `OPENCLAW_CONFIG_PATH` 下安装 hook-pack + adapter bridge，并验证：
+  - `plugins install` 对 hook-pack 与 adapter 都返回成功
   - 宿主 config 写入 `hooks.internal.load.extraDirs`
   - `hooks.internal.entries.capability-orchestrator-bootstrap.enabled = true`
   - `openclaw hooks info capability-orchestrator-bootstrap` 可命中
-- `verify:host:hermes`：在隔离 `HERMES_HOME` 下把 Hermes adapter skeleton 包装成临时 git repo，并验证：
+  - bootstrap hook 会把 awareness 文本注入 `event.messages`
+  - `openclaw plugins inspect capability-orchestrator` 能看到 adapter commands / CLI command
+  - `plugins uninstall capability-orchestrator --force` + hook config unset 能闭环卸载
+- `verify:host:hermes`：在隔离 `HERMES_HOME` 下把 Hermes adapter bridge 包装成临时 git repo，并验证：
   - `hermes plugins install file://...` 返回成功
   - `hermes plugins list` 可见 `capability-orchestrator`
+  - plugin slash command `cap-orch` 可返回 status / route bridge 输出
+  - `pre_llm_call` hook 可注入 awareness context
+  - `disable / enable / remove` 管理链路可闭环
 
 注意：
 
@@ -223,8 +229,7 @@ npm run verify:release
 - 没有直接打开 Claude Code 桌面 GUI 做肉眼会话验收
 - 但当前功能级签字建立在 clean-room CLI + stream-json hook 事件 + debug 日志上；GUI 不再是功能正确性的前置条件
 - OpenClaw / Hermes 当前仍是实验宿主路径，而非正式支持承诺
-- OpenClaw 的 hook-pack install 已经成立，但 runtime loader / restart 语义还在继续钉死
-- Hermes 的最小 plugin install 已经成立，但完整 host-native adapter 仍未完成
+- 当前保守点主要是正式支持矩阵、Windows 原生支持、以及更广泛宿主生命周期承诺，而不是 bridge 本身缺失
 
 ## 最终结论
 

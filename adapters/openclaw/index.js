@@ -1,46 +1,109 @@
-import { definePluginEntry } from "openclaw/plugin-sdk";
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import { createRequire } from "node:module";
 
-function buildStatusText() {
-  return [
-    "capability-orchestrator OpenClaw adapter loaded.",
-    "",
-    "Current state:",
-    "- Runtime capability discovery is implemented in the core repo.",
-    "- Experimental OpenClaw install/uninstall path is implemented through the hook-pack adapter.",
-    "- Runtime loader and restart semantics are still being hardened.",
-    "- This adapter remains an experimental host-native integration path.",
-    "",
-    "Do not treat this as full release-ready host parity yet.",
-  ].join("\n");
+const require = createRequire(import.meta.url);
+const bridge = require("../../scripts/host-adapter-bridge.cjs");
+
+function renderStatus(cwd) {
+  return bridge.buildStatus({
+    platform: "openclaw",
+    cwd: cwd || process.cwd(),
+    coreRoot: require("node:path").resolve(
+      require("node:path").dirname(new URL(import.meta.url).pathname),
+      "../..",
+    ),
+  });
+}
+
+function renderAwareness(cwd) {
+  return bridge.renderAwareness({
+    platform: "openclaw",
+    cwd: cwd || process.cwd(),
+    mode: "awareness",
+  });
+}
+
+function renderRoute(prompt, cwd) {
+  return bridge.renderRoute({
+    platform: "openclaw",
+    cwd: cwd || process.cwd(),
+    prompt,
+  }).rendered;
+}
+
+function buildTextReply(text) {
+  return { text: text || "No output." };
 }
 
 export default definePluginEntry({
   id: "capability-orchestrator",
   name: "Capability Orchestrator",
   description:
-    "Host-native OpenClaw adapter skeleton for capability-orchestrator.",
+    "Host-native OpenClaw bridge for capability-orchestrator awareness and route previews.",
   register(api) {
     api.registerCommand({
       name: "capability-orchestrator-status",
       description: "Report capability-orchestrator OpenClaw adapter status.",
       acceptsArgs: false,
-      handler: async () => ({ text: buildStatusText() }),
+      handler: async () => buildTextReply(renderStatus(process.cwd())),
+    });
+    api.registerCommand({
+      name: "capability-orchestrator-awareness",
+      description:
+        "Show the current capability awareness snapshot for the active workspace.",
+      acceptsArgs: false,
+      handler: async () => buildTextReply(renderAwareness(process.cwd())),
+    });
+    api.registerCommand({
+      name: "capability-orchestrator-route",
+      description:
+        "Preview how capability-orchestrator would route the provided prompt.",
+      acceptsArgs: true,
+      handler: async (ctx) =>
+        buildTextReply(renderRoute(ctx.args || "", process.cwd())),
     });
     api.registerCli(
       async ({ program }) => {
-        program
-          .command("cap-orch-status")
+        const root = program
+          .command("cap-orch")
+          .description("Capability Orchestrator host bridge commands");
+        root
+          .command("status")
           .description("Show capability-orchestrator OpenClaw adapter status")
           .action(() => {
-            process.stdout.write(buildStatusText() + "\n");
+            process.stdout.write(renderStatus(process.cwd()) + "\n");
+          });
+        root
+          .command("awareness")
+          .description(
+            "Show the capability awareness snapshot for the current workspace",
+          )
+          .action(() => {
+            process.stdout.write(renderAwareness(process.cwd()) + "\n");
+          });
+        root
+          .command("route")
+          .description(
+            "Preview how capability-orchestrator would route a prompt",
+          )
+          .argument("<prompt...>")
+          .action((promptParts) => {
+            process.stdout.write(
+              renderRoute(
+                Array.isArray(promptParts)
+                  ? promptParts.join(" ")
+                  : String(promptParts || ""),
+                process.cwd(),
+              ) + "\n",
+            );
           });
       },
       {
         descriptors: [
           {
-            name: "cap-orch-status",
-            description: "Show capability-orchestrator OpenClaw adapter status",
-            hasSubcommands: false,
+            name: "cap-orch",
+            description: "Capability Orchestrator host bridge commands",
+            hasSubcommands: true,
           },
         ],
       },

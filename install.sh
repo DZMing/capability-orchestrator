@@ -7,7 +7,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="1.11.15"
+VERSION_FALLBACK="1.11.16"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
@@ -248,18 +248,28 @@ PLUGINS_DIR="$CONFIG_DIR/plugins/cache"
 INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
 
 install_openclaw_host() {
-  local adapter_dir="$INSTALL_DIR/adapters/openclaw-hook-pack"
-  if [[ ! -d "$adapter_dir" ]]; then
-    red "错误：缺少 OpenClaw hook-pack 目录 $adapter_dir"
+  local hook_pack_dir="$INSTALL_DIR/adapters/openclaw-hook-pack"
+  local plugin_dir="$INSTALL_DIR/adapters/openclaw"
+  if [[ ! -d "$hook_pack_dir" ]]; then
+    red "错误：缺少 OpenClaw hook-pack 目录 $hook_pack_dir"
+    exit 1
+  fi
+  if [[ ! -d "$plugin_dir" ]]; then
+    red "错误：缺少 OpenClaw adapter 目录 $plugin_dir"
     exit 1
   fi
   yellow "正在安装 OpenClaw hook-pack..."
   OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
-    openclaw plugins install "$adapter_dir" --link --force
+    openclaw plugins install "$hook_pack_dir" --link
+  yellow "正在安装 OpenClaw adapter..."
+  OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+    openclaw plugins install "$plugin_dir" --link
 }
 
 uninstall_openclaw_host() {
   if command -v openclaw >/dev/null 2>&1; then
+    OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+      openclaw plugins uninstall capability-orchestrator --force >/dev/null 2>&1 || true
     OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
       openclaw config unset hooks.internal.entries.capability-orchestrator-bootstrap >/dev/null 2>&1 || true
     OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
@@ -275,6 +285,7 @@ create_hermes_adapter_repo() {
   local tmp_repo
   tmp_repo="$(mktemp -d "/tmp/cap-orch-hermes-adapter-XXXXXX")"
   cp -R "$src"/. "$tmp_repo"/
+  printf '%s\n' "$INSTALL_DIR" > "$tmp_repo/.capability-orchestrator-core-root"
   git -C "$tmp_repo" init -q
   git -C "$tmp_repo" config user.email "capability-orchestrator@example.invalid"
   git -C "$tmp_repo" config user.name "capability-orchestrator"
@@ -508,7 +519,7 @@ if [[ "$PLATFORM" == "claude" || "$PLATFORM" == "codex" ]]; then
   green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
   green "✓ UserPromptSubmit hook 已注册（每条消息自动匹配 skill）"
 elif [[ "$PLATFORM" == "openclaw" ]]; then
-  green "✓ OpenClaw hook-pack 已安装（实验宿主路径）"
+  green "✓ OpenClaw hook-pack + adapter 已安装（实验宿主路径）"
 elif [[ "$PLATFORM" == "hermes" ]]; then
   green "✓ Hermes adapter 已安装（实验宿主路径）"
 fi
@@ -528,7 +539,7 @@ elif [[ "$PLATFORM" == "claude" ]]; then
   echo ""
   yellow "提示：重启 Claude Code 开新会话后生效"
 elif [[ "$PLATFORM" == "openclaw" ]]; then
-  yellow "提示：按 OpenClaw 输出重启 gateway 后生效"
+  yellow "提示：按 OpenClaw 输出重启 gateway 后生效（hook-pack + adapter）"
 elif [[ "$PLATFORM" == "hermes" ]]; then
   yellow "提示：按 Hermes 输出重启 gateway 后生效"
 fi

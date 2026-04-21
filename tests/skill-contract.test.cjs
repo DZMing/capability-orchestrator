@@ -193,7 +193,7 @@ test('plugin manifests: Claude and Codex manifests exist and version matches pac
   assert.equal(codexPlugin.name, claudePlugin.name, 'Codex and Claude manifests should describe the same plugin');
 });
 
-test('host adapter skeletons: OpenClaw and Hermes adapter metadata exist and match package version', () => {
+test('host adapter packages: OpenClaw and Hermes adapter metadata exist and match package version', () => {
   const fs = require('fs');
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
   const openclawPkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw', 'package.json'), 'utf8'));
@@ -204,10 +204,10 @@ test('host adapter skeletons: OpenClaw and Hermes adapter metadata exist and mat
   assert.equal(openclawPkg.version, pkg.version, 'OpenClaw adapter package version should match package.json');
   assert.equal(openclawManifest.id, 'capability-orchestrator', 'OpenClaw adapter manifest id should be stable');
   assert.match(hermesYaml, new RegExp(`version:\\s*${pkg.version.replace(/\./g, '\\.')}`), 'Hermes adapter version should match package.json');
-  assert.match(hermesInit, /capability-orchestrator/, 'Hermes adapter skeleton should identify itself');
+  assert.match(hermesInit, /capability-orchestrator/, 'Hermes adapter should identify itself');
 });
 
-test('OpenClaw hook-pack skeleton: metadata and hook files exist', () => {
+test('OpenClaw hook-pack bridge: metadata and hook files exist', () => {
   const fs = require('fs');
   const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
   const hookPack = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw-hook-pack', 'package.json'), 'utf8'));

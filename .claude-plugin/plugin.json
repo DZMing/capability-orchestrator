@@ -1,7 +1,7 @@
 {
   "name": "capability-orchestrator",
   "description": "能力感知 + 路由引导：实时扫描环境中所有可用 skills、subagents、plugins 和 MCP servers，注入路由策略引导 Claude 自动选择最优执行路径。",
-  "version": "1.11.15",
+  "version": "1.11.16",
   "keywords": [
     "capability",
     "orchestration",

@@ -91,8 +91,13 @@ case "${1:-}" in
     shift
     case "${1:-}" in
       install)
-        mkdir -p "$(dirname "$CFG")"
-        cat > "$CFG" <<JSON
+        if [[ " $* " == *" --link "* && " $* " == *" --force "* ]]; then
+          echo "--force is not supported with --link." >&2
+          exit 1
+        fi
+        if [[ "${2:-}" == *"adapters/openclaw-hook-pack"* ]]; then
+          mkdir -p "$(dirname "$CFG")"
+          cat > "$CFG" <<JSON
 {
   "hooks": {
     "internal": {
@@ -112,7 +117,13 @@ case "${1:-}" in
   }
 }
 JSON
-        echo "Linked hook pack path: ${3:-missing-path}"
+          echo "Linked hook pack path: ${2:-missing-path}"
+        else
+          echo "Linked plugin path: ${2:-missing-path}"
+        fi
+        ;;
+      uninstall)
+        echo "Plugin removed: ${2:-unknown}"
         ;;
     esac
     ;;
@@ -355,12 +366,18 @@ OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW
 
 assert "OpenClaw 安装会调用 plugins install" \
   node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins install')?0:1)"
+assert "OpenClaw 安装不会传不兼容的 --link --force 组合" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('--link --force')?1:0)"
+assert "OpenClaw 安装会同时安装 adapter plugin" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('adapters/openclaw')?0:1)"
 assert_file "OpenClaw 安装会写宿主 config" "$OPENCLAW_HOME/openclaw.json"
 assert "OpenClaw 宿主 config 含 install record" \
   node -e "const s=JSON.parse(require('fs').readFileSync('$OPENCLAW_HOME/openclaw.json','utf8')); process.exit(s.hooks.internal.installs['openclaw-hook-pack']?0:1)"
 
 OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" \
   bash "$REPO_ROOT/install.sh" --platform=openclaw --uninstall >/tmp/cap-orch-openclaw-uninstall.log 2>&1
+assert "OpenClaw 卸载会调用 plugins uninstall capability-orchestrator --force" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins uninstall capability-orchestrator --force')?0:1)"
 assert "OpenClaw 卸载会调用 config unset entries" \
   node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.entries.capability-orchestrator-bootstrap')?0:1)"
 assert "OpenClaw 卸载会调用 config unset installs" \

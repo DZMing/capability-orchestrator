@@ -213,17 +213,18 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - OpenClaw：
   - active host runtime snapshot 已成立
   - route 已能命中 OpenClaw runtime skills
-  - 最小 hook-pack skeleton 可通过 `openclaw plugins install ... --link` 安装
+  - hook-pack bootstrap 注入已可通过 `openclaw plugins install ... --link` 安装并执行
   - `openclaw hooks info capability-orchestrator-bootstrap` 已能命中
+  - adapter plugin 已可通过 `openclaw plugins install ... --link` 加载，并暴露 plugin commands / CLI command
 - Hermes：
   - active host runtime snapshot 已成立
   - route 已能命中 Hermes runtime skills
-  - 最小 adapter skeleton 可通过 `hermes plugins install file://...` 安装
+  - plugin bridge 已可通过 `hermes plugins install file://...` 安装
+  - `pre_llm_call` hook 和 slash command 已接入共享 bridge
 
 这些路径已经有真实安装和宿主管理面证据，但仍然标记为实验状态，原因是：
 
-- OpenClaw 的 runtime loader / restart 语义还在继续钉死
-- Hermes 还没有完整的 host-native plugin/hook adapter
+- OpenClaw / Hermes 仍处于实验支持面，主要保守点是正式支持矩阵和更广泛宿主生命周期承诺尚未冻结
 
 ## 渲染模式
 

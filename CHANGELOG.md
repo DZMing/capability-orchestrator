@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.11.16] - 2026-04-20
+
+### Added
+
+- `scripts/host-adapter-bridge.cjs` as the shared awareness/route bridge used by the host adapters
+- OpenClaw bootstrap hook now injects awareness text into `agent:bootstrap` events
+- OpenClaw adapter now loads successfully and exposes plugin commands plus a CLI command root
+- Hermes adapter now registers a real slash bridge and a `pre_llm_call` awareness hook
+- `tests/host-adapter-bridge.test.cjs`
+
+### Fixed
+
+- `install.sh --platform=openclaw` no longer sends the invalid `--link --force` combination to the real OpenClaw CLI
+- OpenClaw host install now includes both the hook-pack and the functional adapter plugin
+- OpenClaw host uninstall now removes the adapter plugin through `openclaw plugins uninstall capability-orchestrator --force`
+- `verify:host:openclaw` now proves bootstrap awareness injection and adapter command exposure
+- `verify:host:hermes` now proves the installed plugin bridge can execute slash-route and `pre_llm_call` awareness injection
+
 ## [1.11.15] - 2026-04-20
 
 ### Fixed
