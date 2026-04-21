@@ -6,10 +6,11 @@ function buildStatusText() {
     "",
     "Current state:",
     "- Runtime capability discovery is implemented in the core repo.",
-    "- OpenClaw host install/uninstall is not finished yet.",
-    "- This adapter is a skeleton for the host-native integration path.",
+    "- Experimental OpenClaw install/uninstall path is implemented through the hook-pack adapter.",
+    "- Runtime loader and restart semantics are still being hardened.",
+    "- This adapter remains an experimental host-native integration path.",
     "",
-    "Do not treat this as release-ready host support yet.",
+    "Do not treat this as full release-ready host parity yet.",
   ].join("\n");
 }
 

@@ -114,9 +114,13 @@ case "${1:-}" in
 JSON
         echo "Linked hook pack path: ${3:-missing-path}"
         ;;
-      uninstall)
-        rm -f "$CFG"
-        echo "Uninstalled openclaw-hook-pack"
+    esac
+    ;;
+  config)
+    shift
+    case "${1:-}" in
+      unset)
+        echo "Removed ${2:-unknown}"
         ;;
     esac
     ;;
@@ -357,8 +361,12 @@ assert "OpenClaw 宿主 config 含 install record" \
 
 OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" \
   bash "$REPO_ROOT/install.sh" --platform=openclaw --uninstall >/tmp/cap-orch-openclaw-uninstall.log 2>&1
-assert "OpenClaw 卸载会调用 plugins uninstall" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins uninstall openclaw-hook-pack')?0:1)"
+assert "OpenClaw 卸载会调用 config unset entries" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.entries.capability-orchestrator-bootstrap')?0:1)"
+assert "OpenClaw 卸载会调用 config unset installs" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.installs.openclaw-hook-pack')?0:1)"
+assert "OpenClaw 卸载会调用 config unset extraDirs" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.load.extraDirs.0')?0:1)"
 rm -rf "$OPENCLAW_HOME" /tmp/cap-orch-openclaw-install.log /tmp/cap-orch-openclaw-uninstall.log
 
 # ── Hermes 实验宿主安装/卸载 smoke ──────────────────────────────────────────

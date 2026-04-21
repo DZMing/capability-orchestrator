@@ -7,7 +7,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="1.11.14"
+VERSION_FALLBACK="1.11.15"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
@@ -261,7 +261,11 @@ install_openclaw_host() {
 uninstall_openclaw_host() {
   if command -v openclaw >/dev/null 2>&1; then
     OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
-      openclaw plugins uninstall openclaw-hook-pack --force >/dev/null 2>&1 || true
+      openclaw config unset hooks.internal.entries.capability-orchestrator-bootstrap >/dev/null 2>&1 || true
+    OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+      openclaw config unset hooks.internal.installs.openclaw-hook-pack >/dev/null 2>&1 || true
+    OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+      openclaw config unset hooks.internal.load.extraDirs.0 >/dev/null 2>&1 || true
   fi
 }
 

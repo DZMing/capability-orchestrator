@@ -43,14 +43,23 @@ function main() {
   const env = { ...process.env, HERMES_HOME: home };
   const install = run('hermes', ['plugins', 'install', `file://${repo}`], { env });
   const list = run('hermes', ['plugins', 'list'], { env });
+  const disable = run('hermes', ['plugins', 'disable', 'capability-orchestrator'], { env });
+  const listDisabled = run('hermes', ['plugins', 'list'], { env });
+  const enable = run('hermes', ['plugins', 'enable', 'capability-orchestrator'], { env });
+  const listEnabled = run('hermes', ['plugins', 'list'], { env });
+  const remove = run('hermes', ['plugins', 'remove', 'capability-orchestrator'], { env });
+  const listAfterRemove = run('hermes', ['plugins', 'list'], { env });
 
   const result = {
     installSucceeded: /Installed|Plugin installed/.test(install),
     listed: /capability-orchestrat/i.test(list),
+    disabled: /disabled/i.test(disable) || /capability-orchestrat/i.test(listDisabled),
+    reenabled: /enabled/i.test(enable) || /capability-orchestrat/i.test(listEnabled),
+    removed: /removed|deleted/i.test(remove) || !/capability-orchestrat/i.test(listAfterRemove),
     home,
   };
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  if (!result.installSucceeded || !result.listed) process.exit(1);
+  if (!result.installSucceeded || !result.listed || !result.disabled || !result.reenabled || !result.removed) process.exit(1);
 }
 
 main();

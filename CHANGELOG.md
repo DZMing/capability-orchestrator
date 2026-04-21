@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.15] - 2026-04-20
+
+### Fixed
+
+- OpenClaw host uninstall now removes the managed hook-pack records through
+  `openclaw config unset ...` instead of relying on `plugins uninstall`, which
+  does not resolve the linked hook-pack install record on real hosts
+- `verify:host:openclaw` now proves both installation and removal by checking
+  `hooks info` before and after uninstall
+- `verify:host:hermes` now exercises install, disable, re-enable, and remove so
+  the experimental Hermes host path is validated across the full management loop
+- adapter status text now reflects the current experimental installable state
+  instead of the older "skeleton only" wording
+
 ## [1.11.14] - 2026-04-20
 
 ### Added
