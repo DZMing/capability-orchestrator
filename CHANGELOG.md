@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.17] - 2026-04-20
+
+### Fixed
+
+- Host bridge status no longer performs a full runtime snapshot, making adapter
+  status commands and `host-adapter-bridge` tests fast and side-effect-light
+- Hermes bridge subprocess calls now have a bounded timeout
+- OpenClaw adapter path resolution now uses `fileURLToPath` instead of raw URL
+  pathname parsing
+
 ## [1.11.16] - 2026-04-20
 
 ### Added

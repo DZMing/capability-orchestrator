@@ -54,6 +54,7 @@ def _run_bridge(mode: str, prompt: str = "", cwd: str | None = None) -> str:
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
         env=env,
     )
     if proc.returncode != 0:

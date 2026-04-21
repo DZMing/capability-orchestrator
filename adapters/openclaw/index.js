@@ -1,17 +1,17 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const bridge = require("../../scripts/host-adapter-bridge.cjs");
+const adapterDir = dirname(fileURLToPath(import.meta.url));
 
 function renderStatus(cwd) {
   return bridge.buildStatus({
     platform: "openclaw",
     cwd: cwd || process.cwd(),
-    coreRoot: require("node:path").resolve(
-      require("node:path").dirname(new URL(import.meta.url).pathname),
-      "../..",
-    ),
+    coreRoot: resolve(adapterDir, "../.."),
   });
 }
 

@@ -90,7 +90,6 @@ function renderRoute({ platform, cwd, userDir, prompt }) {
 
 function buildStatus({ platform, cwd, userDir, coreRoot }) {
   return withScopedHostEnv(platform, userDir, () => {
-    const snapshot = collectSnapshot(cwd, userDir);
     const { dir: resolvedUserDir, source } = resolveUserDirWithSource();
     return [
       `capability-orchestrator host bridge`,
@@ -99,8 +98,7 @@ function buildStatus({ platform, cwd, userDir, coreRoot }) {
       `coreRoot: ${coreRoot || process.cwd()}`,
       `userDir: ${userDir || resolvedUserDir}`,
       `userDirSource: ${source}`,
-      `sections: ${snapshot.sections.length}`,
-      `errors: ${snapshot.errors.length}`,
+      `state: ready`,
     ].join('\n');
   });
 }
