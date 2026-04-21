@@ -313,6 +313,23 @@ test('createOutput: sanitizes skill description to prevent injection', () => {
   }
 });
 
+test('createOutput: active OpenClaw host uses /skill <name> invocation for skills', () => {
+  const { createOutput } = require('../scripts/route-matcher.cjs');
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  process.env.CAPABILITY_PLATFORM = 'openclaw';
+  const origWrite = process.stdout.write;
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; return true; };
+  try {
+    createOutput({ name: 'coding-agent', desc: 'delegate coding', surfaceType: 'skill' });
+    assert.ok(captured.includes('立即调用：/skill coding-agent'));
+  } finally {
+    process.stdout.write = origWrite;
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+  }
+});
+
 // ─── collectAllSkills 插件 skill 路由 ───────────────────────────────────────
 
 const FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'project');
@@ -888,6 +905,148 @@ test('collectAllSkills: includes OpenClaw and Hermes skills in matching pool', (
     else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
     if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
     else process.env.HERMES_USER_DIR = savedHermes;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('collectAllSkills: active OpenClaw host reads workspace and personal skills from its own user dir', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-host-route-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const binDir = path.join(tmp, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'openclaw'), `#!/usr/bin/env node
+const args = process.argv.slice(2).join(' ');
+if (args === 'skills list --json') {
+  process.stdout.write(JSON.stringify({ skills: [
+    { name: 'oc-workspace', description: 'openclaw workspace audit helper', eligible: true, disabled: false, bundled: false, source: 'workspace' },
+    { name: 'oc-personal', description: 'openclaw personal planning helper', eligible: true, disabled: false, bundled: false, source: 'personal' }
+  ] }));
+} else if (args === 'plugins list --json') {
+  process.stdout.write(JSON.stringify({ plugins: [
+    { id: 'memory-core', status: 'loaded' }
+  ] }));
+} else if (args === 'hooks list --json') {
+  process.stdout.write(JSON.stringify({ hooks: [] }));
+} else if (args === 'plugins inspect memory-core') {
+  process.stdout.write("Commands:\\ndreaming\\n\\nCLI commands:\\nmemory\\n");
+} else {
+  process.exit(1);
+}
+`, { mode: 0o755 });
+
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedPath = process.env.PATH;
+  process.env.CAPABILITY_PLATFORM = 'openclaw';
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  try {
+    const skills = collectAllSkills(FIXTURE_PROJECT, openClawRoot);
+    const names = skills.map(s => s.name);
+    assert.ok(names.includes('oc-workspace'));
+    assert.ok(names.includes('oc-personal'));
+    assert.equal(findBestMatch('please do an openclaw workspace audit', skills).name, 'oc-workspace');
+    assert.equal(findBestMatch('need openclaw personal planning', skills).name, 'oc-personal');
+  } finally {
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    process.env.PATH = savedPath;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: active OpenClaw host can literal-route runtime plugin command', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-literal-route-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const binDir = path.join(tmp, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'openclaw'), `#!/usr/bin/env node
+const args = process.argv.slice(2).join(' ');
+if (args === 'skills list --json') {
+  process.stdout.write(JSON.stringify({ skills: [] }));
+} else if (args === 'plugins list --json') {
+  process.stdout.write(JSON.stringify({ plugins: [{ id: 'memory-core', status: 'loaded' }] }));
+} else if (args === 'hooks list --json') {
+  process.stdout.write(JSON.stringify({ hooks: [] }));
+} else if (args === 'plugins inspect memory-core') {
+  process.stdout.write("Commands:\\ndreaming\\n\\nCLI commands:\\nmemory\\n");
+} else {
+  process.exit(1);
+}
+`, { mode: 0o755 });
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedPath = process.env.PATH;
+  process.env.CAPABILITY_PLATFORM = 'openclaw';
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  try {
+    const input = JSON.stringify({ prompt: '/dreaming', cwd: FIXTURE_PROJECT });
+    const decision = resolveRouteDecision(input);
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.targetType, 'command');
+    assert.equal(decision.explain.targetName, 'dreaming');
+    assert.equal(decision.explain.reason, 'matched-command-literal');
+  } finally {
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    process.env.PATH = savedPath;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('createCommandOutput: active OpenClaw host uses slash invocation for plugin command', () => {
+  const { createCommandOutput } = require('../scripts/route-matcher.cjs');
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  process.env.CAPABILITY_PLATFORM = 'openclaw';
+  const origWrite = process.stdout.write;
+  let captured = '';
+  process.stdout.write = (s) => { captured += s; return true; };
+  try {
+    createCommandOutput({ name: 'dreaming', desc: 'trigger dreaming', surfaceType: 'plugin_command', filePath: '' });
+    assert.ok(captured.includes('立即调用：/dreaming'));
+  } finally {
+    process.stdout.write = origWrite;
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+  }
+});
+
+test('collectAllSkills: active Hermes host reads its own user skills from host dir', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-host-route-'));
+  const hermesRoot = path.join(tmp, 'hermes');
+  const binDir = path.join(tmp, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'hermes'), `#!/usr/bin/env node
+const args = process.argv.slice(2).join(' ');
+if (args === 'skills list') {
+  process.stdout.write("\\n┃ Name                              ┃ Category             ┃ Source  ┃ Trust   ┃\\n│ hermes-host-skill                 │                      │ local   │ local   │\\n");
+} else {
+  process.exit(1);
+}
+`, { mode: 0o755 });
+
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  const savedHermes = process.env.HERMES_USER_DIR;
+  const savedPath = process.env.PATH;
+  process.env.CAPABILITY_PLATFORM = 'hermes';
+  process.env.HERMES_USER_DIR = hermesRoot;
+  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  try {
+    const skills = collectAllSkills(FIXTURE_PROJECT, hermesRoot);
+    const names = skills.map(s => s.name);
+    assert.ok(names.includes('hermes-host-skill'));
+    assert.equal(findBestMatch('need hermes host planning help', skills).name, 'hermes-host-skill');
+  } finally {
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
+    else process.env.HERMES_USER_DIR = savedHermes;
+    process.env.PATH = savedPath;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

@@ -7,7 +7,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="1.11.12"
+VERSION_FALLBACK="1.11.14"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
@@ -82,7 +82,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --platform)
       if [[ $# -lt 2 ]]; then
-        red "错误：--platform 需要参数（claude 或 codex）"
+        red "错误：--platform 需要参数（claude / codex / openclaw / hermes）"
         exit 1
       fi
       PLATFORM="$2"
@@ -106,16 +106,24 @@ if [[ -z "$PLATFORM" ]]; then
     PLATFORM="claude"
   elif [[ -n "${CODEX_USER_DIR:-}" || -n "${CODEX_PLUGIN_DATA:-}" ]]; then
     PLATFORM="codex"
+  elif [[ -n "${OPENCLAW_USER_DIR:-}" || -n "${OPENCLAW_PLUGIN_DATA:-}" || -n "${OPENCLAW_CONFIG_PATH:-}" ]]; then
+    PLATFORM="openclaw"
+  elif [[ -n "${HERMES_HOME:-}" || -n "${HERMES_USER_DIR:-}" || -n "${HERMES_PLUGIN_DATA:-}" ]]; then
+    PLATFORM="hermes"
   elif [[ -d "$HOME/.claude" ]]; then
     PLATFORM="claude"
   elif [[ -f "$HOME/.codex/config.toml" ]]; then
     PLATFORM="codex"
+  elif [[ -f "$HOME/.openclaw/openclaw.json" || -d "$HOME/.openclaw" ]]; then
+    PLATFORM="openclaw"
+  elif [[ -f "$HOME/.hermes/config.yaml" || -d "$HOME/.hermes" ]]; then
+    PLATFORM="hermes"
   else
     PLATFORM="claude"
   fi
 fi
-if [[ "$PLATFORM" != "claude" && "$PLATFORM" != "codex" ]]; then
-  red "错误：--platform 仅支持 claude 或 codex"
+if [[ "$PLATFORM" != "claude" && "$PLATFORM" != "codex" && "$PLATFORM" != "openclaw" && "$PLATFORM" != "hermes" ]]; then
+  red "错误：--platform 仅支持 claude / codex / openclaw / hermes"
   exit 1
 fi
 
@@ -213,11 +221,23 @@ resolve_install_target() {
 }
 
 # 确定用户级平台目录
+HOST_CONFIG_FILE=""
 if [[ "$PLATFORM" == "codex" ]]; then
   CONFIG_DIR="${CODEX_USER_DIR:-$HOME/.codex}"
   CONFIG_DIR_ENV="CODEX_USER_DIR"
   HOOKS_FILE="$CONFIG_DIR/hooks.json"
   PLUGIN_DATA_ENV="CODEX_PLUGIN_DATA"
+elif [[ "$PLATFORM" == "openclaw" ]]; then
+  CONFIG_DIR="${OPENCLAW_USER_DIR:-$HOME/.openclaw}"
+  CONFIG_DIR_ENV="OPENCLAW_USER_DIR"
+  HOOKS_FILE=""
+  PLUGIN_DATA_ENV="OPENCLAW_PLUGIN_DATA"
+  HOST_CONFIG_FILE="${OPENCLAW_CONFIG_PATH:-$CONFIG_DIR/openclaw.json}"
+elif [[ "$PLATFORM" == "hermes" ]]; then
+  CONFIG_DIR="${HERMES_HOME:-${HERMES_USER_DIR:-$HOME/.hermes}}"
+  CONFIG_DIR_ENV="HERMES_HOME"
+  HOOKS_FILE=""
+  PLUGIN_DATA_ENV="HERMES_PLUGIN_DATA"
 else
   CONFIG_DIR="${CLAUDE_USER_DIR:-$HOME/.claude}"
   CONFIG_DIR_ENV="CLAUDE_USER_DIR"
@@ -226,6 +246,57 @@ else
 fi
 PLUGINS_DIR="$CONFIG_DIR/plugins/cache"
 INSTALL_DIR="$PLUGINS_DIR/$PLUGIN_NAME"
+
+install_openclaw_host() {
+  local adapter_dir="$INSTALL_DIR/adapters/openclaw-hook-pack"
+  if [[ ! -d "$adapter_dir" ]]; then
+    red "错误：缺少 OpenClaw hook-pack 目录 $adapter_dir"
+    exit 1
+  fi
+  yellow "正在安装 OpenClaw hook-pack..."
+  OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+    openclaw plugins install "$adapter_dir" --link --force
+}
+
+uninstall_openclaw_host() {
+  if command -v openclaw >/dev/null 2>&1; then
+    OPENCLAW_CONFIG_PATH="${HOST_CONFIG_FILE}" \
+      openclaw plugins uninstall openclaw-hook-pack --force >/dev/null 2>&1 || true
+  fi
+}
+
+HERMES_TMP_REPO=""
+create_hermes_adapter_repo() {
+  local src="$INSTALL_DIR/adapters/hermes"
+  local tmp_repo
+  tmp_repo="$(mktemp -d "/tmp/cap-orch-hermes-adapter-XXXXXX")"
+  cp -R "$src"/. "$tmp_repo"/
+  git -C "$tmp_repo" init -q
+  git -C "$tmp_repo" config user.email "capability-orchestrator@example.invalid"
+  git -C "$tmp_repo" config user.name "capability-orchestrator"
+  git -C "$tmp_repo" add -A
+  git -C "$tmp_repo" commit -qm "seed hermes adapter"
+  printf '%s' "$tmp_repo"
+}
+
+install_hermes_host() {
+  local src="$INSTALL_DIR/adapters/hermes"
+  if [[ ! -d "$src" ]]; then
+    red "错误：缺少 Hermes adapter 目录 $src"
+    exit 1
+  fi
+  HERMES_TMP_REPO="$(create_hermes_adapter_repo)"
+  yellow "正在安装 Hermes adapter..."
+  HERMES_HOME="${CONFIG_DIR}" \
+    hermes plugins install "file://$HERMES_TMP_REPO" --force
+}
+
+uninstall_hermes_host() {
+  if command -v hermes >/dev/null 2>&1; then
+    HERMES_HOME="${CONFIG_DIR}" \
+      hermes plugins remove capability-orchestrator >/dev/null 2>&1 || true
+  fi
+}
 
 # --version 支持
 if [[ "$MODE" == "version" ]]; then
@@ -244,6 +315,12 @@ if [[ "$MODE" == "uninstall" ]]; then
       node "$HELPER_SCRIPT" --mode codex-uninstall --file "$HOOKS_FILE"
       echo "Codex hooks 已移除"
     fi
+  elif [[ "$PLATFORM" == "openclaw" ]]; then
+    uninstall_openclaw_host
+    echo "OpenClaw hook-pack 已移除"
+  elif [[ "$PLATFORM" == "hermes" ]]; then
+    uninstall_hermes_host
+    echo "Hermes adapter 已移除"
   else
     SETTINGS_FILE="$CONFIG_DIR/settings.json"
     if [[ -f "$SETTINGS_FILE" && -n "${HELPER_SCRIPT:-}" ]]; then
@@ -321,6 +398,7 @@ cleanup_install_artifacts() {
   [[ -n "${STAGE_DIR:-}" && -d "$STAGE_DIR" ]] && rm -rf "$STAGE_DIR"
   [[ -n "${TMP_ZIP:-}" && -e "$TMP_ZIP" ]] && rm -f "$TMP_ZIP"
   [[ -n "${TMP_DIR:-}" && -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+  [[ -n "${HERMES_TMP_REPO:-}" && -d "$HERMES_TMP_REPO" ]] && rm -rf "$HERMES_TMP_REPO"
 
   return $status
 }
@@ -398,7 +476,7 @@ if [[ "$PLATFORM" == "codex" ]]; then
   yellow "正在注册 Codex hooks..."
   node "$HELPER_SCRIPT" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD"
   echo "Codex hooks 已注册"
-else
+elif [[ "$PLATFORM" == "claude" ]]; then
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
   HOOK_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
@@ -414,12 +492,22 @@ else
   # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
   yellow "正在注册 UserPromptSubmit hook..."
   echo "$ROUTE_STATUS"
+elif [[ "$PLATFORM" == "openclaw" ]]; then
+  install_openclaw_host
+elif [[ "$PLATFORM" == "hermes" ]]; then
+  install_hermes_host
 fi
 
 echo ""
 green "✓ 安装完成：$INSTALL_DIR (平台: $PLATFORM)"
-green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
-green "✓ UserPromptSubmit hook 已注册（每条消息自动匹配 skill）"
+if [[ "$PLATFORM" == "claude" || "$PLATFORM" == "codex" ]]; then
+  green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
+  green "✓ UserPromptSubmit hook 已注册（每条消息自动匹配 skill）"
+elif [[ "$PLATFORM" == "openclaw" ]]; then
+  green "✓ OpenClaw hook-pack 已安装（实验宿主路径）"
+elif [[ "$PLATFORM" == "hermes" ]]; then
+  green "✓ Hermes adapter 已安装（实验宿主路径）"
+fi
 echo ""
 bold "使用方式："
 echo "  新会话开始时自动感知环境能力（无需手动触发）"
@@ -429,10 +517,14 @@ if [[ "$PLATFORM" == "codex" ]]; then
   echo "  \$refresh      — 对比前后能力变化"
   echo ""
   yellow "提示：重启 Codex CLI 后生效"
-else
+elif [[ "$PLATFORM" == "claude" ]]; then
   echo "  /capability-orchestrator:capabilities — 查看完整能力摘要"
   echo "  /capability-orchestrator:orchestrate  — 路由复杂任务"
   echo "  /capability-orchestrator:refresh      — 对比前后能力变化"
   echo ""
   yellow "提示：重启 Claude Code 开新会话后生效"
+elif [[ "$PLATFORM" == "openclaw" ]]; then
+  yellow "提示：按 OpenClaw 输出重启 gateway 后生效"
+elif [[ "$PLATFORM" == "hermes" ]]; then
+  yellow "提示：按 Hermes 输出重启 gateway 后生效"
 fi

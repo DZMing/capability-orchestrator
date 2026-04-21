@@ -23,9 +23,18 @@ const {
   getOpenClawSkillDir,
   getHermesSkillDir,
   scanCompatibleSkills,
+  scanOpenClawRuntimeSkills,
+  scanOpenClawRuntimePluginCommands,
+  scanHermesRuntimeSkills,
 } = require('./lib/scan-core.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
-const { detectPlatform, getPlatformPaths } = require('./lib/platform.cjs');
+const {
+  detectPlatform,
+  getPlatformPaths,
+  getUserSkillsPaths,
+  getUserCommandsPaths,
+  formatInvocation,
+} = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
 const { stemEnglish } = require('./stem-rules.cjs');
 const { expandSynonyms } = require('./synonyms.cjs');
@@ -270,7 +279,7 @@ function findBestMatch(prompt, skills) {
 // skill 路由：注入明确的调用指令，避免泄漏未渲染的 !command 原文
 function createOutput(match) {
   const platform = detectPlatform();
-  const skillInvocation = platform === 'codex' ? `$${match.name}` : `/${match.name}`;
+  const skillInvocation = formatInvocation(match.name, platform, match.surfaceType || 'skill');
   const safeDesc = sanitize(match.desc || '');
   const ctx = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
@@ -338,7 +347,7 @@ function createCommandOutput(match) {
   body = readCommandBody(match.filePath);
   const safeDesc = sanitize(match.desc || '');
   const platform = detectPlatform();
-  const cmdInvocation = platform === 'codex' ? `$${match.name}` : `/${match.name}`;
+  const cmdInvocation = formatInvocation(match.name, platform, match.surfaceType || 'slash_command');
   if (canInvokeAsSlashCommand(match)) {
     const ctx = [
       '[AUTO-ROUTE] 检测到任务匹配命令: ' + cmdInvocation,
@@ -388,17 +397,31 @@ function createMcpOutput(server) {
 }
 
 function collectAllSkills(projectDir, userDir) {
-  const claudeUserDir = userDir || resolveUserDir();
+  const activeUserDir = userDir || resolveUserDir();
   const platform = detectPlatform();
   const pp = getPlatformPaths(platform);
 
   const projSkills = scanSkills(path.join(projectDir, pp.projectSkillsDir), []);
-  const userSkills = scanSkills(path.join(claudeUserDir, 'skills'), []);
-  const openClawSkills = scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', []);
-  const hermesSkills = scanCompatibleSkills(getHermesSkillDir(), 'hermes', []);
+  const userSkills = getUserSkillsPaths(activeUserDir, platform)
+    .flatMap((dir) => scanSkills(dir, []));
+  const runtimeHelpers = {
+    sanitize,
+    truncate: (str, max) => {
+      if (!str) return '';
+      str = String(str).replace(/\r?\n/g, ' ').trim();
+      return str.length > max ? str.slice(0, max - 1) + '…' : str;
+    },
+    withCapabilityMeta: (entity, meta = {}) => ({ ...entity, ...meta }),
+  };
+  const openClawSkills = platform === 'openclaw'
+    ? scanOpenClawRuntimeSkills([], runtimeHelpers)
+    : scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', []);
+  const hermesSkills = platform === 'hermes'
+    ? scanHermesRuntimeSkills([], runtimeHelpers)
+    : scanCompatibleSkills(getHermesSkillDir(), 'hermes', []);
   const pluginSkills = [];
   try {
-    for (const p of scanInstalledPlugins(claudeUserDir, [])) {
+    for (const p of scanInstalledPlugins(activeUserDir, [])) {
       for (const s of (p.skillItems || [])) pluginSkills.push(s);
     }
   } catch { /* fault-open */ }
@@ -408,7 +431,8 @@ function collectAllSkills(projectDir, userDir) {
   try {
     if (pp.projectCommandsDir) {
       const projCmds = scanCommands(path.join(projectDir, pp.projectCommandsDir), []);
-      const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), []);
+      const userCmds = getUserCommandsPaths(activeUserDir, platform)
+        .flatMap((dir) => scanCommands(dir, []));
       for (const c of [...projCmds, ...userCmds]) {
         if (c.desc) legacyCmds.push({ ...c, type: 'command' });
       }
@@ -425,6 +449,29 @@ function collectAllSkills(projectDir, userDir) {
     }
   }
   return deduped;
+}
+
+function collectLiteralCommands(projectDir, userDir, prompt) {
+  const platform = detectPlatform();
+  const trimmed = String(prompt || '').trim();
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const looksLiteral = /^\/[a-z0-9_-]+/i.test(trimmed) || words.length <= 3;
+  if (!looksLiteral) return [];
+  const runtimeHelpers = {
+    sanitize,
+    truncate: (str, max) => {
+      if (!str) return '';
+      str = String(str).replace(/\r?\n/g, ' ').trim();
+      return str.length > max ? str.slice(0, max - 1) + '…' : str;
+    },
+    withCapabilityMeta: (entity, meta = {}) => ({ ...entity, ...meta }),
+  };
+  try {
+    if (platform === 'openclaw') {
+      return scanOpenClawRuntimePluginCommands([], runtimeHelpers);
+    }
+  } catch { /* fault-open */ }
+  return [];
 }
 
 function buildExplainResult({ action, reason, targetType = null, targetName = null, confidence = 0, matchedKeywords = [], cwd = '', userDirSource = '' }) {
@@ -470,13 +517,18 @@ function _resolveRouteDecisionInner(input) {
   }
 
   const skills = collectAllSkills(projectDir, userDir);
-  const literal = findLiteralMatch(prompt, skills);
+  const literalPool = [...skills, ...collectLiteralCommands(projectDir, userDir, prompt)];
+  const literal = findLiteralMatch(prompt, literalPool);
   const literalMatched = !!literal;
   const bestSkill = findBestMatch(prompt, skills);
   // 语义匹配低于最低置信度阈值视为噪音，不路由（字面量匹配不受限制）
   const match = literal || (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE ? bestSkill : null);
   if (match) {
-    const targetType = match.type === 'command' ? 'command' : 'skill';
+    const isCommandLike = match.type === 'command'
+      || match.surfaceType === 'slash_command'
+      || match.surfaceType === 'plugin_command'
+      || match.surfaceType === 'cli_subcommand';
+    const targetType = isCommandLike ? 'command' : 'skill';
     const reason = targetType === 'command'
       ? getCommandExplainReason(match, literalMatched)
       : 'matched-skill';

@@ -79,6 +79,79 @@ fi
 GITEOF
 chmod +x "$FAKE_GIT"
 
+FAKE_OPENCLAW="$TMP_GIT/openclaw"
+cat > "$FAKE_OPENCLAW" <<'OCEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+LOG="${FAKE_OPENCLAW_LOG:-}"
+CFG="${OPENCLAW_CONFIG_PATH:-$HOME/.openclaw/openclaw.json}"
+if [[ -n "$LOG" ]]; then printf '%s\n' "$*" >> "$LOG"; fi
+case "${1:-}" in
+  plugins)
+    shift
+    case "${1:-}" in
+      install)
+        mkdir -p "$(dirname "$CFG")"
+        cat > "$CFG" <<JSON
+{
+  "hooks": {
+    "internal": {
+      "load": {
+        "extraDirs": ["${3:-missing-path}"]
+      },
+      "entries": {
+        "capability-orchestrator-bootstrap": { "enabled": true }
+      },
+      "installs": {
+        "openclaw-hook-pack": {
+          "source": "path",
+          "installPath": "${3:-missing-path}"
+        }
+      }
+    }
+  }
+}
+JSON
+        echo "Linked hook pack path: ${3:-missing-path}"
+        ;;
+      uninstall)
+        rm -f "$CFG"
+        echo "Uninstalled openclaw-hook-pack"
+        ;;
+    esac
+    ;;
+esac
+OCEOF
+chmod +x "$FAKE_OPENCLAW"
+
+FAKE_HERMES="$TMP_GIT/hermes"
+cat > "$FAKE_HERMES" <<'HERMEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+LOG="${FAKE_HERMES_LOG:-}"
+HOME_DIR="${HERMES_HOME:-$HOME/.hermes}"
+if [[ -n "$LOG" ]]; then printf '%s\n' "$*" >> "$LOG"; fi
+case "${1:-}" in
+  plugins)
+    shift
+    case "${1:-}" in
+      install)
+        mkdir -p "$HOME_DIR/plugins/capability-orchestrator"
+        echo "Plugin installed"
+        ;;
+      remove)
+        rm -rf "$HOME_DIR/plugins/capability-orchestrator"
+        echo "Plugin removed"
+        ;;
+      enable|disable|list)
+        echo "ok"
+        ;;
+    esac
+    ;;
+esac
+HERMEOF
+chmod +x "$FAKE_HERMES"
+
 # node/bash/git 使用真实的，fake git 排在最前面覆盖 clone 行为
 FAKE_PATH="$TMP_GIT:$(dirname "$(which node)"):$(dirname "$(which bash)"):/usr/bin:/bin"
 
@@ -269,6 +342,40 @@ HOME="$DUAL_HOME" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
 assert_file "双安装默认检测仍写 Claude settings.json" "$DUAL_HOME/.claude/settings.json"
 assert "双安装默认检测不会误写 Codex hooks.json" test ! -f "$DUAL_HOME/.codex/hooks.json"
 rm -rf "$DUAL_HOME" /tmp/cap-orch-dual-auto.log
+
+# ── OpenClaw 实验宿主安装/卸载 smoke ────────────────────────────────────────
+OPENCLAW_HOME=$(mktemp -d)
+OPENCLAW_LOG="$OPENCLAW_HOME/openclaw.log"
+OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" --platform=openclaw >/tmp/cap-orch-openclaw-install.log 2>&1
+
+assert "OpenClaw 安装会调用 plugins install" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins install')?0:1)"
+assert_file "OpenClaw 安装会写宿主 config" "$OPENCLAW_HOME/openclaw.json"
+assert "OpenClaw 宿主 config 含 install record" \
+  node -e "const s=JSON.parse(require('fs').readFileSync('$OPENCLAW_HOME/openclaw.json','utf8')); process.exit(s.hooks.internal.installs['openclaw-hook-pack']?0:1)"
+
+OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" \
+  bash "$REPO_ROOT/install.sh" --platform=openclaw --uninstall >/tmp/cap-orch-openclaw-uninstall.log 2>&1
+assert "OpenClaw 卸载会调用 plugins uninstall" \
+  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins uninstall openclaw-hook-pack')?0:1)"
+rm -rf "$OPENCLAW_HOME" /tmp/cap-orch-openclaw-install.log /tmp/cap-orch-openclaw-uninstall.log
+
+# ── Hermes 实验宿主安装/卸载 smoke ──────────────────────────────────────────
+HERMES_HOME_TMP=$(mktemp -d)
+HERMES_LOG="$HERMES_HOME_TMP/hermes.log"
+HERMES_HOME="$HERMES_HOME_TMP" FAKE_HERMES_LOG="$HERMES_LOG" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" --platform=hermes >/tmp/cap-orch-hermes-install.log 2>&1
+
+assert "Hermes 安装会调用 plugins install" \
+  node -e "const s=require('fs').readFileSync('$HERMES_LOG','utf8'); process.exit(s.includes('plugins install file://')?0:1)"
+assert "Hermes 安装会创建宿主插件目录" test -d "$HERMES_HOME_TMP/plugins/capability-orchestrator"
+
+HERMES_HOME="$HERMES_HOME_TMP" FAKE_HERMES_LOG="$HERMES_LOG" PATH="$FAKE_PATH" \
+  bash "$REPO_ROOT/install.sh" --platform=hermes --uninstall >/tmp/cap-orch-hermes-uninstall.log 2>&1
+assert "Hermes 卸载会调用 plugins remove" \
+  node -e "const s=require('fs').readFileSync('$HERMES_LOG','utf8'); process.exit(s.includes('plugins remove capability-orchestrator')?0:1)"
+rm -rf "$HERMES_HOME_TMP" /tmp/cap-orch-hermes-install.log /tmp/cap-orch-hermes-uninstall.log
 
 # ── 验证卸载 ─────────────────────────────────────────────────────────────────
 CLAUDE_USER_DIR="$TMP_HOME" PATH="$FAKE_PATH" \

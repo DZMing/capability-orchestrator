@@ -192,3 +192,30 @@ test('plugin manifests: Claude and Codex manifests exist and version matches pac
   assert.equal(codexPlugin.version, pkg.version, 'Codex plugin manifest version should match package.json');
   assert.equal(codexPlugin.name, claudePlugin.name, 'Codex and Claude manifests should describe the same plugin');
 });
+
+test('host adapter skeletons: OpenClaw and Hermes adapter metadata exist and match package version', () => {
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
+  const openclawPkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw', 'package.json'), 'utf8'));
+  const openclawManifest = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw', 'openclaw.plugin.json'), 'utf8'));
+  const hermesYaml = fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'hermes', 'plugin.yaml'), 'utf8');
+  const hermesInit = fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'hermes', '__init__.py'), 'utf8');
+
+  assert.equal(openclawPkg.version, pkg.version, 'OpenClaw adapter package version should match package.json');
+  assert.equal(openclawManifest.id, 'capability-orchestrator', 'OpenClaw adapter manifest id should be stable');
+  assert.match(hermesYaml, new RegExp(`version:\\s*${pkg.version.replace(/\./g, '\\.')}`), 'Hermes adapter version should match package.json');
+  assert.match(hermesInit, /capability-orchestrator/, 'Hermes adapter skeleton should identify itself');
+});
+
+test('OpenClaw hook-pack skeleton: metadata and hook files exist', () => {
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
+  const hookPack = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw-hook-pack', 'package.json'), 'utf8'));
+  const hookMd = fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw-hook-pack', 'capability-orchestrator-bootstrap', 'HOOK.md'), 'utf8');
+  const handler = fs.readFileSync(path.join(REPO_ROOT, 'adapters', 'openclaw-hook-pack', 'capability-orchestrator-bootstrap', 'handler.js'), 'utf8');
+
+  assert.equal(hookPack.version, pkg.version, 'OpenClaw hook-pack version should match package.json');
+  assert.deepEqual(hookPack.openclaw.hooks, ['capability-orchestrator-bootstrap']);
+  assert.match(hookMd, /name:\s*capability-orchestrator-bootstrap/);
+  assert.match(handler, /export default async function/);
+});

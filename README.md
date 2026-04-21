@@ -1,6 +1,6 @@
 # capability-orchestrator
 
-> Auto-routing plugin for Claude Code and Codex. Automatically matches user prompts to
+> Auto-routing plugin for Claude Code and Codex, with experimental OpenClaw and Hermes host adapters. Automatically matches user prompts to
 > the right skill, command, or MCP tool using semantic + literal + cross-language
 > matching. Zero config, zero dependencies.
 
@@ -8,7 +8,14 @@
 
 **一句话**：装上之后，Claude Code 或 Codex 每次开新会话自动知道你有哪些 skills / agents / plugins / MCP servers，并且在你输入 prompt 时自动匹配到最合适的工具。
 
-当前版本还会顺带发现本机已安装的 OpenClaw / Hermes 本地 skills，让这些能力也能进入路由视野。
+当前版本除了 Claude Code / Codex 的正式宿主支持外，还已经具备：
+
+- OpenClaw 运行态能力快照 + 路由接入
+- Hermes 运行态能力快照 + 路由接入
+- OpenClaw 实验 hook-pack 安装路径
+- Hermes 实验 plugin 安装路径
+
+换句话说，OpenClaw / Hermes 已经不只是“被扫描的生态目录”，而是正在进入一等运行平台形态；但当前仍处于实验宿主路径，不应误读为和 Claude/Codex 同等级的正式支持。
 
 ## 30 秒上手
 
@@ -65,15 +72,17 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 
 下面的兼容声明刻意保守，只反映当前仓库里已经文档化或验证过的事实。
 
-| 维度              | 状态     | 说明                                            |
-| ----------------- | -------- | ----------------------------------------------- |
-| Node.js           | 支持     | `>=18`                                          |
-| macOS             | 支持     | CI 和本地验证覆盖                               |
-| Linux             | 支持     | CI 覆盖                                         |
-| WSL               | 支持     | Codex on Windows 的推荐路径                     |
-| Windows 原生      | 部分支持 | Claude Code 原生安装支持；Codex 请使用 WSL2     |
-| Claude Code hooks | 支持     | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks |
-| Codex hooks       | 支持     | Linux / macOS 原生支持；Windows 走 WSL2         |
+| 维度              | 状态     | 说明                                                 |
+| ----------------- | -------- | ---------------------------------------------------- |
+| Node.js           | 支持     | `>=18`                                               |
+| macOS             | 支持     | CI 和本地验证覆盖                                    |
+| Linux             | 支持     | CI 覆盖                                              |
+| WSL               | 支持     | Codex on Windows 的推荐路径                          |
+| Windows 原生      | 部分支持 | Claude Code 原生安装支持；Codex 请使用 WSL2          |
+| Claude Code hooks | 支持     | 依赖 `SessionStart` 和 `UserPromptSubmit` hooks      |
+| Codex hooks       | 支持     | Linux / macOS 原生支持；Windows 走 WSL2              |
+| OpenClaw host     | 实验中   | 运行态快照/路由已接入；最小 hook-pack 安装路径已验证 |
+| Hermes host       | 实验中   | 运行态快照/路由已接入；最小 plugin 安装路径已验证    |
 
 ## 安装会改什么
 
@@ -84,6 +93,8 @@ bash ~/.claude/plugins/cache/capability-orchestrator/install.sh --uninstall
 - 安装到 `~/.claude/plugins/cache/capability-orchestrator` 或 `~/.codex/plugins/cache/capability-orchestrator`
 - Claude Code：在 `~/.claude/settings.json` 中写入或更新 `SessionStart` / `UserPromptSubmit`
 - Codex：在 `~/.codex/hooks.json` 中写入或更新对应 hooks
+- OpenClaw（实验）：通过宿主 `plugins install` 安装最小 hook-pack skeleton
+- Hermes（实验）：通过宿主 `plugins install` 安装最小 adapter skeleton
 - 升级和卸载时保留无关 hook 条目
 - 运行时会额外扫描 `~/.openclaw/workspace/skills/` 与 `~/.hermes/skills/`（可通过 `OPENCLAW_USER_DIR` / `HERMES_USER_DIR` 覆盖）
 
@@ -108,10 +119,17 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 # 显式安装到 Codex
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=codex
+
+# 实验：显式安装到 OpenClaw
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=openclaw
+
+# 实验：显式安装到 Hermes
+curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=hermes
 ```
 
 注意：单纯把仓库 `git clone` 到插件目录只会落文件，不会注册 hooks。需要活跃安装时，请通过 `install.sh` 完成。
 Windows 原生安装器当前只覆盖 Claude Code。Codex on Windows 请在 WSL2 内使用 `install.sh`。
+OpenClaw / Hermes 当前仍标记为实验宿主路径：已经有真实安装和宿主管理面证据，但还没升格成正式兼容承诺。
 
 ## 验证
 
@@ -143,6 +161,8 @@ printf '%s' '{"prompt":"输出当前环境的全部可用能力摘要","cwd":"."
 ```bash
 npm run verify:live:claude
 npm run verify:live:codex
+npm run verify:host:openclaw
+npm run verify:host:hermes
 npm run verify:release
 ```
 
@@ -151,6 +171,8 @@ npm run verify:release
 - `verify:live:claude` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，并继承真实 `~/.claude/settings.json` 里的运行时 `model + env` 配置，然后用真实 `claude` CLI 抓取 stream-json 与 debug 日志；通过标准是同一条 `UserPromptSubmit` hook 响应里出现目标路由证据
 - `verify:live:codex` 会先用 `install.sh` 注册隔离 hooks，再把当前工作区快照同步到隔离安装目录，并使用 ASCII 临时工作区别名执行真实 `codex exec`；通过标准是 fresh `route-log.jsonl` 里出现目标 skill 路由条目
 - `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并显式报告 `HEAD` 与最新 tag、工作树 clean/dirty 状态，以及最新 tag 对应的 GitHub Release 是否已真正发布；发布前需要人工检查这些字段，不只看退出码
+- `verify:host:openclaw`：在隔离 `OPENCLAW_CONFIG_PATH` 下安装最小 hook-pack skeleton，并验证宿主 config 写入、启用态、以及 `openclaw hooks info capability-orchestrator-bootstrap`
+- `verify:host:hermes`：在隔离 `HERMES_HOME` 下把 Hermes adapter skeleton 包装成临时 git repo，通过 `hermes plugins install file://...` 安装，并验证 `hermes plugins list` 可见该插件
 
 ## 升级
 

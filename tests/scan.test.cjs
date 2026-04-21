@@ -17,7 +17,10 @@ const {
   tryReadHead, scanSkills, scanAgents, scanCommands, readMcpServers,
   scanInstalledPlugins, isPluginRoot, compareSemver, renderSection,
   collectSnapshot, renderSnapshot, truncate, getOpenClawSkillDir, getHermesSkillDir,
-  parsePlatformList, extractSupportedPlatforms, isPlatformCompatible,
+  parsePlatformList, extractSupportedPlatforms, isPlatformCompatible, withCapabilityMeta,
+  parseOpenClawSkillsJson, parseOpenClawPluginsJson, parseOpenClawHooksJson, parseHermesSkillsTable,
+  parseOpenClawPluginCommandsJson, parseOpenClawCliCommandsJson, parseOpenClawInspectCommandList,
+  parseHermesPluginsList,
 } = require('../scripts/scan-environment.cjs');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -247,6 +250,106 @@ test('collectSnapshot: OpenClaw and Hermes skills are discovered', () => {
   }
 });
 
+test('collectSnapshot: active OpenClaw host uses workspace + personal skills as primary user skills', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-host-scan-'));
+  const openClawRoot = path.join(tmp, 'openclaw');
+  const binDir = path.join(tmp, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'openclaw'), `#!/usr/bin/env node
+const args = process.argv.slice(2).join(' ');
+if (args === 'skills list --json') {
+  process.stdout.write(JSON.stringify({ skills: [
+    { name: 'oc-workspace', description: 'OpenClaw workspace skill', eligible: true, disabled: false, bundled: false, source: 'workspace' },
+    { name: 'oc-personal', description: 'OpenClaw personal skill', eligible: true, disabled: false, bundled: false, source: 'personal' }
+  ] }));
+} else if (args === 'plugins list --json') {
+  process.stdout.write(JSON.stringify({ plugins: [
+    { id: 'memory-core', status: 'loaded' }
+  ] }));
+} else if (args === 'hooks list --json') {
+  process.stdout.write(JSON.stringify({ hooks: [] }));
+} else {
+  process.exit(1);
+}
+`, { mode: 0o755 });
+
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
+  const savedPath = process.env.PATH;
+  process.env.CAPABILITY_PLATFORM = 'openclaw';
+  process.env.OPENCLAW_USER_DIR = openClawRoot;
+  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  try {
+    const snap = collectSnapshot(PROJECT_DIR, openClawRoot);
+    const runtimeSection = snap.sections.find(s => s.label === 'OpenClaw Runtime Skills');
+    assert.ok(runtimeSection, 'runtime skills should exist for openclaw host');
+    const workspaceItem = runtimeSection.items.find(i => i.name === 'oc-workspace');
+    const personalItem = runtimeSection.items.find(i => i.name === 'oc-personal');
+    assert.ok(workspaceItem);
+    assert.ok(personalItem);
+    assert.equal(workspaceItem.host, 'openclaw');
+    assert.equal(workspaceItem.surfaceType, 'skill');
+    assert.equal(workspaceItem.invocation, 'slash');
+    assert.equal(personalItem.host, 'openclaw');
+    assert.ok(!snap.sections.some(s => s.label === 'OpenClaw Runtime Commands'), 'default snapshot should avoid expensive plugin inspect command expansion');
+    assert.ok(!snap.sections.some(s => s.label === 'OpenClaw Runtime CLI Commands'), 'default snapshot should avoid expensive plugin inspect cli expansion');
+    assert.ok(!snap.sections.some(s => s.label === '用户级 Skills'), 'active host should prefer runtime view over generic user section');
+    assert.ok(!snap.sections.some(s => s.label === 'OpenClaw Skills'), 'active host should not also render OpenClaw as ecosystem section');
+  } finally {
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
+    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
+    process.env.PATH = savedPath;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('collectSnapshot: active Hermes host uses user skills as primary user skills', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-host-scan-'));
+  const hermesRoot = path.join(tmp, 'hermes');
+  const binDir = path.join(tmp, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(path.join(binDir, 'hermes'), `#!/usr/bin/env node
+const args = process.argv.slice(2).join(' ');
+if (args === 'skills list') {
+  process.stdout.write("\\n┃ Name                              ┃ Category             ┃ Source  ┃ Trust   ┃\\n│ hermes-host-skill                 │                      │ local   │ local   │\\n");
+} else if (args === 'plugins list') {
+  process.stdout.write("\\n┃ Name                              ┃ Status  ┃ Version ┃ Description ┃ Source ┃\\n│ cache                             │ enabled │ 1.0.0   │ test cache  │ local  │\\n");
+} else {
+  process.exit(1);
+}
+`, { mode: 0o755 });
+
+  const savedPlatform = process.env.CAPABILITY_PLATFORM;
+  const savedHermes = process.env.HERMES_USER_DIR;
+  const savedPath = process.env.PATH;
+  process.env.CAPABILITY_PLATFORM = 'hermes';
+  process.env.HERMES_USER_DIR = hermesRoot;
+  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  try {
+    const snap = collectSnapshot(PROJECT_DIR, hermesRoot);
+    const runtimeSection = snap.sections.find(s => s.label === 'Hermes Runtime Skills');
+    assert.ok(runtimeSection, 'runtime skills should exist for hermes host');
+    const item = runtimeSection.items.find(i => i.name === 'hermes-host-skill');
+    assert.ok(item);
+    assert.equal(item.host, 'hermes');
+    assert.equal(item.surfaceType, 'skill');
+    assert.equal(item.invocation, 'slash');
+    const pluginSection = snap.sections.find(s => s.label === 'Hermes Runtime Plugins');
+    assert.ok(pluginSection && pluginSection.items.some(i => i.name === 'cache'));
+    assert.ok(!snap.sections.some(s => s.label === '用户级 Skills'), 'active host should prefer runtime view over generic user section');
+    assert.ok(!snap.sections.some(s => s.label === 'Hermes Skills'), 'active host should not also render Hermes as ecosystem section');
+  } finally {
+    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
+    else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    if (savedHermes === undefined) delete process.env.HERMES_USER_DIR;
+    else process.env.HERMES_USER_DIR = savedHermes;
+    process.env.PATH = savedPath;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('platform metadata: Hermes platforms and OpenClaw metadata.openclaw.os are parsed and filtered', () => {
   assert.deepEqual(parsePlatformList('[windows, linux]'), ['windows', 'linux']);
 
@@ -258,6 +361,153 @@ test('platform metadata: Hermes platforms and OpenClaw metadata.openclaw.os are 
 
   const expectCurrent = process.platform === 'win32';
   assert.equal(isPlatformCompatible(openClawSkill, 'openclaw'), expectCurrent);
+});
+
+test('withCapabilityMeta: merges metadata onto base capability entity', () => {
+  const entity = withCapabilityMeta({ name: 'demo' }, { host: 'openclaw', surfaceType: 'skill', state: 'enabled' });
+  assert.equal(entity.name, 'demo');
+  assert.equal(entity.host, 'openclaw');
+  assert.equal(entity.surfaceType, 'skill');
+  assert.equal(entity.state, 'enabled');
+});
+
+test('parseOpenClawSkillsJson: parses runtime JSON into capability entities', () => {
+  const helpers = { sanitize, truncate, withCapabilityMeta };
+  const parsed = parseOpenClawSkillsJson({
+    skills: [
+      {
+        name: 'coding-agent',
+        description: 'Delegate coding tasks',
+        eligible: true,
+        disabled: false,
+        bundled: true,
+        source: 'openclaw-bundled',
+      },
+    ],
+  }, helpers);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, 'coding-agent');
+  assert.equal(parsed[0].host, 'openclaw');
+  assert.equal(parsed[0].surfaceType, 'skill');
+  assert.equal(parsed[0].state, 'loaded');
+  assert.equal(parsed[0].scope, 'bundled');
+});
+
+test('parseOpenClawPluginsJson: parses runtime JSON into plugin entities', () => {
+  const helpers = { sanitize, truncate, withCapabilityMeta };
+  const parsed = parseOpenClawPluginsJson({
+    plugins: [
+      {
+        id: 'metaclaw-openclaw',
+        description: 'MetaClaw bridge',
+        origin: 'config',
+        enabled: true,
+        activated: true,
+        status: 'loaded',
+      },
+    ],
+  }, helpers);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, 'metaclaw-openclaw');
+  assert.equal(parsed[0].surfaceType, 'plugin');
+  assert.equal(parsed[0].state, 'loaded');
+  assert.equal(parsed[0].scope, 'user');
+});
+
+test('parseOpenClawHooksJson: parses runtime JSON into hook entities', () => {
+  const helpers = { sanitize, truncate, withCapabilityMeta };
+  const parsed = parseOpenClawHooksJson({
+    hooks: [
+      {
+        name: 'command-logger',
+        description: 'Log command events',
+        loadable: true,
+        disabled: false,
+        source: 'openclaw-bundled',
+        managedByPlugin: false,
+      },
+    ],
+  }, helpers);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, 'command-logger');
+  assert.equal(parsed[0].surfaceType, 'hook');
+  assert.equal(parsed[0].state, 'loaded');
+});
+
+test('parseOpenClawPluginCommandsJson: parses plugin slash commands from runtime JSON', () => {
+  const helpers = { sanitize, withCapabilityMeta };
+  const parsed = parseOpenClawPluginCommandsJson({
+    plugins: [
+      { id: 'memory-core', status: 'loaded', commands: ['dreaming'] },
+    ],
+  }, helpers);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, 'dreaming');
+  assert.equal(parsed[0].surfaceType, 'plugin_command');
+  assert.equal(parsed[0].source, 'memory-core');
+  assert.equal(parsed[0].invocation, 'slash');
+});
+
+test('parseOpenClawCliCommandsJson: parses plugin CLI subcommands from runtime JSON', () => {
+  const helpers = { sanitize, withCapabilityMeta };
+  const parsed = parseOpenClawCliCommandsJson({
+    plugins: [
+      { id: 'memory-core', status: 'loaded', cliCommands: ['memory'] },
+    ],
+  }, helpers);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].name, 'memory');
+  assert.equal(parsed[0].surfaceType, 'cli_subcommand');
+  assert.equal(parsed[0].invocation, 'cli');
+});
+
+test('parseOpenClawInspectCommandList: parses commands and CLI commands from inspect output', () => {
+  const helpers = { sanitize, withCapabilityMeta };
+  const text = `
+Commands:
+dreaming
+
+CLI commands:
+memory
+`;
+  const commands = parseOpenClawInspectCommandList(text, 'Commands', helpers, 'memory-core');
+  const cliCommands = parseOpenClawInspectCommandList(text, 'CLI commands', helpers, 'memory-core');
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].name, 'dreaming');
+  assert.equal(commands[0].surfaceType, 'plugin_command');
+  assert.equal(cliCommands.length, 1);
+  assert.equal(cliCommands[0].name, 'memory');
+  assert.equal(cliCommands[0].surfaceType, 'cli_subcommand');
+});
+
+test('parseHermesSkillsTable: parses hermes skills list table rows', () => {
+  const helpers = { sanitize, withCapabilityMeta };
+  const parsed = parseHermesSkillsTable(`
+┃ Name                              ┃ Category             ┃ Source  ┃ Trust   ┃
+│ dogfood                           │                      │ builtin │ builtin │
+│ karpathy-guidelines               │                      │ local   │ local   │
+`, helpers);
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].name, 'dogfood');
+  assert.equal(parsed[0].host, 'hermes');
+  assert.equal(parsed[0].surfaceType, 'skill');
+  assert.equal(parsed[0].state, 'loaded');
+  assert.equal(parsed[1].source, 'local');
+});
+
+test('parseHermesPluginsList: parses hermes plugins table rows', () => {
+  const helpers = { sanitize, truncate, withCapabilityMeta };
+  const parsed = parseHermesPluginsList(`
+┃ Name                              ┃ Status  ┃ Version ┃ Description ┃ Source ┃
+│ my-plugin                         │ enabled │ 1.0.0   │ test cache  │ local  │
+│ builtin-plugin                    │ loaded  │ 2.0.0   │ builtin impl │ builtin │
+`, helpers);
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].name, 'my-plugin');
+  assert.equal(parsed[0].host, 'hermes');
+  assert.equal(parsed[0].surfaceType, 'plugin');
+  assert.equal(parsed[0].state, 'enabled');
+  assert.equal(parsed[1].scope, 'bundled');
 });
 
 // ─── renderSnapshot 截断 ─────────────────────────────────────────────────────

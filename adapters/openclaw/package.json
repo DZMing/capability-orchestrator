@@ -1,0 +1,12 @@
+{
+  "name": "@capability-orchestrator/openclaw-adapter",
+  "version": "1.11.14",
+  "private": true,
+  "description": "OpenClaw adapter for capability-orchestrator",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}

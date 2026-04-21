@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'DZMing/capability-orchestrator'
 $RepoUrl = if ($env:CAPABILITY_INSTALL_REPO_URL) { $env:CAPABILITY_INSTALL_REPO_URL } else { "https://github.com/$Repo.git" }
 $PluginName = 'capability-orchestrator'
-$VersionFallback = '1.11.12'
+$VersionFallback = '1.11.14'
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ScriptDir = if ($ScriptPath) { Split-Path -Parent $ScriptPath } else { $null }
 if ($ScriptDir -and ($ScriptDir -like '/dev/fd*' -or $ScriptDir -like '/proc/*/fd*')) {

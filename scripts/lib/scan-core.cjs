@@ -4,10 +4,40 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { resolveUserDir } = require('./user-dir.cjs');
+const {
+  detectPlatform,
+  getPlatformPaths,
+  getUserSkillsPaths,
+  getUserAgentsPaths,
+  getUserCommandsPaths,
+} = require('./platform.cjs');
+const {
+  parseOpenClawSkillsJson,
+  parseOpenClawPluginsJson,
+  parseOpenClawPluginCommandsJson,
+  parseOpenClawCliCommandsJson,
+  parseOpenClawInspectCommandList,
+  parseOpenClawHooksJson,
+  scanOpenClawRuntimeSkills,
+  scanOpenClawRuntimePlugins,
+  scanOpenClawRuntimePluginCommands,
+  scanOpenClawRuntimeCliCommands,
+  scanOpenClawRuntimeHooks,
+} = require('./openclaw-runtime.cjs');
+const {
+  parseHermesSkillsTable,
+  parseHermesPluginsList,
+  scanHermesRuntimeSkills,
+  scanHermesRuntimePlugins,
+} = require('./hermes-runtime.cjs');
 
 const MAX_DESC = 100;
 const MAX_PLUGIN_DEPTH = 3;
 const HEAD_BYTES = 2048;
+
+function withCapabilityMeta(entity, meta = {}) {
+  return { ...entity, ...meta };
+}
 
 function tryRead(filePath, errors) {
   try { return fs.readFileSync(filePath, 'utf8'); }
@@ -214,7 +244,7 @@ function isSymlink(filePath, errors) {
   }
 }
 
-function scanSkills(dir, errors) {
+function scanSkills(dir, errors, meta = {}) {
   const results = [];
   for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
@@ -225,12 +255,12 @@ function scanSkills(dir, errors) {
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
     const filePath = path.join(fullPath, 'SKILL.md');
-    results.push({ name, desc, filePath });
+    results.push(withCapabilityMeta({ name, desc, filePath }, { surfaceType: 'skill', ...meta }));
   }
   return results;
 }
 
-function scanCompatibleSkills(dir, source, errors) {
+function scanCompatibleSkills(dir, source, errors, meta = {}) {
   const results = [];
   for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
@@ -242,12 +272,15 @@ function scanCompatibleSkills(dir, source, errors) {
     const name = getName(content, dirent.name);
     const desc = getDescription(content);
     const filePath = path.join(fullPath, 'SKILL.md');
-    results.push({ name, desc, filePath });
+    results.push(withCapabilityMeta(
+      { name, desc, filePath },
+      { host: source, surfaceType: 'skill', state: 'enabled', source, ...meta }
+    ));
   }
   return results;
 }
 
-function scanAgents(dir, errors) {
+function scanAgents(dir, errors, meta = {}) {
   const results = [];
   for (const dirent of tryReadDir(dir, true, errors)) {
     if (dirent.name.startsWith('.') || !dirent.isFile() || !dirent.name.endsWith('.md')) continue;
@@ -257,12 +290,12 @@ function scanAgents(dir, errors) {
     if (content === null) continue;
     const name = getName(content, dirent.name.replace(/\.md$/, ''));
     const desc = getDescription(content);
-    results.push({ name, desc, filePath: fullPath });
+    results.push(withCapabilityMeta({ name, desc, filePath: fullPath }, { surfaceType: 'agent', ...meta }));
   }
   return results;
 }
 
-function scanCommands(dir, errors) {
+function scanCommands(dir, errors, meta = {}) {
   return tryReadDir(dir, true, errors)
     .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
     .flatMap(d => {
@@ -272,7 +305,7 @@ function scanCommands(dir, errors) {
       if (content === null) return [];
       const fm = extractFrontmatter(content);
       const desc = sanitize(fm.description || fm.name || '');
-      return [{ name, desc, filePath }];
+      return [withCapabilityMeta({ name, desc, filePath }, { surfaceType: 'slash_command', ...meta })];
     });
 }
 
@@ -375,7 +408,16 @@ function scanInstalledPlugins(claudeUserDir, errors) {
         .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
         .map(d => sanitize(d.name.replace(/\.md$/, '')));
 
-      results.push({ name, version, description, skillItems, agentNames });
+      results.push({
+        name,
+        version,
+        description,
+        skillItems,
+        agentNames,
+        surfaceType: 'plugin',
+        state: 'discovered',
+        source: 'plugin-cache',
+      });
     }
   }
 
@@ -401,11 +443,9 @@ function getHermesSkillDir() {
 
 function collectSnapshot(projectDir, userDir) {
   const cwd = projectDir || process.cwd();
-  const claudeUserDir = userDir || resolveUserDir();
+  const activeUserDir = userDir || resolveUserDir();
   const errors = [];
   const sections = [];
-
-  const { detectPlatform, getPlatformPaths } = require('./platform.cjs');
   const platform = detectPlatform();
   const pp = getPlatformPaths(platform);
 
@@ -418,9 +458,22 @@ function collectSnapshot(projectDir, userDir) {
     }
   }
 
-  tryCollect('项目级 Skills', '', () => scanSkills(path.join(cwd, pp.projectSkillsDir), errors));
+  tryCollect('项目级 Skills', '', () =>
+    scanSkills(path.join(cwd, pp.projectSkillsDir), errors, {
+      host: platform,
+      source: 'project',
+      scope: 'project',
+      state: 'enabled',
+      invocation: pp.invocationStyle,
+    }));
   if (pp.projectAgentsDir) {
-    tryCollect('项目级 Subagents', '@', () => scanAgents(path.join(cwd, pp.projectAgentsDir), errors));
+    tryCollect('项目级 Subagents', '@', () =>
+      scanAgents(path.join(cwd, pp.projectAgentsDir), errors, {
+        host: platform,
+        source: 'project',
+        scope: 'project',
+        state: 'enabled',
+      }));
   }
 
   try {
@@ -428,9 +481,9 @@ function collectSnapshot(projectDir, userDir) {
     readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s =>
       mcpItems.push({ name: sanitize(s.name), desc: sanitize(truncate(s.desc, MAX_DESC)) || '项目级' }));
 
-    const userMcpFile = fs.existsSync(path.join(claudeUserDir, 'mcp.json'))
-      ? path.join(claudeUserDir, 'mcp.json')
-      : path.join(claudeUserDir, '.mcp.json');
+    const userMcpFile = fs.existsSync(path.join(activeUserDir, 'mcp.json'))
+      ? path.join(activeUserDir, 'mcp.json')
+      : path.join(activeUserDir, '.mcp.json');
     const projMcpNames = new Set(mcpItems.map(s => s.name));
     readMcpServers(userMcpFile, errors).forEach(s => {
       const name = sanitize(s.name);
@@ -443,13 +496,51 @@ function collectSnapshot(projectDir, userDir) {
     errors.push(`MCP: ${e.message}`);
   }
 
-  tryCollect('用户级 Skills', '', () => scanSkills(path.join(claudeUserDir, 'skills'), errors));
-  tryCollect('用户级 Subagents', '@', () => scanAgents(path.join(claudeUserDir, 'agents'), errors));
-  tryCollect('OpenClaw Skills', '', () => scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', errors));
-  tryCollect('Hermes Skills', '', () => scanCompatibleSkills(getHermesSkillDir(), 'hermes', errors));
+  if (platform !== 'openclaw' && platform !== 'hermes') {
+    const userSkillPaths = getUserSkillsPaths(activeUserDir, platform);
+    tryCollect('用户级 Skills', '', () => userSkillPaths.flatMap((dir, index) => scanSkills(dir, errors, {
+      host: platform,
+      source: index === 0 ? 'user' : 'external',
+      scope: 'user',
+      state: 'enabled',
+      invocation: pp.invocationStyle,
+    })));
+
+    const userAgentPaths = getUserAgentsPaths(activeUserDir, platform);
+    if (userAgentPaths.length > 0) {
+      tryCollect('用户级 Subagents', '@', () => userAgentPaths.flatMap((dir) => scanAgents(dir, errors, {
+        host: platform,
+        source: 'user',
+        scope: 'user',
+        state: 'enabled',
+      })));
+    }
+  }
+
+  if (platform !== 'openclaw') {
+    tryCollect('OpenClaw Skills', '', () => scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', errors, {
+      scope: 'workspace',
+      invocation: pp.invocationStyle,
+    }));
+  } else {
+    const runtimeHelpers = { sanitize, truncate, withCapabilityMeta };
+    tryCollect('OpenClaw Runtime Skills', '', () => scanOpenClawRuntimeSkills(errors, runtimeHelpers));
+    tryCollect('OpenClaw Runtime Plugins', '', () => scanOpenClawRuntimePlugins(errors, runtimeHelpers));
+    tryCollect('OpenClaw Runtime Hooks', '', () => scanOpenClawRuntimeHooks(errors, runtimeHelpers));
+  }
+  if (platform !== 'hermes') {
+    tryCollect('Hermes Skills', '', () => scanCompatibleSkills(getHermesSkillDir(), 'hermes', errors, {
+      scope: 'user',
+      invocation: pp.invocationStyle,
+    }));
+  } else {
+    const runtimeHelpers = { sanitize, truncate, withCapabilityMeta };
+    tryCollect('Hermes Runtime Skills', '', () => scanHermesRuntimeSkills(errors, runtimeHelpers));
+    tryCollect('Hermes Runtime Plugins', '', () => scanHermesRuntimePlugins(errors, runtimeHelpers));
+  }
 
   try {
-    const plugins = scanInstalledPlugins(claudeUserDir, errors);
+    const plugins = scanInstalledPlugins(activeUserDir, errors);
     if (plugins.length > 0) {
       const items = plugins.map(p => ({
         name: `${p.name}${p.version ? ' (v' + p.version + ')' : ''}`,
@@ -468,9 +559,25 @@ function collectSnapshot(projectDir, userDir) {
   try {
     if (pp.projectCommandsDir) {
       const projCmds = scanCommands(path.join(cwd, pp.projectCommandsDir), errors);
-      const userCmds = scanCommands(path.join(claudeUserDir, 'commands'), errors);
+      const userCmds = getUserCommandsPaths(activeUserDir, platform)
+        .flatMap((dir) => scanCommands(dir, errors, {
+          host: platform,
+          source: 'user',
+          scope: 'user',
+          state: 'enabled',
+          invocation: pp.invocationStyle,
+        }));
       const cmds = [
-        ...projCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy，建议迁移到 skills/' })),
+        ...projCmds.map(c => ({
+          ...c,
+          host: platform,
+          source: 'project',
+          scope: 'project',
+          state: 'enabled',
+          invocation: pp.invocationStyle,
+          name: c.name,
+          desc: c.desc || 'legacy，建议迁移到 skills/',
+        })),
         ...userCmds.map(c => ({ name: c.name, desc: c.desc || 'legacy' })),
       ];
       if (cmds.length > 0) sections.push({ label: 'Legacy Commands', prefix: '', items: cmds });
@@ -533,5 +640,21 @@ module.exports = {
   scanInstalledPlugins,
   getOpenClawSkillDir,
   getHermesSkillDir,
+  parseOpenClawSkillsJson,
+  parseOpenClawPluginsJson,
+  parseOpenClawPluginCommandsJson,
+  parseOpenClawCliCommandsJson,
+  parseOpenClawInspectCommandList,
+  parseOpenClawHooksJson,
+  parseHermesSkillsTable,
+  parseHermesPluginsList,
+  scanOpenClawRuntimeSkills,
+  scanOpenClawRuntimePlugins,
+  scanOpenClawRuntimePluginCommands,
+  scanOpenClawRuntimeCliCommands,
+  scanOpenClawRuntimeHooks,
+  scanHermesRuntimeSkills,
+  scanHermesRuntimePlugins,
   collectSnapshot,
+  withCapabilityMeta,
 };

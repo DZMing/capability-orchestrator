@@ -58,19 +58,21 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 扫描来源及稳定性
 
-| 来源                   | 路径                            | 稳定性                                |
-| ---------------------- | ------------------------------- | ------------------------------------- |
-| 项目级 skills          | `.claude/skills/`               | ✅ 官方正式目录                       |
-| 项目级 agents          | `.claude/agents/`               | ✅ 官方正式目录                       |
-| 项目级 legacy commands | `.claude/commands/`             | ✅ 官方正式目录                       |
-| 用户级 skills          | `~/.claude/skills/`             | ✅ 官方正式目录                       |
-| 用户级 agents          | `~/.claude/agents/`             | ✅ 官方正式目录                       |
-| 用户级 legacy commands | `~/.claude/commands/`           | ✅ 官方正式目录                       |
-| 项目级 MCP 配置        | `.mcp.json`                     | ✅ 官方正式格式                       |
-| 用户级 MCP 配置        | `~/.claude/mcp.json`            | ✅ 官方正式格式（兼容旧 `.mcp.json`） |
-| 已安装插件             | `~/.claude/plugins/cache/`      | ⚠️ best-effort，目录结构未正式文档化  |
-| OpenClaw skills        | `~/.openclaw/workspace/skills/` | ⚠️ 兼容扫描面（只读，不执行）         |
-| Hermes skills          | `~/.hermes/skills/`             | ⚠️ 兼容扫描面（只读，不执行）         |
+| 来源                                  | 路径                                           | 稳定性                                     |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| 项目级 skills                         | `.claude/skills/`                              | ✅ 官方正式目录                            |
+| 项目级 agents                         | `.claude/agents/`                              | ✅ 官方正式目录                            |
+| 项目级 legacy commands                | `.claude/commands/`                            | ✅ 官方正式目录                            |
+| 用户级 skills                         | `~/.claude/skills/`                            | ✅ 官方正式目录                            |
+| 用户级 agents                         | `~/.claude/agents/`                            | ✅ 官方正式目录                            |
+| 用户级 legacy commands                | `~/.claude/commands/`                          | ✅ 官方正式目录                            |
+| 项目级 MCP 配置                       | `.mcp.json`                                    | ✅ 官方正式格式                            |
+| 用户级 MCP 配置                       | `~/.claude/mcp.json`                           | ✅ 官方正式格式（兼容旧 `.mcp.json`）      |
+| 已安装插件                            | `~/.claude/plugins/cache/`                     | ⚠️ best-effort，目录结构未正式文档化       |
+| OpenClaw runtime skills/plugins/hooks | 宿主 CLI (`openclaw skills/plugins/hooks ...`) | ⚠️ 实验宿主路径：运行态快照与 route 已接入 |
+| OpenClaw skills fallback              | `~/.openclaw/workspace/skills/`                | ⚠️ 兼容扫描面（只读，不执行）              |
+| Hermes runtime skills/plugins         | 宿主 CLI (`hermes skills/plugins ...`)         | ⚠️ 实验宿主路径：运行态快照与 route 已接入 |
+| Hermes skills fallback                | `~/.hermes/skills/`                            | ⚠️ 兼容扫描面（只读，不执行）              |
 
 ## Token 预算
 
@@ -203,6 +205,25 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - `userDirSource`
 
 默认 hook 模式不输出 explain 信息，避免影响既有 Claude Code 行为。`/debug-route` skill 只是这个 explain 能力的人类可读包装。
+
+## 实验宿主路径
+
+当前仓库除了正式支持的 Claude / Codex 之外，还已经具备两条实验宿主路径：
+
+- OpenClaw：
+  - active host runtime snapshot 已成立
+  - route 已能命中 OpenClaw runtime skills
+  - 最小 hook-pack skeleton 可通过 `openclaw plugins install ... --link` 安装
+  - `openclaw hooks info capability-orchestrator-bootstrap` 已能命中
+- Hermes：
+  - active host runtime snapshot 已成立
+  - route 已能命中 Hermes runtime skills
+  - 最小 adapter skeleton 可通过 `hermes plugins install file://...` 安装
+
+这些路径已经有真实安装和宿主管理面证据，但仍然标记为实验状态，原因是：
+
+- OpenClaw 的 runtime loader / restart 语义还在继续钉死
+- Hermes 还没有完整的 host-native plugin/hook adapter
 
 ## 渲染模式
 

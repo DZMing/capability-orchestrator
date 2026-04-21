@@ -1,0 +1,15 @@
+{
+  "id": "capability-orchestrator",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["awareness", "route"],
+        "description": "Default capability-orchestrator mode for OpenClaw adapter surfaces."
+      }
+    }
+  }
+}

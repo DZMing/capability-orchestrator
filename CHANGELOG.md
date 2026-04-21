@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.11.14] - 2026-04-20
+
+### Added
+
+- experimental `install.sh --platform=openclaw` host path that installs the
+  minimal OpenClaw hook-pack skeleton through `openclaw plugins install ... --link`
+- experimental `install.sh --platform=hermes` host path that installs the
+  Hermes adapter skeleton through `hermes plugins install file://...`
+- `npm run verify:host:openclaw`
+- `npm run verify:host:hermes`
+- OpenClaw adapter skeleton under `adapters/openclaw/`
+- OpenClaw hook-pack skeleton under `adapters/openclaw-hook-pack/`
+- Hermes adapter skeleton under `adapters/hermes/`
+
+### Changed
+
+- active OpenClaw snapshots now use runtime `skills/plugins/hooks` surfaces
+  instead of only directory scanning
+- active Hermes snapshots now use runtime `skills/plugins` surfaces
+- OpenClaw route output now uses `/skill <name>` for runtime skill invocation
+- runtime host abstractions now recognize `openclaw` and `hermes` as
+  experimental platforms
+
 ## [1.11.13] - 2026-04-20
 
 ### Fixed
