@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.11.18] - 2026-04-21
+
+### Added
+
+- `npm run verify:host:lifecycle`, which validates OpenClaw and Hermes through
+  installer-driven install, reinstall, bridge execution, management, and uninstall
+
+### Fixed
+
+- host lifecycle verification now uses an isolated temporary git source without
+  repository hooks or `.omx` runtime files, so it verifies the installer instead
+  of mutating test fixtures
+- OpenClaw lifecycle verification now handles the real `hooks info` not-found
+  behavior, which reports via stdout with exit code 0
+
 ## [1.11.17] - 2026-04-20
 
 ### Fixed

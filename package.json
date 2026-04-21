@@ -1,6 +1,6 @@
 {
   "name": "capability-orchestrator",
-  "version": "1.11.17",
+  "version": "1.11.18",
   "description": "Auto-routing plugin for Claude Code and Codex — semantic + literal + cross-language matching for skills, commands, and MCP tools",
   "scripts": {
     "test": "node --test tests/scan.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-logger.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
@@ -11,6 +11,7 @@
     "verify:live:codex": "node scripts/live-verify.cjs --platform codex",
     "verify:host:openclaw": "node scripts/verify-openclaw-adapter.cjs",
     "verify:host:hermes": "node scripts/verify-hermes-adapter.cjs",
+    "verify:host:lifecycle": "node scripts/verify-host-lifecycle.cjs",
     "verify:release": "node scripts/release-readiness-check.cjs"
   },
   "keywords": [

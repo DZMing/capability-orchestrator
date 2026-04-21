@@ -195,6 +195,7 @@ npm run verify:live:claude
 npm run verify:live:codex
 npm run verify:host:openclaw
 npm run verify:host:hermes
+npm run verify:host:lifecycle
 npm run verify:release
 ```
 
@@ -217,6 +218,10 @@ npm run verify:release
   - plugin slash command `cap-orch` 可返回 status / route bridge 输出
   - `pre_llm_call` hook 可注入 awareness context
   - `disable / enable / remove` 管理链路可闭环
+- `verify:host:lifecycle`：用当前工作区生成隔离临时 git 源，并通过 `install.sh` 验证：
+  - OpenClaw install / reinstall / adapter inspect / bridge command exposure / uninstall
+  - Hermes install / reinstall / slash bridge / pre-LLM bridge / disable / enable / uninstall
+  - 两边都验证卸载后宿主视角不再可见该 adapter
 
 注意：
 

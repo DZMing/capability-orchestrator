@@ -163,6 +163,7 @@ npm run verify:live:claude
 npm run verify:live:codex
 npm run verify:host:openclaw
 npm run verify:host:hermes
+npm run verify:host:lifecycle
 npm run verify:release
 ```
 
@@ -173,6 +174,7 @@ npm run verify:release
 - `verify:release` 会检查 package / plugin manifests / changelog 是否同步，并显式报告 `HEAD` 与最新 tag、工作树 clean/dirty 状态，以及最新 tag 对应的 GitHub Release 是否已真正发布；发布前需要人工检查这些字段，不只看退出码
 - `verify:host:openclaw`：在隔离 `OPENCLAW_CONFIG_PATH` 下安装 hook-pack + adapter bridge，并验证宿主 config 写入、`hooks info`、bootstrap awareness 注入、adapter commands 暴露、以及卸载闭环
 - `verify:host:hermes`：在隔离 `HERMES_HOME` 下把 Hermes adapter bridge 包装成临时 git repo，通过 `hermes plugins install file://...` 安装，并验证 `plugins list`、slash bridge、`pre_llm_call` 注入、disable/re-enable/remove 闭环
+- `verify:host:lifecycle`：用当前工作区创建隔离临时 git 源，再通过 `install.sh` 跑 OpenClaw / Hermes 的 install、reinstall、bridge、管理和 uninstall 生命周期闭环
 
 ## 升级
 
