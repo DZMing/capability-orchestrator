@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.11.21] - 2026-04-21
+
+### Fixed
+
+- Hermes `_run_bridge` now uses `--` terminator before prompt arg, preventing CLI arg injection via user input
+- OpenClaw hook-pack `handler.js` now searches multiple candidate paths for bridge module, fixing tarball install mode
+- `verify-host-lifecycle` and `verify-openclaw-adapter` now set `OPENCLAW_STATE_DIR` to isolate from global gateway state
+- `verify-openclaw-adapter.cjs`, `verify-hermes-adapter.cjs`, `verify-host-lifecycle.cjs` now clean up temp directories on exit
+- `release-readiness-check.cjs` validates adapter versions (openclaw, hook-pack, hermes) in addition to core manifests
+
 ## [1.11.20] - 2026-04-21
 
 ### Fixed
