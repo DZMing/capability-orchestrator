@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.11.20] - 2026-04-21
+
+### Fixed
+
+- `install.sh` platform detection no longer overridden by globally inherited host env vars (e.g. `OPENCLAW_CONFIG_PATH`) when `$HOME/.claude` exists; Claude-first detection restored in dual-install scenarios
+- `isEscaped()` no longer skips routing for CJK questions ending with `?`; threshold narrowed to English-only prompts under 15 chars
+- `readCommandBody` truncates file before applying frontmatter regex, preventing catastrophic backtracking on large files
+- `openclaw-runtime.cjs` removed dead duplicate `scanOpenClawRuntimePluginCommands` definition
+- `verify-openclaw-adapter.cjs`, `verify-hermes-adapter.cjs`, `verify-host-lifecycle.cjs` now clean up temp directories on exit
+
+### Added
+
+- `release-readiness-check.cjs` validates adapter versions (openclaw, openclaw-hook-pack, hermes plugin.yaml) in addition to core manifests
+- `VERIFICATION.md` test count no longer hardcodes exact number
+
 ## [1.11.19] - 2026-04-21
 
 ### Fixed

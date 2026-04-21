@@ -130,11 +130,6 @@ function scanOpenClawRuntimePlugins(errors, helpers) {
   return data ? parseOpenClawPluginsJson(data, helpers) : [];
 }
 
-function scanOpenClawRuntimePluginCommands(errors, helpers) {
-  const data = tryExecJson('openclaw', ['plugins', 'list', '--json'], errors, 'OpenClaw plugins CLI');
-  return data ? parseOpenClawPluginCommandsJson(data, helpers) : [];
-}
-
 function scanOpenClawRuntimeCliCommands(errors, helpers) {
   const data = tryExecJson('openclaw', ['plugins', 'list', '--json'], errors, 'OpenClaw plugins CLI');
   return data ? parseOpenClawCliCommandsJson(data, helpers) : [];

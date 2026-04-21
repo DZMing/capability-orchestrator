@@ -164,8 +164,8 @@ test('isEscaped: detects 不用skill', () => {
   assert.ok(isEscaped('不用skill'));
 });
 
-test('isEscaped: detects short question', () => {
-  assert.ok(isEscaped('这是什么?'));
+test('isEscaped: short English question is escaped', () => {
+  assert.ok(isEscaped('what is it?'));
 });
 
 test('isEscaped: long question not escaped', () => {
@@ -1107,20 +1107,19 @@ test('mutation: single keyword overlap with long prompt matches (SHORT_SINGLE_KE
   assert.equal(shortMatch, null, 'single keyword + short prompt should not match');
 });
 
-// 4c: isEscaped short question threshold — 25 char question should be escaped
-test('mutation: 25-char question is escaped (threshold < 30)', () => {
-  // Exactly 25 characters ending with ?
-  const q = 'abcdefghijklmnopqrstuvwx?';
-  assert.equal(q.length, 25);
-  assert.ok(isEscaped(q), '25-char question should be escaped');
-  // 30-char question should also be escaped (< 30)
-  const q29 = 'abcdefghijklmnopqrstuvwxyzab?';
-  assert.equal(q29.length, 29);
-  assert.ok(isEscaped(q29), '29-char question should be escaped');
-  // 31-char question should NOT be escaped
-  const q31 = 'abcdefghijklmnopqrstuvwxyzabcd?';
-  assert.equal(q31.length, 31);
-  assert.ok(!isEscaped(q31), '31-char question should NOT be escaped');
+// 4c: isEscaped short question threshold — short English-only question escaped
+test('mutation: short English question is escaped (threshold < 15)', () => {
+  // 14-char English question ending with ? — should be escaped (< 15)
+  const q = 'abcdefghijklm?';
+  assert.equal(q.length, 14);
+  assert.ok(isEscaped(q), '14-char English question should be escaped');
+  // 15-char English question should NOT be escaped (not < 15)
+  const q15 = 'abcdefghijklmn?';
+  assert.equal(q15.length, 15);
+  assert.ok(!isEscaped(q15), '15-char English question should NOT be escaped');
+  // CJK question should NOT be escaped regardless of length
+  const qCjk = '帮我提交代码?';
+  assert.ok(!isEscaped(qCjk), 'CJK question should NOT be escaped');
 });
 
 // 4e: MIN_PROMPT_LEN boundary — 5 char prompt processed, 4 char skipped

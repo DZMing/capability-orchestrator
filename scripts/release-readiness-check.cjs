@@ -82,22 +82,39 @@ function fetchReleaseByTag(repo, tag) {
   });
 }
 
-function buildStatus({ pkg, claude, codex, changelog, latestTag, headCommit, latestTagCommit, worktreeDirty, releaseProbe }) {
+function readYamlVersion(relPath) {
+  try {
+    const content = fs.readFileSync(path.join(root, relPath), 'utf8');
+    const match = content.match(/^version:\s*['"]?([^\s'"]+)/m);
+    return match ? match[1] : '';
+  } catch { return ''; }
+}
+
+function buildStatus({ pkg, claude, codex, openclaw, openclawHookPack, hermesYaml, changelog, latestTag, headCommit, latestTagCommit, worktreeDirty, releaseProbe }) {
   const topChangelog = (changelog.match(/^## \[([^\]]+)\]/m) || [null, ''])[1];
   const latestTagMatchesPackage = latestTag === `v${pkg.version}`;
   const githubReleaseReady = !!(releaseProbe && releaseProbe.ok && releaseProbe.exists && !releaseProbe.isDraft && !releaseProbe.isPrerelease);
   const githubReleaseCheckOk = !!(releaseProbe && releaseProbe.ok);
   const releaseAuditOk = !latestTagMatchesPackage || githubReleaseReady;
 
+  const allVersions = [
+    pkg.version, claude.version, codex.version,
+    openclaw.version, openclawHookPack.version, hermesYaml,
+  ].filter(Boolean);
+  const versionSyncOk = allVersions.length >= 4 && allVersions.every(v => v === allVersions[0]);
+
   return {
     packageVersion: pkg.version,
     claudeManifestVersion: claude.version,
     codexManifestVersion: codex.version,
+    openclawAdapterVersion: openclaw.version,
+    openclawHookPackVersion: openclawHookPack.version,
+    hermesPluginVersion: hermesYaml,
     topChangelogVersion: topChangelog,
     latestGitTag: latestTag,
     headCommit,
     latestTagCommit,
-    versionSyncOk: pkg.version === claude.version && pkg.version === codex.version,
+    versionSyncOk,
     changelogSyncOk: topChangelog === pkg.version,
     latestTagMatchesPackage,
     headMatchesLatestTag: !!latestTagCommit && latestTagCommit === headCommit,
@@ -120,6 +137,9 @@ async function main() {
   const pkg = readJson('package.json');
   const claude = readJson('.claude-plugin/plugin.json');
   const codex = readJson('.codex-plugin/plugin.json');
+  const openclaw = readJson('adapters/openclaw/package.json');
+  const openclawHookPack = readJson('adapters/openclaw-hook-pack/package.json');
+  const hermesYaml = readYamlVersion('adapters/hermes/plugin.yaml');
   const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
 
   const latestTag = runGit(['tag', '--list', 'v*'])
@@ -136,6 +156,9 @@ async function main() {
     pkg,
     claude,
     codex,
+    openclaw,
+    openclawHookPack,
+    hermesYaml,
     changelog,
     latestTag,
     headCommit,

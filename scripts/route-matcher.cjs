@@ -188,7 +188,7 @@ function isEscaped(prompt) {
   if (!prompt) return false;
   const lower = prompt.toLowerCase().replace(/\s+/g, '');
   if (ESCAPE_PATTERNS.some(p => lower.includes(p.replace(/\s+/g, '')))) return true;
-  if (prompt.trimEnd().endsWith('?') && prompt.length < 30) return true;
+  if (prompt.trimEnd().endsWith('?') && prompt.length < 15 && !/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(prompt)) return true;
   return false;
 }
 
@@ -323,9 +323,11 @@ function readCommandBody(filePath) {
   if (!filePath) return '';
   try {
     let raw = fs.readFileSync(filePath, 'utf8');
+    // 先限制长度防止正则在大文件上回溯
+    if (raw.length > 5200) raw = raw.slice(0, 5200);
     // 剥离 frontmatter
     raw = raw.replace(/^---[\s\S]*?---\s*\n?/, '');
-    // 限制长度防止超出 context 预算
+    // 限制输出长度
     if (raw.length > 5000) raw = raw.slice(0, 5000) + '\n[...截断]';
     return raw.trim();
   } catch {

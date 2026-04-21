@@ -29,7 +29,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 当前自动化总数：`387`
+- 当前自动化总数：`387+`（具体以 `npm test 2>&1 | grep tests` 为准）
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 

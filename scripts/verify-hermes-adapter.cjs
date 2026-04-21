@@ -29,6 +29,14 @@ function copyDir(src, dest) {
 
 function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-hermes-'));
+  try {
+    return _main(tmp);
+  } finally {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+  }
+}
+
+function _main(tmp) {
   const home = path.join(tmp, 'hermes-home');
   const repo = path.join(tmp, 'adapter-repo');
   fs.mkdirSync(home, { recursive: true });

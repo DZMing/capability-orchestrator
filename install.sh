@@ -102,13 +102,18 @@ fi
 
 # ── 平台自动检测 ──────────────────────────────────────────────────────────
 if [[ -z "$PLATFORM" ]]; then
+  # 显式环境变量优先。当多个平台环境变量同时存在时，Claude 优先。
   if [[ -n "${CLAUDE_USER_DIR:-}" || -n "${CLAUDE_PLUGIN_DATA:-}" ]]; then
     PLATFORM="claude"
   elif [[ -n "${CODEX_USER_DIR:-}" || -n "${CODEX_PLUGIN_DATA:-}" ]]; then
     PLATFORM="codex"
-  elif [[ -n "${OPENCLAW_USER_DIR:-}" || -n "${OPENCLAW_PLUGIN_DATA:-}" || -n "${OPENCLAW_CONFIG_PATH:-}" ]]; then
+  # 对于宿主环境变量，仅在 $HOME 下同时存在对应平台目录时才匹配，
+  # 避免全局继承的环境变量覆盖 $HOME 下的目录检测。
+  elif [[ -n "${OPENCLAW_USER_DIR:-}" || -n "${OPENCLAW_PLUGIN_DATA:-}" || -n "${OPENCLAW_CONFIG_PATH:-}" ]] \
+       && ! [[ -d "$HOME/.claude" || -f "$HOME/.codex/config.toml" ]]; then
     PLATFORM="openclaw"
-  elif [[ -n "${HERMES_HOME:-}" || -n "${HERMES_USER_DIR:-}" || -n "${HERMES_PLUGIN_DATA:-}" ]]; then
+  elif [[ -n "${HERMES_HOME:-}" || -n "${HERMES_USER_DIR:-}" || -n "${HERMES_PLUGIN_DATA:-}" ]] \
+       && ! [[ -d "$HOME/.claude" || -f "$HOME/.codex/config.toml" || -f "$HOME/.openclaw/openclaw.json" || -d "$HOME/.openclaw" ]]; then
     PLATFORM="hermes"
   elif [[ -d "$HOME/.claude" ]]; then
     PLATFORM="claude"

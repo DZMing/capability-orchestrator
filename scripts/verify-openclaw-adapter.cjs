@@ -21,6 +21,17 @@ function run(cmd, args, opts = {}) {
 
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-openclaw-'));
+  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-openclaw-pack-'));
+  try {
+    return await _main(tmp, packDir);
+  } finally {
+    for (const d of [tmp, packDir]) {
+      try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+    }
+  }
+}
+
+async function _main(tmp, packDir) {
   const cfg = path.join(tmp, 'openclaw.json');
   fs.writeFileSync(cfg, '{}\n');
   const env = { ...process.env, OPENCLAW_CONFIG_PATH: cfg };
@@ -87,7 +98,6 @@ async function main() {
     configPath: cfg,
   };
 
-  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-openclaw-pack-'));
   const adapterPackOutput = run('npm', ['pack', '--pack-destination', packDir], { cwd: ADAPTER_DIR });
   const hookPackOutput = run('npm', ['pack', '--pack-destination', packDir], { cwd: HOOK_PACK_DIR });
   const adapterTarball = path.join(packDir, adapterPackOutput.trim().split(/\r?\n/).pop());

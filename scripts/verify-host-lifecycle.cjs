@@ -58,6 +58,7 @@ function installEnv(sourceRepo, extraEnv) {
 
 function verifyOpenClaw(sourceRepo) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-openclaw-'));
+  cleanupDirs.push(tmp);
   const cfg = path.join(tmp, 'openclaw.json');
   const env = installEnv(sourceRepo, {
     OPENCLAW_USER_DIR: tmp,
@@ -120,6 +121,7 @@ print("HOOK>>>" + hook_text)
 
 function verifyHermes(sourceRepo) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-hermes-'));
+  cleanupDirs.push(tmp);
   const home = path.join(tmp, 'hermes-home');
   const env = installEnv(sourceRepo, { HERMES_HOME: home });
 
@@ -149,8 +151,16 @@ function allTrue(obj) {
   return Object.values(obj).every(Boolean);
 }
 
+const cleanupDirs = [];
+function cleanup() {
+  for (const d of cleanupDirs) {
+    try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+  }
+}
+
 function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-source-'));
+  cleanupDirs.push(tmp);
   copyRepoToTemp(tmp);
 
   const result = {
@@ -159,6 +169,8 @@ function main() {
     hermes: hasCommand('hermes') ? verifyHermes(tmp) : { skipped: true },
   };
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+
+  cleanup();
 
   if (result.openclaw.skipped || result.hermes.skipped) {
     process.exit(1);
