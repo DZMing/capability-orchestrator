@@ -282,7 +282,7 @@ test('collectSnapshot: active Hermes host uses user skills as primary user skill
   const hermesRoot = path.join(tmp, 'hermes');
   const binDir = path.join(tmp, 'bin');
   fs.mkdirSync(binDir, { recursive: true });
-  fs.writeFileSync(path.join(binDir, 'hermes'), `#!/usr/bin/env node
+  const hermesStub = `
 const args = process.argv.slice(2).join(' ');
 if (args === 'skills list') {
   process.stdout.write("\\n┃ Name                              ┃ Category             ┃ Source  ┃ Trust   ┃\\n│ hermes-host-skill                 │                      │ local   │ local   │\\n");
@@ -291,14 +291,17 @@ if (args === 'skills list') {
 } else {
   process.exit(1);
 }
-`, { mode: 0o755 });
+`;
+  fs.writeFileSync(path.join(binDir, 'hermes-stub.cjs'), hermesStub);
+  fs.writeFileSync(path.join(binDir, 'hermes'), `#!/usr/bin/env node${hermesStub}`, { mode: 0o755 });
+  fs.writeFileSync(path.join(binDir, 'hermes.cmd'), '@echo off\r\nnode "%~dp0hermes-stub.cjs" %*\r\n');
 
   const savedPlatform = process.env.CAPABILITY_PLATFORM;
   const savedHermes = process.env.HERMES_USER_DIR;
   const savedPath = process.env.PATH;
   process.env.CAPABILITY_PLATFORM = 'hermes';
   process.env.HERMES_USER_DIR = hermesRoot;
-  process.env.PATH = `${binDir}:${savedPath || ''}`;
+  process.env.PATH = `${binDir}${path.delimiter}${savedPath || ''}`;
   try {
     const snap = collectSnapshot(PROJECT_DIR, hermesRoot);
     const runtimeSection = snap.sections.find(s => s.label === 'Hermes Runtime Skills');
