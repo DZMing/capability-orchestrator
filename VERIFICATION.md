@@ -31,7 +31,7 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 自动化总数以 `npm test` 的 TAP 汇总为准；PR1 复验为 `379` tests
+- 自动化总数以 `npm test` 的 TAP 汇总为准；本轮复验为 `413` tests
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
@@ -216,6 +216,7 @@ I need a valid test skill for this important task
 ```bash
 npm run verify:live:claude
 npm run verify:live:codex
+npm run verify:scenarios
 npm run verify:host:hermes
 npm run verify:host:lifecycle
 npm run verify:release
@@ -226,6 +227,7 @@ npm run verify:release:strict
 
 - `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，并继承真实 `settings.json` 中的 `model + env` 运行时配置，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
 - `verify:live:codex`：隔离 `HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并要求 fresh `route-log.jsonl` 里出现目标 skill 路由条目
+- `verify:scenarios`：在隔离 fixture 中分别模拟 Claude / Codex 目录表面，覆盖短提示词五段合同、高风险确认闸门、低风险 escape passthrough、skill 调用格式、MCP advisory-only、legacy command 不注入正文，以及偏好 / 项目规则里的 secret redaction
 - `verify:release`：pre-landing audit，用于检查版本/manifest/changelog 同步、GitHub Release 状态和 OpenClaw host bridge 冻结边界；它会报告 `HEAD` 是否已经等于最新 tag、以及工作树是否 clean，但不会把 dirty/ahead 工作树当作审查失败
 - `verify:release:strict`：真实发布前 hard release gate；除 `verify:release` 的检查外，还要求工作树 clean 且 `HEAD` 等于最新 release tag
 - `verify:host:hermes`：在隔离 `HERMES_HOME` 下把 Hermes adapter bridge 包装成临时 git repo，并验证：

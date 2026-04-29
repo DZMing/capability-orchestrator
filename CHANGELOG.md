@@ -14,6 +14,9 @@
 - Documented the Intent Router execution-contract layer, its five-block
   `What` / `Guardrails` / `Success` / `Budget` / `Verify` output, and the
   confirmation gate for high-risk actions.
+- Added `verify:scenarios`, a Claude/Codex scenario matrix for short prompts,
+  confirmation gates, capability routing, MCP advisory behavior, legacy command
+  safety, and preference redaction.
 
 ### Fixed
 

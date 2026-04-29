@@ -106,6 +106,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
+npm run verify:scenarios
 npm run verify:host:hermes
 npm run verify:host:lifecycle
 npm run verify:release
@@ -135,6 +136,8 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - `verify:release` 是 pre-landing audit，会检查 package、manifests、已支持
   adapter versions、changelog、tag metadata、GitHub Release 状态，并拒绝任何残留
   OpenClaw host bridge surface 或脚本。
+- `verify:scenarios` 会同时跑 Claude / Codex 场景矩阵，覆盖短提示词、高风险确认闸门、
+  skill 路由、MCP advisory、legacy command 安全和偏好脱敏。
 - `verify:release:strict` 是真实发布前的 hard release gate，还要求工作树 clean
   且 `HEAD` 等于最新 release tag。
 - 高风险意图，如发布、推送、部署、删除、付费、凭证操作、生产变更和真实产品 / UX

@@ -118,6 +118,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
+npm run verify:scenarios
 npm run verify:host:hermes
 npm run verify:host:lifecycle
 npm run verify:release
@@ -148,6 +149,9 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
   versiones de adapters soportados, changelog, metadata del tag, estado de
   GitHub Release, y rechaza cualquier superficie o script restante de OpenClaw
   host bridge.
+- `verify:scenarios` ejecuta una matriz Claude/Codex para prompts cortos,
+  confirmaciones de alto riesgo, rutas de skill, MCP advisory, seguridad de
+  legacy commands y redacción de preferencias.
 - `verify:release:strict` es el hard release gate para publicación real; también
   exige árbol limpio y `HEAD` igual al último release tag.
 - Los intents de alto riesgo, como publicar, hacer push, desplegar, borrar,

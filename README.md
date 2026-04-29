@@ -112,6 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
+npm run verify:scenarios
 npm run verify:host:hermes
 npm run verify:host:lifecycle
 npm run verify:release
@@ -141,6 +142,9 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - `verify:release` is a pre-landing audit: it validates package, manifests,
   supported adapter versions, changelog, tag metadata, GitHub Release state, and
   rejects any leftover OpenClaw host bridge surface or script.
+- `verify:scenarios` runs a cross-host Claude/Codex scenario matrix for short
+  prompts, high-risk confirmation gates, skill routing, MCP advisory routing,
+  legacy command safety, and preference redaction.
 - `verify:release:strict` is the hard release gate for real publishing; it also
   requires a clean worktree and `HEAD` matching the latest release tag.
 - High-risk intents such as publish, push, deploy, delete, paid actions,

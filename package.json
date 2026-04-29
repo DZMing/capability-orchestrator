@@ -11,6 +11,7 @@
     "verify:live:codex": "node scripts/live-verify.cjs --platform codex",
     "verify:host:hermes": "node scripts/verify-hermes-adapter.cjs",
     "verify:host:lifecycle": "node scripts/verify-host-lifecycle.cjs",
+    "verify:scenarios": "node scripts/scenario-verify.cjs",
     "verify:release": "node scripts/release-readiness-check.cjs",
     "verify:release:strict": "node scripts/release-readiness-check.cjs --strict"
   },
