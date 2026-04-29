@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.0.0] - 2026-04-29
+
 ### Changed
 
 - OpenClaw host bridge support is frozen as a public support surface; only
