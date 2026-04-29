@@ -51,6 +51,7 @@ function _main(tmp) {
 
   const env = { ...process.env, HERMES_HOME: home };
   const install = run('hermes', ['plugins', 'install', `file://${repo}`], { env });
+  const enableAfterInstall = run('hermes', ['plugins', 'enable', 'capability-orchestrator'], { env });
   const list = run('hermes', ['plugins', 'list'], { env });
   const bridgeCheck = run('python3', ['-c', `
 from hermes_cli.plugins import discover_plugins, get_plugin_commands, invoke_hook
@@ -74,7 +75,8 @@ print("HOOK>>>" + hook_text)
 
   const result = {
     installSucceeded: /Installed|Plugin installed/.test(install),
-    listed: /capability-orchestrat/i.test(list),
+    enabledAfterInstall: /enabled|ok/i.test(enableAfterInstall),
+    listed: /capability-orchest/i.test(list),
     bridgeStatusOk: /STATUS>>>capability-orchestrator host bridge/i.test(bridgeCheck),
     bridgeRouteOk: /ROUTE>>>[\s\S]*(AUTO-ROUTE|立即调用|Best route|No route match)/i.test(bridgeCheck),
     bridgeHookOk: /HOOK>>>[\s\S]*(\[能力感知\]|环境能力感知)/i.test(bridgeCheck),
@@ -84,7 +86,7 @@ print("HOOK>>>" + hook_text)
     home,
   };
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  if (!result.installSucceeded || !result.listed || !result.bridgeStatusOk || !result.bridgeRouteOk || !result.bridgeHookOk || !result.disabled || !result.reenabled || !result.removed) process.exit(1);
+  if (!result.installSucceeded || !result.enabledAfterInstall || !result.listed || !result.bridgeStatusOk || !result.bridgeRouteOk || !result.bridgeHookOk || !result.disabled || !result.reenabled || !result.removed) process.exit(1);
 }
 
 main();

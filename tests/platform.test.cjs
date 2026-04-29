@@ -36,6 +36,23 @@ describe('platform', () => {
     }
   }
 
+  function setTestHome(home) {
+    const saved = {
+      HOME: process.env.HOME,
+      USERPROFILE: process.env.USERPROFILE,
+    };
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    return saved;
+  }
+
+  function restoreTestHome(saved) {
+    if (saved.HOME === undefined) delete process.env.HOME;
+    else process.env.HOME = saved.HOME;
+    if (saved.USERPROFILE === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = saved.USERPROFILE;
+  }
+
   const envKeys = [
     'CAPABILITY_PLATFORM',
     'CLAUDE_USER_DIR', 'CLAUDE_PLUGIN_DATA',
@@ -98,10 +115,10 @@ describe('platform', () => {
     it('defaults to claude when no codex config exists', () => {
       saveEnv(envKeys);
       // 设置一个不存在的 HOME，避免 ~/.codex/config.toml 误触发
-      const savedHome = process.env.HOME;
-      process.env.HOME = '/tmp/no-codex-here-' + Date.now();
+      const testHome = '/tmp/no-codex-here-' + Date.now();
+      const savedHome = setTestHome(testHome);
       assert.equal(detectPlatform(), 'claude');
-      process.env.HOME = savedHome;
+      restoreTestHome(savedHome);
       restoreEnv(envKeys);
     });
 
@@ -115,46 +132,46 @@ describe('platform', () => {
 
     it('defaults to claude when both .claude and .codex config exist', () => {
       saveEnv(envKeys);
-      const savedHome = process.env.HOME;
-      process.env.HOME = '/tmp/dual-install-home-' + Date.now();
+      const testHome = '/tmp/dual-install-home-' + Date.now();
+      const savedHome = setTestHome(testHome);
       fs.existsSync = (target) => {
-        if (target === path.join(process.env.HOME, '.claude')) return true;
-        if (target === path.join(process.env.HOME, '.codex', 'config.toml')) return true;
+        if (target === path.join(testHome, '.claude')) return true;
+        if (target === path.join(testHome, '.codex', 'config.toml')) return true;
         return savedExistsSync(target);
       };
       assert.equal(detectPlatform(), 'claude');
       fs.existsSync = savedExistsSync;
-      process.env.HOME = savedHome;
+      restoreTestHome(savedHome);
       restoreEnv(envKeys);
     });
 
     it('detects openclaw from home config when claude/codex are absent', () => {
       saveEnv(envKeys);
-      const savedHome = process.env.HOME;
-      process.env.HOME = '/tmp/openclaw-home-' + Date.now();
+      const testHome = '/tmp/openclaw-home-' + Date.now();
+      const savedHome = setTestHome(testHome);
       fs.existsSync = (target) => {
-        if (target === path.join(process.env.HOME, '.openclaw')) return true;
-        if (target === path.join(process.env.HOME, '.openclaw', 'openclaw.json')) return true;
+        if (target === path.join(testHome, '.openclaw')) return true;
+        if (target === path.join(testHome, '.openclaw', 'openclaw.json')) return true;
         return false;
       };
       assert.equal(detectPlatform(), 'openclaw');
       fs.existsSync = savedExistsSync;
-      process.env.HOME = savedHome;
+      restoreTestHome(savedHome);
       restoreEnv(envKeys);
     });
 
     it('detects hermes from home config when higher-priority hosts are absent', () => {
       saveEnv(envKeys);
-      const savedHome = process.env.HOME;
-      process.env.HOME = '/tmp/hermes-home-' + Date.now();
+      const testHome = '/tmp/hermes-home-' + Date.now();
+      const savedHome = setTestHome(testHome);
       fs.existsSync = (target) => {
-        if (target === path.join(process.env.HOME, '.hermes', 'config.yaml')) return true;
-        if (target === path.join(process.env.HOME, '.hermes')) return true;
+        if (target === path.join(testHome, '.hermes', 'config.yaml')) return true;
+        if (target === path.join(testHome, '.hermes')) return true;
         return false;
       };
       assert.equal(detectPlatform(), 'hermes');
       fs.existsSync = savedExistsSync;
-      process.env.HOME = savedHome;
+      restoreTestHome(savedHome);
       restoreEnv(envKeys);
     });
   });
@@ -279,13 +296,13 @@ describe('platform', () => {
     it('falls back to HOME_DEFAULT for openclaw when no env is set', () => {
       saveEnv(envKeys);
       process.env.CAPABILITY_PLATFORM = 'openclaw';
-      const savedHome = process.env.HOME;
-      process.env.HOME = '/tmp/openclaw-default-' + Date.now();
+      const testHome = '/tmp/openclaw-default-' + Date.now();
+      const savedHome = setTestHome(testHome);
       assert.deepEqual(resolveUserDirWithSource(), {
-        dir: path.join(process.env.HOME, '.openclaw'),
+        dir: path.join(testHome, '.openclaw'),
         source: 'HOME_DEFAULT',
       });
-      process.env.HOME = savedHome;
+      restoreTestHome(savedHome);
       restoreEnv(envKeys);
     });
   });

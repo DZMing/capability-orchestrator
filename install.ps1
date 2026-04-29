@@ -66,6 +66,9 @@ function Resolve-InstallTarget {
     if ($env:CAPABILITY_INSTALL_REF -eq 'master') {
       return @{ Kind = 'head'; Ref = 'master' }
     }
+    if ($env:CAPABILITY_INSTALL_REF -match '^[0-9a-fA-F]{7,40}$') {
+      return @{ Kind = 'commit'; Ref = $env:CAPABILITY_INSTALL_REF }
+    }
     return @{ Kind = 'tag'; Ref = $env:CAPABILITY_INSTALL_REF }
   }
   if ($Channel -eq 'master') {
@@ -191,12 +194,22 @@ try {
       & git -C $StagedInstallDir checkout -q $Target.Ref
       if ($LASTEXITCODE -ne 0) { throw 'git checkout tag 失败' }
     } else {
-      & git clone --depth=1 --branch $Target.Ref $RepoUrl $StagedInstallDir
-      if ($LASTEXITCODE -ne 0) { throw 'git clone branch 失败' }
+      if ($Target.Kind -eq 'commit') {
+        & git clone --depth=1 $RepoUrl $StagedInstallDir
+        if ($LASTEXITCODE -ne 0) { throw 'git clone 失败' }
+        & git -C $StagedInstallDir checkout -q $Target.Ref
+        if ($LASTEXITCODE -ne 0) { throw 'git checkout commit 失败' }
+      } else {
+        & git clone --depth=1 --branch $Target.Ref $RepoUrl $StagedInstallDir
+        if ($LASTEXITCODE -ne 0) { throw 'git clone branch 失败' }
+      }
     }
   } else {
     if ($env:CAPABILITY_INSTALL_REPO_URL) {
       throw '错误：本地/自定义 CAPABILITY_INSTALL_REPO_URL 需要 git clone，但当前环境未找到 git'
+    }
+    if ($Target.Kind -eq 'commit') {
+      throw '错误：CAPABILITY_INSTALL_REF 指向 commit 时需要 git'
     }
     $TmpZip = Join-Path ([IO.Path]::GetTempPath()) ('cap-orch-' + [guid]::NewGuid().ToString('N') + '.zip')
     $TmpDir = Join-Path ([IO.Path]::GetTempPath()) ('cap-orch-' + [guid]::NewGuid().ToString('N'))

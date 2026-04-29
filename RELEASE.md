@@ -35,15 +35,17 @@ npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
 npm run verify:release
+npm run verify:release:strict
 ```
 
-任一命令失败，都不要打 release tag。
+任一命令失败，都不要打 release tag。`verify:release` 是 pre-landing audit，
+`verify:release:strict` 是真实发版前 hard release gate。
 
-另外，`npm run verify:release` 的 JSON 输出必须人工检查：
+另外，`npm run verify:release` / `npm run verify:release:strict` 的 JSON 输出必须人工检查：
 
 - `versionSyncOk` 和 `changelogSyncOk` 必须为 `true`
-- 打 tag 之前，`worktreeClean` 必须为 `true`
-- 打 tag 并 push 完之后，重新执行一次，确认 `headMatchesLatestTag` 变为 `true`
+- 打 tag 之前，`strictReleaseOk` 必须为 `true`，`strictReleaseBlockers` 必须为空
+- 打 tag 并 push 完之后，重新执行 strict gate，确认 `headMatchesLatestTag` 变为 `true`
 - GitHub Release 创建完成后，重新执行一次，确认 `githubReleaseExists=true`、`githubReleaseReady=true`
 
 ## 打 tag 与发布

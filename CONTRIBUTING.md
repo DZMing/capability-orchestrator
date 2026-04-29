@@ -60,7 +60,8 @@ npm run verify:live:codex
 说明：
 
 - `verify:live:*` 是功能级 CLI 验收，不是 CI 基线；它依赖本机已登录的 Claude / Codex 客户端
-- 如果改动触及安装行为、hooks、平台检测、路由输出或公开契约，至少应运行 `npm run verify:release`，并人工检查其中的 `headMatchesLatestTag` / `worktreeClean` / `githubReleaseReady` 字段
+- 如果改动触及安装行为、hooks、平台检测、路由输出或公开契约，至少应运行 `npm run verify:release`；它是 pre-landing audit，会报告但不会因 dirty/ahead 工作树失败
+- 真实发布前必须运行 `npm run verify:release:strict`，并确认 `strictReleaseOk=true`、`strictReleaseBlockers=[]`、`githubReleaseReady=true`
 
 ## 维护预期
 

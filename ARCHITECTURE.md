@@ -25,6 +25,38 @@ Claude Code 本身就是路由器——它的 agent loop 已经会根据上下�
 
 这样做的目的不是改变外部契约，而是让 `scan-environment` 和 `route-matcher` 共享同一套用户目录解析与能力发现逻辑。
 
+### Intent Router 执行契约层
+
+除了技能 / 命令 / MCP 路由，仓库还提供一层独立的 Intent Router，
+用于把短操作口令扩展成完整的执行契约。它不是替代 route-matcher，
+而是给“继续”“执行吧”“还有什么没做完”“做到可以商用”这类短 prompt
+提供统一的 What / Guardrails / Success / Budget / Verify 输出。
+
+数据流如下：
+
+1. `intent-classifier.cjs` 先按短 prompt 和关键词把输入映射到 intent
+   （`continue_work` / `execute_plan` / `work_status` /
+   `commercial_readiness` / `prompt_composition` / `capability_lookup`）
+2. `work-context.cjs` 读取受限工作上下文：项目规则、git status、最近的
+   route 记录
+3. `preference-profile.cjs` 读取可选偏好文件
+   `~/.config/capability-orchestrator/preferences.json`，并对 secret-like
+   内容做 redaction
+4. `safety-gate.cjs` 根据 prompt 和上下文判断是否需要确认
+5. `prompt-composer.cjs` 生成五段式执行契约，并在高风险时输出
+   `[CONFIRMATION REQUIRED]`
+6. `intent-router.cjs` 负责把这些输入串起来；当 intent 不明确或置信度
+   不足时返回 `null`，让现有的 skill / command / MCP matcher 继续处理
+
+安全规则：
+
+- `preferences.json` 里的条目是建议，不会降低风险等级
+- project preferences 优先于 global preferences
+- disabled 或低置信度偏好会被忽略
+- route log、AGENTS 规则和 git 状态都只读读取，不写入任何文件
+- 高风险动作包括发布、推送、部署、删除、付费、凭证、生产变更和真实
+  产品 / UX 决策，都会被闸门拦下并要求确认
+
 ### 核心机制：`!command` 动态注入
 
 Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行 shell 命令，stdout 直接注入到 Claude 的上下文。
@@ -58,21 +90,20 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 ## 扫描来源及稳定性
 
-| 来源                                  | 路径                                           | 稳定性                                     |
-| ------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
-| 项目级 skills                         | `.claude/skills/`                              | ✅ 官方正式目录                            |
-| 项目级 agents                         | `.claude/agents/`                              | ✅ 官方正式目录                            |
-| 项目级 legacy commands                | `.claude/commands/`                            | ✅ 官方正式目录                            |
-| 用户级 skills                         | `~/.claude/skills/`                            | ✅ 官方正式目录                            |
-| 用户级 agents                         | `~/.claude/agents/`                            | ✅ 官方正式目录                            |
-| 用户级 legacy commands                | `~/.claude/commands/`                          | ✅ 官方正式目录                            |
-| 项目级 MCP 配置                       | `.mcp.json`                                    | ✅ 官方正式格式                            |
-| 用户级 MCP 配置                       | `~/.claude/mcp.json`                           | ✅ 官方正式格式（兼容旧 `.mcp.json`）      |
-| 已安装插件                            | `~/.claude/plugins/cache/`                     | ⚠️ best-effort，目录结构未正式文档化       |
-| OpenClaw runtime skills/plugins/hooks | 宿主 CLI (`openclaw skills/plugins/hooks ...`) | ⚠️ 实验宿主路径：运行态快照与 route 已接入 |
-| OpenClaw skills fallback              | `~/.openclaw/workspace/skills/`                | ⚠️ 兼容扫描面（只读，不执行）              |
-| Hermes runtime skills/plugins         | 宿主 CLI (`hermes skills/plugins ...`)         | ⚠️ 实验宿主路径：运行态快照与 route 已接入 |
-| Hermes skills fallback                | `~/.hermes/skills/`                            | ⚠️ 兼容扫描面（只读，不执行）              |
+| 来源                          | 路径                                   | 稳定性                                                  |
+| ----------------------------- | -------------------------------------- | ------------------------------------------------------- |
+| 项目级 skills                 | `.claude/skills/`                      | ✅ 官方正式目录                                         |
+| 项目级 agents                 | `.claude/agents/`                      | ✅ 官方正式目录                                         |
+| 项目级 legacy commands        | `.claude/commands/`                    | ✅ 官方正式目录                                         |
+| 用户级 skills                 | `~/.claude/skills/`                    | ✅ 官方正式目录                                         |
+| 用户级 agents                 | `~/.claude/agents/`                    | ✅ 官方正式目录                                         |
+| 用户级 legacy commands        | `~/.claude/commands/`                  | ✅ 官方正式目录                                         |
+| 项目级 MCP 配置               | `.mcp.json`                            | ✅ 官方正式格式                                         |
+| 用户级 MCP 配置               | `~/.claude/mcp.json`                   | ✅ 官方正式格式（兼容旧 `.mcp.json`）                   |
+| 已安装插件                    | `~/.claude/plugins/cache/`             | ⚠️ best-effort，目录结构未正式文档化                    |
+| OpenClaw skills fallback      | `~/.openclaw/workspace/skills/`        | ⚠️ 冻结的兼容扫描面（只读，不执行；不承诺 host bridge） |
+| Hermes runtime skills/plugins | 宿主 CLI (`hermes skills/plugins ...`) | ⚠️ 实验宿主路径：运行态快照与 route 已接入              |
+| Hermes skills fallback        | `~/.hermes/skills/`                    | ⚠️ 兼容扫描面（只读，不执行）                           |
 
 ## Token 预算
 
@@ -168,11 +199,12 @@ Windows 原生 Claude 安装器会把 hook 命令写成 `cmd.exe /d /s /c ""...\
 每条用户消息经过 `route-matcher.cjs`：
 
 1. 从 stdin 读取 JSON（含 prompt 字段）
-2. 扫描环境中所有 skill / legacy command 的 name + description
-3. 关键词匹配 → 找到最佳匹配目标
-4. 匹配到 skill → 注入明确的 `/<skill-name>` 调用指令
-5. 匹配到 legacy command → 优先注入明确的 `/<command>` 调用；仅在命令名不适合 slash 调用时回退到命令定义
-6. 未匹配 → 静默放行
+2. Intent Router 先识别短 prompt（例如“继续”“执行吧”“还有什么没做完”“做到可以商用”）并生成 Harness Contract
+3. 高风险动作（发布、推送、部署、删除、付费、凭证、真实产品/UX 决策）先进入 confirmation gate
+4. 未命中 intent 时，扫描环境中所有 skill / legacy command 的 name + description
+5. 匹配到 skill → 注入明确的 `/<skill-name>` 调用指令
+6. 匹配到 legacy command → 输出明确的 `/<command>` 能力入口建议，不执行扫描到的命令正文或 markdown 定义
+7. 未匹配 → 静默放行
 
 扫描范围（v1.4.0+）：项目级 skill + 用户级 skill + 已安装插件 skill，去重优先级：项目 > 用户 > 插件。
 
@@ -189,15 +221,16 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - skill description 经 sanitize 清洗，防注入
 - 只在 UserPromptSubmit 做路由，不在 PostToolUse → 避免循环
 - 匹配到 skill 时注入明确的 `/<skill-name>` 调用指令，不注入未渲染的 `SKILL.md` 原文
-- 匹配到 legacy command 时优先注入明确的 `/<command>` 调用，只在 slash 调用不安全时回退到命令定义
+- 匹配到 legacy command 时只输出明确的 `/<command>` 能力入口建议，不注入、不执行扫描到的命令正文或 markdown 定义
+- MCP 匹配只作为能力建议；涉及外部、凭证、生产、付费或真实用户数据时必须先确认
 
 ## explain 调试入口
 
 `route-matcher.cjs` 新增 `--explain` 只读模式。输入与 hook 相同的 stdin JSON，输出机器可读 JSON：
 
 - `action`: `route` / `pass`
-- `reason`: `matched-skill` / `matched-command-literal` / `matched-command-semantic` / `matched-command-fallback` / `matched-mcp` / `escaped` / `too-short` / `no-match`
-- `targetType`: `skill` / `command` / `mcp` / `null`
+- `reason`: `intent-router` / `confirmation-required` / `matched-skill` / `matched-command-literal` / `matched-command-semantic` / `matched-command-fallback` / `matched-mcp` / `escaped` / `too-short` / `no-match`
+- `targetType`: `intent` / `skill` / `command` / `mcp` / `null`
 - `targetName`
 - `confidence`
 - `matchedKeywords`
@@ -208,23 +241,20 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 
 ## 实验宿主路径
 
-当前仓库除了正式支持的 Claude / Codex 之外，还已经具备两条实验宿主路径：
+当前仓库除了正式支持的 Claude / Codex 之外，保留 Hermes 实验宿主路径。
+OpenClaw host bridge 已冻结，不再作为安装、route bridge、adapter command 或
+lifecycle 验证承诺；仅保留 `~/.openclaw/workspace/skills/` 的只读兼容扫描。
 
-- OpenClaw：
-  - active host runtime snapshot 已成立
-  - route 已能命中 OpenClaw runtime skills
-  - hook-pack bootstrap 注入已可通过 `openclaw plugins install ... --link` 安装并执行
-  - `openclaw hooks info capability-orchestrator-bootstrap` 已能命中
-  - adapter plugin 已可通过 `openclaw plugins install ... --link` 加载，并暴露 plugin commands / CLI command
 - Hermes：
   - active host runtime snapshot 已成立
   - route 已能命中 Hermes runtime skills
   - plugin bridge 已可通过 `hermes plugins install file://...` 安装
   - `pre_llm_call` hook 和 slash command 已接入共享 bridge
 
-这些路径已经有真实安装和宿主管理面证据，但仍然标记为实验状态，原因是：
+Hermes 路径已经有真实安装和宿主管理面证据，但仍然标记为实验状态，原因是：
 
-- OpenClaw / Hermes 仍处于实验支持面，主要保守点是正式支持矩阵和更广泛宿主生命周期承诺尚未冻结
+- Hermes 仍处于实验支持面，主要保守点是正式支持矩阵和更广泛宿主生命周期承诺尚未冻结
+- OpenClaw bridge 在本版本冻结，避免文档、测试和 release gate 继续声明不可验证的宿主支持
 
 ## 渲染模式
 
@@ -239,7 +269,7 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - MCP server 描述（平台只暴露 tool 名，不注入 server 级描述）
 - Agent 描述（帮助判断何时委派 vs 自己做）
 - Skill 名称 + 描述（供路由匹配使用）
-- 兼容生态本地 skills（OpenClaw / Hermes）
+- 兼容生态本地 skills（OpenClaw scan-only / Hermes）
 - 强制路由规则（`<MANDATORY>` 包裹，要求 Claude 匹配到 skill 时必须调用）
 
 ## Future Enhancements（仅文档记录，不实现）

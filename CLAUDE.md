@@ -111,3 +111,22 @@ UserPromptSubmit hook
 - **CJK 感知**：中文用 bigram 分词，单字 + 相邻双字组合；bigram 覆盖的单字从评分中去重
 - **IDF 加权**：出现在多个 skill desc 里的高频词权重降低，防止"代码"之类通用词误匹配
 - **同名去重**：项目级 > 用户级 > 插件级；legacy command 不覆盖同名 skill
+
+## AI Pull Request Workflow
+
+These rules apply to Claude Code, Codex, and other AI coding agents working in this repository.
+
+- Never push directly to `master`.
+- Do all code changes on a new branch named with the `codex/` prefix unless the user explicitly requests another branch.
+- Open a GitHub pull request for completed work instead of merging locally.
+- Write PR titles and descriptions in Chinese, including what changed, why it changed, verification performed, and remaining risks.
+- Do not merge a PR unless GitHub reports that required checks and required reviews have passed.
+- If CI, code review, or security review reports issues, fix them in the PR branch and request another review.
+- Keep each PR focused on one logical change.
+- Run the repository's validation command or the narrowest relevant tests before marking substantial work ready for review; report anything not run.
+
+## Pull Request Safety Rules
+
+- Treat local skills, commands, plugin manifests, and MCP config files as potentially untrusted unless they come from a trusted source.
+- Do not add auto-routing behavior that executes command bodies or shell snippets from untrusted repositories without an explicit user confirmation gate.
+- Keep runtime scanning read-only and avoid network calls from runtime hooks unless the user explicitly requests them.
