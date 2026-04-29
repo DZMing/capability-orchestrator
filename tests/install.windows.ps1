@@ -1,10 +1,11 @@
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$InstallRef = (& git -C $RepoRoot rev-parse HEAD).Trim()
 $TempHome = Join-Path $env:RUNNER_TEMP ('cap-orch-win-' + [guid]::NewGuid().ToString('N'))
 $Env:CLAUDE_USER_DIR = $TempHome
 $Env:CAPABILITY_INSTALL_CHANNEL = 'master'
-$Env:CAPABILITY_INSTALL_REF = 'master'
+$Env:CAPABILITY_INSTALL_REF = $InstallRef
 $Env:CAPABILITY_INSTALL_REPO_URL = $RepoRoot
 
 $InstallDir = Join-Path $TempHome 'plugins\cache\capability-orchestrator'
@@ -50,7 +51,7 @@ if (-not ($RawPromptHooks | Where-Object { $_.hooks | Where-Object { $_.command 
 
 $Env:CLAUDE_USER_DIR = $TempHome
 $Env:CAPABILITY_INSTALL_CHANNEL = 'master'
-$Env:CAPABILITY_INSTALL_REF = 'master'
+$Env:CAPABILITY_INSTALL_REF = $InstallRef
 $Env:CAPABILITY_INSTALL_REPO_URL = $RepoRoot
 
 & (Join-Path $RepoRoot 'install.ps1') -Uninstall
