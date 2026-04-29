@@ -12,19 +12,6 @@ const {
   getUserCommandsPaths,
 } = require('./platform.cjs');
 const {
-  parseOpenClawSkillsJson,
-  parseOpenClawPluginsJson,
-  parseOpenClawPluginCommandsJson,
-  parseOpenClawCliCommandsJson,
-  parseOpenClawInspectCommandList,
-  parseOpenClawHooksJson,
-  scanOpenClawRuntimeSkills,
-  scanOpenClawRuntimePlugins,
-  scanOpenClawRuntimePluginCommands,
-  scanOpenClawRuntimeCliCommands,
-  scanOpenClawRuntimeHooks,
-} = require('./openclaw-runtime.cjs');
-const {
   parseHermesSkillsTable,
   parseHermesPluginsList,
   scanHermesRuntimeSkills,
@@ -517,17 +504,10 @@ function collectSnapshot(projectDir, userDir) {
     }
   }
 
-  if (platform !== 'openclaw') {
-    tryCollect('OpenClaw Skills', '', () => scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', errors, {
-      scope: 'workspace',
-      invocation: pp.invocationStyle,
-    }));
-  } else {
-    const runtimeHelpers = { sanitize, truncate, withCapabilityMeta };
-    tryCollect('OpenClaw Runtime Skills', '', () => scanOpenClawRuntimeSkills(errors, runtimeHelpers));
-    tryCollect('OpenClaw Runtime Plugins', '', () => scanOpenClawRuntimePlugins(errors, runtimeHelpers));
-    tryCollect('OpenClaw Runtime Hooks', '', () => scanOpenClawRuntimeHooks(errors, runtimeHelpers));
-  }
+  tryCollect('OpenClaw Skills', '', () => scanCompatibleSkills(getOpenClawSkillDir(), 'openclaw', errors, {
+    scope: 'workspace',
+    invocation: pp.invocationStyle,
+  }));
   if (platform !== 'hermes') {
     tryCollect('Hermes Skills', '', () => scanCompatibleSkills(getHermesSkillDir(), 'hermes', errors, {
       scope: 'user',
@@ -640,19 +620,8 @@ module.exports = {
   scanInstalledPlugins,
   getOpenClawSkillDir,
   getHermesSkillDir,
-  parseOpenClawSkillsJson,
-  parseOpenClawPluginsJson,
-  parseOpenClawPluginCommandsJson,
-  parseOpenClawCliCommandsJson,
-  parseOpenClawInspectCommandList,
-  parseOpenClawHooksJson,
   parseHermesSkillsTable,
   parseHermesPluginsList,
-  scanOpenClawRuntimeSkills,
-  scanOpenClawRuntimePlugins,
-  scanOpenClawRuntimePluginCommands,
-  scanOpenClawRuntimeCliCommands,
-  scanOpenClawRuntimeHooks,
   scanHermesRuntimeSkills,
   scanHermesRuntimePlugins,
   collectSnapshot,

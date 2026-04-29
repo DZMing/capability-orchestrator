@@ -152,6 +152,10 @@ test('isEscaped: detects 直接做', () => {
   assert.ok(isEscaped('直接做：列出文件'));
 });
 
+test('isEscaped: detects 直接执行', () => {
+  assert.ok(isEscaped('直接执行：列出文件'));
+});
+
 test('isEscaped: detects skip', () => {
   assert.ok(isEscaped('skip this, just do it'));
 });
@@ -178,6 +182,58 @@ test('isEscaped: normal message not escaped', () => {
 
 test('isEscaped: null returns false', () => {
   assert.ok(!isEscaped(null));
+});
+
+test('resolveRouteDecision: short continuation prompt routes through Intent Router', () => {
+  const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-route-intent-'));
+  fs.writeFileSync(path.join(tmp, 'AGENTS.md'), 'Never push directly to master.\n');
+  try {
+    const decision = resolveRouteDecision(JSON.stringify({ prompt: '继续', cwd: tmp }));
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.reason, 'intent-router');
+    assert.equal(decision.explain.targetType, 'intent');
+    assert.equal(decision.explain.targetName, 'continue_work');
+    assert.equal(decision.targetType, 'intent');
+    assert.ok(decision.intentRoute.output.includes('[AUTO-ROUTE]'));
+    assert.ok(decision.intentRoute.output.includes('## What'));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: risky publish prompt routes to confirmation gate', () => {
+  const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+  const decision = resolveRouteDecision(JSON.stringify({
+    prompt: '帮我发布并推送到生产',
+    cwd: FIXTURE_PROJECT,
+  }));
+  assert.equal(decision.explain.action, 'route');
+  assert.equal(decision.explain.reason, 'confirmation-required');
+  assert.equal(decision.explain.targetType, 'intent');
+  assert.equal(decision.explain.targetName, 'execute_plan');
+  assert.equal(decision.intentRoute.safety.confirmationRequired, true);
+  assert.ok(decision.intentRoute.output.includes('[CONFIRMATION REQUIRED]'));
+});
+
+test('resolveRouteDecision: escaped risky prompts still route to confirmation gate', () => {
+  const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+  const prompts = [
+    '直接做，帮我发布到生产',
+    '不用skill，帮我删除这个目录',
+    'skip，使用凭证部署',
+    '直接执行付费发布',
+    'push prod?',
+  ];
+
+  for (const prompt of prompts) {
+    const decision = resolveRouteDecision(JSON.stringify({ prompt, cwd: FIXTURE_PROJECT }));
+    assert.equal(decision.explain.action, 'route', prompt);
+    assert.equal(decision.explain.reason, 'confirmation-required', prompt);
+    assert.equal(decision.explain.targetType, 'intent', prompt);
+    assert.equal(decision.intentRoute.safety.confirmationRequired, true, prompt);
+    assert.ok(decision.intentRoute.output.includes('[CONFIRMATION REQUIRED]'), prompt);
+  }
 });
 
 // ─── findBestMatch ──────────────────────────────────────────────────────────
@@ -909,110 +965,28 @@ test('collectAllSkills: includes OpenClaw and Hermes skills in matching pool', (
   }
 });
 
-test('collectAllSkills: active OpenClaw host reads workspace and personal skills from its own user dir', () => {
+test('collectAllSkills: active OpenClaw host stays scan-only and reads workspace skills from its own user dir', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-host-route-'));
   const openClawRoot = path.join(tmp, 'openclaw');
-  const binDir = path.join(tmp, 'bin');
-  fs.mkdirSync(binDir, { recursive: true });
-  fs.writeFileSync(path.join(binDir, 'openclaw'), `#!/usr/bin/env node
-const args = process.argv.slice(2).join(' ');
-if (args === 'skills list --json') {
-  process.stdout.write(JSON.stringify({ skills: [
-    { name: 'oc-workspace', description: 'openclaw workspace audit helper', eligible: true, disabled: false, bundled: false, source: 'workspace' },
-    { name: 'oc-personal', description: 'openclaw personal planning helper', eligible: true, disabled: false, bundled: false, source: 'personal' }
-  ] }));
-} else if (args === 'plugins list --json') {
-  process.stdout.write(JSON.stringify({ plugins: [
-    { id: 'memory-core', status: 'loaded' }
-  ] }));
-} else if (args === 'hooks list --json') {
-  process.stdout.write(JSON.stringify({ hooks: [] }));
-} else if (args === 'plugins inspect memory-core') {
-  process.stdout.write("Commands:\\ndreaming\\n\\nCLI commands:\\nmemory\\n");
-} else {
-  process.exit(1);
-}
-`, { mode: 0o755 });
+  fs.mkdirSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-workspace'), { recursive: true });
+  fs.writeFileSync(path.join(openClawRoot, 'workspace', 'skills', 'oc-workspace', 'SKILL.md'), '---\nname: oc-workspace\ndescription: openclaw workspace audit helper\n---\n');
 
   const savedPlatform = process.env.CAPABILITY_PLATFORM;
   const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
-  const savedPath = process.env.PATH;
   process.env.CAPABILITY_PLATFORM = 'openclaw';
   process.env.OPENCLAW_USER_DIR = openClawRoot;
-  process.env.PATH = `${binDir}:${savedPath || ''}`;
   try {
     const skills = collectAllSkills(FIXTURE_PROJECT, openClawRoot);
     const names = skills.map(s => s.name);
     assert.ok(names.includes('oc-workspace'));
-    assert.ok(names.includes('oc-personal'));
     assert.equal(findBestMatch('please do an openclaw workspace audit', skills).name, 'oc-workspace');
-    assert.equal(findBestMatch('need openclaw personal planning', skills).name, 'oc-personal');
+    assert.ok(!names.includes('memory-core'), 'OpenClaw runtime plugins are not part of scan-only support');
   } finally {
     if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
     else process.env.CAPABILITY_PLATFORM = savedPlatform;
     if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
     else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
-    process.env.PATH = savedPath;
     fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
-test('resolveRouteDecision: active OpenClaw host can literal-route runtime plugin command', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-literal-route-'));
-  const openClawRoot = path.join(tmp, 'openclaw');
-  const binDir = path.join(tmp, 'bin');
-  fs.mkdirSync(binDir, { recursive: true });
-  fs.writeFileSync(path.join(binDir, 'openclaw'), `#!/usr/bin/env node
-const args = process.argv.slice(2).join(' ');
-if (args === 'skills list --json') {
-  process.stdout.write(JSON.stringify({ skills: [] }));
-} else if (args === 'plugins list --json') {
-  process.stdout.write(JSON.stringify({ plugins: [{ id: 'memory-core', status: 'loaded' }] }));
-} else if (args === 'hooks list --json') {
-  process.stdout.write(JSON.stringify({ hooks: [] }));
-} else if (args === 'plugins inspect memory-core') {
-  process.stdout.write("Commands:\\ndreaming\\n\\nCLI commands:\\nmemory\\n");
-} else {
-  process.exit(1);
-}
-`, { mode: 0o755 });
-  const savedPlatform = process.env.CAPABILITY_PLATFORM;
-  const savedOpenClaw = process.env.OPENCLAW_USER_DIR;
-  const savedPath = process.env.PATH;
-  process.env.CAPABILITY_PLATFORM = 'openclaw';
-  process.env.OPENCLAW_USER_DIR = openClawRoot;
-  process.env.PATH = `${binDir}:${savedPath || ''}`;
-  try {
-    const input = JSON.stringify({ prompt: '/dreaming', cwd: FIXTURE_PROJECT });
-    const decision = resolveRouteDecision(input);
-    assert.equal(decision.explain.action, 'route');
-    assert.equal(decision.targetType, 'command');
-    assert.equal(decision.explain.targetName, 'dreaming');
-    assert.equal(decision.explain.reason, 'matched-command-literal');
-  } finally {
-    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
-    else process.env.CAPABILITY_PLATFORM = savedPlatform;
-    if (savedOpenClaw === undefined) delete process.env.OPENCLAW_USER_DIR;
-    else process.env.OPENCLAW_USER_DIR = savedOpenClaw;
-    process.env.PATH = savedPath;
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
-test('createCommandOutput: active OpenClaw host uses slash invocation for plugin command', () => {
-  const { createCommandOutput } = require('../scripts/route-matcher.cjs');
-  const savedPlatform = process.env.CAPABILITY_PLATFORM;
-  process.env.CAPABILITY_PLATFORM = 'openclaw';
-  const origWrite = process.stdout.write;
-  let captured = '';
-  process.stdout.write = (s) => { captured += s; return true; };
-  try {
-    createCommandOutput({ name: 'dreaming', desc: 'trigger dreaming', surfaceType: 'plugin_command', filePath: '' });
-    assert.ok(captured.includes('立即调用：/dreaming'));
-  } finally {
-    process.stdout.write = origWrite;
-    if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
-    else process.env.CAPABILITY_PLATFORM = savedPlatform;
   }
 });
 
@@ -1272,7 +1246,8 @@ test('createMcpOutput: outputs plain text with mcp__ instruction', () => {
     // createMcpOutput now outputs plain text (not JSON)
     assert.ok(captured.includes('mcp__chrome-devtools'), 'should include mcp__ prefix');
     assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
-    assert.ok(captured.includes('强制指令'), 'should include mandatory instruction');
+    assert.ok(captured.includes('能力建议'), 'should present MCP as advisory capability');
+    assert.ok(!captured.includes('强制指令'), 'should not force-call metadata-derived MCP tools');
   } finally {
     process.stdout.write = origWrite;
   }
@@ -1341,16 +1316,16 @@ test('createCommandOutput: outputs plain text with AUTO-ROUTE marker', () => {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'commit', desc: 'Create well-formatted commits', filePath: null });
     assert.ok(captured.includes('[AUTO-ROUTE]'), 'should include AUTO-ROUTE marker');
-    assert.ok(captured.includes('优先立即调用 /commit'), 'should prefer direct slash command invocation');
+    assert.ok(captured.includes('能力建议'), 'should present command as a capability suggestion');
     assert.ok(captured.includes('立即调用：/commit'), 'should include explicit slash command call');
     assert.ok(captured.includes('/commit'), 'should reference /commit');
-    assert.ok(captured.includes('强制指令'), 'should include mandatory instruction');
+    assert.ok(captured.includes('不要执行扫描到的命令正文'), 'should not execute scanned command bodies');
   } finally {
     process.stdout.write = origWrite;
   }
 });
 
-test('createCommandOutput: includes fallback command content when slash invoke is supported', () => {
+test('createCommandOutput: does not include scanned fallback command content', () => {
   const fs = require('fs');
   const os = require('os');
   const path = require('path');
@@ -1362,9 +1337,9 @@ test('createCommandOutput: includes fallback command content when slash invoke i
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'test-cmd', desc: 'test', filePath: tmpFile, type: 'command' });
-    assert.ok(captured.includes('[回退定义]'), 'should include explicit fallback section');
-    assert.ok(captured.includes('Do the thing.'),
-      'should include fallback file content (frontmatter stripped)');
+    assert.ok(!captured.includes('[回退定义]'), 'should not include fallback command body section');
+    assert.ok(!captured.includes('Do the thing.'),
+      'should not include fallback file content');
     assert.ok(!captured.includes('description: test'),
       'should strip frontmatter');
   } finally {
@@ -1373,14 +1348,15 @@ test('createCommandOutput: includes fallback command content when slash invoke i
   }
 });
 
-test('createCommandOutput: falls back to inline command definition when slash invoke is unsafe', () => {
+test('createCommandOutput: treats unsafe slash command names as advisory only', () => {
   const origWrite = process.stdout.write.bind(process.stdout);
   let captured = '';
   process.stdout.write = (data) => { captured += data; return true; };
   try {
     const { createCommandOutput } = require('../scripts/route-matcher.cjs');
     createCommandOutput({ name: 'bad cmd', desc: 'fallback only', filePath: null, type: 'command' });
-    assert.ok(captured.includes('不适合直接调用'), 'should explain inline fallback mode');
+    assert.ok(captured.includes('不适合直接 slash 调用'), 'should explain non-invokable command name');
+    assert.ok(captured.includes('能力建议'), 'should keep unsafe command names advisory only');
     assert.ok(!captured.includes('立即调用：/bad cmd'), 'should not emit unsafe slash invocation');
     assert.ok(!captured.includes('执行 /bad cmd 命令的完整流程。'), 'should not reintroduce unsafe slash syntax in fallback copy');
   } finally {

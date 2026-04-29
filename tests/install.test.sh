@@ -79,66 +79,6 @@ fi
 GITEOF
 chmod +x "$FAKE_GIT"
 
-FAKE_OPENCLAW="$TMP_GIT/openclaw"
-cat > "$FAKE_OPENCLAW" <<'OCEOF'
-#!/usr/bin/env bash
-set -euo pipefail
-LOG="${FAKE_OPENCLAW_LOG:-}"
-CFG="${OPENCLAW_CONFIG_PATH:-$HOME/.openclaw/openclaw.json}"
-if [[ -n "$LOG" ]]; then printf '%s\n' "$*" >> "$LOG"; fi
-case "${1:-}" in
-  plugins)
-    shift
-    case "${1:-}" in
-      install)
-        if [[ " $* " == *" --link "* && " $* " == *" --force "* ]]; then
-          echo "--force is not supported with --link." >&2
-          exit 1
-        fi
-        if [[ "${2:-}" == *"adapters/openclaw-hook-pack"* ]]; then
-          mkdir -p "$(dirname "$CFG")"
-          cat > "$CFG" <<JSON
-{
-  "hooks": {
-    "internal": {
-      "load": {
-        "extraDirs": ["${3:-missing-path}"]
-      },
-      "entries": {
-        "capability-orchestrator-bootstrap": { "enabled": true }
-      },
-      "installs": {
-        "openclaw-hook-pack": {
-          "source": "path",
-          "installPath": "${3:-missing-path}"
-        }
-      }
-    }
-  }
-}
-JSON
-          echo "Linked hook pack path: ${2:-missing-path}"
-        else
-          echo "Linked plugin path: ${2:-missing-path}"
-        fi
-        ;;
-      uninstall)
-        echo "Plugin removed: ${2:-unknown}"
-        ;;
-    esac
-    ;;
-  config)
-    shift
-    case "${1:-}" in
-      unset)
-        echo "Removed ${2:-unknown}"
-        ;;
-    esac
-    ;;
-esac
-OCEOF
-chmod +x "$FAKE_OPENCLAW"
-
 FAKE_HERMES="$TMP_GIT/hermes"
 cat > "$FAKE_HERMES" <<'HERMEOF'
 #!/usr/bin/env bash
@@ -158,7 +98,14 @@ case "${1:-}" in
         rm -rf "$HOME_DIR/plugins/capability-orchestrator"
         echo "Plugin removed"
         ;;
-      enable|disable|list)
+      enable)
+        if [[ "${FAKE_HERMES_FAIL_ENABLE:-}" == "1" ]]; then
+          echo "enable failed" >&2
+          exit 1
+        fi
+        echo "ok"
+        ;;
+      disable|list)
         echo "ok"
         ;;
     esac
@@ -358,33 +305,15 @@ assert_file "双安装默认检测仍写 Claude settings.json" "$DUAL_HOME/.clau
 assert "双安装默认检测不会误写 Codex hooks.json" test ! -f "$DUAL_HOME/.codex/hooks.json"
 rm -rf "$DUAL_HOME" /tmp/cap-orch-dual-auto.log
 
-# ── OpenClaw 实验宿主安装/卸载 smoke ────────────────────────────────────────
-OPENCLAW_HOME=$(mktemp -d)
-OPENCLAW_LOG="$OPENCLAW_HOME/openclaw.log"
-OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
-  bash "$REPO_ROOT/install.sh" --platform=openclaw >/tmp/cap-orch-openclaw-install.log 2>&1
-
-assert "OpenClaw 安装会调用 plugins install" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins install')?0:1)"
-assert "OpenClaw 安装不会传不兼容的 --link --force 组合" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('--link --force')?1:0)"
-assert "OpenClaw 安装会同时安装 adapter plugin" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('adapters/openclaw')?0:1)"
-assert_file "OpenClaw 安装会写宿主 config" "$OPENCLAW_HOME/openclaw.json"
-assert "OpenClaw 宿主 config 含 install record" \
-  node -e "const s=JSON.parse(require('fs').readFileSync('$OPENCLAW_HOME/openclaw.json','utf8')); process.exit(s.hooks.internal.installs['openclaw-hook-pack']?0:1)"
-
-OPENCLAW_CONFIG_PATH="$OPENCLAW_HOME/openclaw.json" FAKE_OPENCLAW_LOG="$OPENCLAW_LOG" PATH="$FAKE_PATH" \
-  bash "$REPO_ROOT/install.sh" --platform=openclaw --uninstall >/tmp/cap-orch-openclaw-uninstall.log 2>&1
-assert "OpenClaw 卸载会调用 plugins uninstall capability-orchestrator --force" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('plugins uninstall capability-orchestrator --force')?0:1)"
-assert "OpenClaw 卸载会调用 config unset entries" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.entries.capability-orchestrator-bootstrap')?0:1)"
-assert "OpenClaw 卸载会调用 config unset installs" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.installs.openclaw-hook-pack')?0:1)"
-assert "OpenClaw 卸载会调用 config unset extraDirs" \
-  node -e "const s=require('fs').readFileSync('$OPENCLAW_LOG','utf8'); process.exit(s.includes('config unset hooks.internal.load.extraDirs.0')?0:1)"
-rm -rf "$OPENCLAW_HOME" /tmp/cap-orch-openclaw-install.log /tmp/cap-orch-openclaw-uninstall.log
+# ── OpenClaw host bridge 当前冻结：安装入口必须明确失败 ───────────────────────
+set +e
+PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" --platform=openclaw >/tmp/cap-orch-openclaw-frozen.log 2>&1
+OPENCLAW_STATUS=$?
+set -e
+assert "OpenClaw host bridge 安装入口已冻结" test "$OPENCLAW_STATUS" -ne 0
+assert "OpenClaw 冻结提示清晰" grep -q "OpenClaw host bridge 当前已冻结" /tmp/cap-orch-openclaw-frozen.log
+rm -f /tmp/cap-orch-openclaw-frozen.log
 
 # ── Hermes 实验宿主安装/卸载 smoke ──────────────────────────────────────────
 HERMES_HOME_TMP=$(mktemp -d)
@@ -394,7 +323,21 @@ HERMES_HOME="$HERMES_HOME_TMP" FAKE_HERMES_LOG="$HERMES_LOG" PATH="$FAKE_PATH" C
 
 assert "Hermes 安装会调用 plugins install" \
   node -e "const s=require('fs').readFileSync('$HERMES_LOG','utf8'); process.exit(s.includes('plugins install file://')?0:1)"
+assert "Hermes 安装后会启用 adapter" \
+  node -e "const s=require('fs').readFileSync('$HERMES_LOG','utf8'); process.exit(s.includes('plugins enable capability-orchestrator')?0:1)"
 assert "Hermes 安装会创建宿主插件目录" test -d "$HERMES_HOME_TMP/plugins/capability-orchestrator"
+
+HERMES_FAIL_HOME_TMP=$(mktemp -d)
+if HERMES_HOME="$HERMES_FAIL_HOME_TMP" FAKE_HERMES_LOG="$HERMES_FAIL_HOME_TMP/hermes.log" FAKE_HERMES_FAIL_ENABLE=1 PATH="$FAKE_PATH" CAPABILITY_INSTALL_REF=master \
+  bash "$REPO_ROOT/install.sh" --platform=hermes >/tmp/cap-orch-hermes-enable-fail.log 2>&1
+then
+  HERMES_ENABLE_STATUS=0
+else
+  HERMES_ENABLE_STATUS=$?
+fi
+assert "Hermes enable 失败会让安装失败" test "$HERMES_ENABLE_STATUS" -ne 0
+assert "Hermes enable 失败提示清晰" grep -q "Hermes adapter 安装后启用失败" /tmp/cap-orch-hermes-enable-fail.log
+rm -rf "$HERMES_FAIL_HOME_TMP" /tmp/cap-orch-hermes-enable-fail.log
 
 HERMES_HOME="$HERMES_HOME_TMP" FAKE_HERMES_LOG="$HERMES_LOG" PATH="$FAKE_PATH" \
   bash "$REPO_ROOT/install.sh" --platform=hermes --uninstall >/tmp/cap-orch-hermes-uninstall.log 2>&1

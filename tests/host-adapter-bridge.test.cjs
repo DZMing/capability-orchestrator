@@ -14,56 +14,23 @@ const {
 
 test('host bridge: status reflects requested platform and cwd', () => {
   const text = buildStatus({
+    platform: 'hermes',
+    cwd: process.cwd(),
+    coreRoot: process.cwd(),
+  });
+  assert.match(text, /platform: hermes/);
+  assert.match(text, /coreRoot:/);
+});
+
+test('host bridge: OpenClaw status is frozen instead of ready', () => {
+  const text = buildStatus({
     platform: 'openclaw',
     cwd: process.cwd(),
     coreRoot: process.cwd(),
   });
   assert.match(text, /platform: openclaw/);
-  assert.match(text, /coreRoot:/);
-});
-
-test('host bridge: awareness renders snapshot text for active openclaw host', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-bridge-oc-'));
-  const binDir = path.join(root, 'bin');
-  fs.mkdirSync(binDir, { recursive: true });
-  const fakeOpenClaw = path.join(binDir, 'openclaw');
-  fs.writeFileSync(fakeOpenClaw, `#!/usr/bin/env bash
-set -euo pipefail
-if [[ "$1 $2 $3" == "skills list --json" ]]; then
-  cat <<'JSON'
-{"skills":[{"name":"oc-bridge","description":"OpenClaw bridge skill","eligible":true,"disabled":false,"bundled":false,"source":"workspace"}]}
-JSON
-elif [[ "$1 $2 $3" == "plugins list --json" ]]; then
-  cat <<'JSON'
-{"plugins":[{"id":"capability-orchestrator","description":"bridge plugin","status":"loaded","origin":"config"}]}
-JSON
-elif [[ "$1 $2 $3" == "hooks list --json" ]]; then
-  cat <<'JSON'
-{"hooks":[{"name":"capability-orchestrator-bootstrap","description":"bridge hook","source":"openclaw-managed","loadable":true,"disabled":false}]}
-JSON
-else
-  exit 1
-fi
-`);
-  fs.chmodSync(fakeOpenClaw, 0o755);
-  const prev = process.env.OPENCLAW_USER_DIR;
-  const prevPath = process.env.PATH;
-  process.env.OPENCLAW_USER_DIR = root;
-  process.env.PATH = `${binDir}:${prevPath || ''}`;
-  try {
-    const text = renderAwareness({
-      platform: 'openclaw',
-      cwd: process.cwd(),
-      mode: 'list',
-    });
-    assert.match(text, /OpenClaw Runtime Skills/);
-    assert.match(text, /oc-bridge/);
-  } finally {
-    if (prev === undefined) delete process.env.OPENCLAW_USER_DIR;
-    else process.env.OPENCLAW_USER_DIR = prev;
-    if (prevPath === undefined) delete process.env.PATH;
-    else process.env.PATH = prevPath;
-  }
+  assert.match(text, /state: frozen/);
+  assert.match(text, /read-only skill scanning/);
 });
 
 test('host bridge: route returns rendered text payload', () => {

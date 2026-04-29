@@ -2,9 +2,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const {
   buildGitHubHeaders,
+  buildSupportMatrixStatus,
   buildStatus,
   readRepoSlug,
 } = require('../scripts/release-readiness-check.cjs');
@@ -14,8 +18,6 @@ function makeStatus(releaseProbe, overrides = {}) {
     pkg: { version: '1.9.1' },
     claude: { version: '1.9.1' },
     codex: { version: '1.9.1' },
-    openclaw: { version: '1.9.1' },
-    openclawHookPack: { version: '1.9.1' },
     hermesYaml: '1.9.1',
     changelog: '# Changelog\n\n## [1.9.1] - 2026-04-20\n',
     latestTag: overrides.latestTag || 'v1.9.1',
@@ -23,6 +25,7 @@ function makeStatus(releaseProbe, overrides = {}) {
     latestTagCommit: overrides.latestTagCommit || 'abc123',
     worktreeDirty: !!overrides.worktreeDirty,
     releaseProbe,
+    supportMatrix: overrides.supportMatrix || { ok: true, findings: [] },
   });
 }
 
@@ -67,9 +70,18 @@ test('buildStatus: draft release is not release-ready', () => {
 });
 
 test('buildStatus: unreleased worktree ahead of latest tag stays audit-ok pre-release', () => {
-  const status = makeStatus({ ok: true, exists: true, tagName: 'v1.9.0' }, { latestTag: 'v1.9.0' });
+  const status = makeStatus({ ok: true, exists: true, tagName: 'v1.9.0' }, {
+    latestTag: 'v1.9.0',
+    headCommit: 'new-head',
+    latestTagCommit: 'old-tag',
+    worktreeDirty: true,
+  });
   assert.equal(status.latestTagMatchesPackage, false);
   assert.equal(status.releaseAuditOk, true);
+  assert.equal(status.prelandingAuditOk, true);
+  assert.equal(status.strictReleaseOk, false);
+  assert.ok(status.strictReleaseBlockers.includes('worktree is not clean'));
+  assert.ok(status.strictReleaseBlockers.includes('HEAD does not match latest release tag'));
 });
 
 test('buildStatus: published non-draft release satisfies release audit', () => {
@@ -85,15 +97,30 @@ test('buildStatus: published non-draft release satisfies release audit', () => {
   });
   assert.equal(status.githubReleaseReady, true);
   assert.equal(status.releaseAuditOk, true);
+  assert.equal(status.prelandingAuditOk, true);
+  assert.equal(status.strictReleaseOk, true);
 });
 
-test('buildStatus: requires every adapter version to be present and synced', () => {
+test('buildStatus: support matrix drift blocks release audit', () => {
+  const status = makeStatus({
+    ok: true,
+    exists: true,
+    tagName: 'v1.9.1',
+    isDraft: false,
+    isPrerelease: false,
+  }, {
+    supportMatrix: { ok: false, findings: ['unexpected OpenClaw host surface remains: adapters/openclaw'] },
+  });
+  assert.equal(status.supportMatrixOk, false);
+  assert.equal(status.releaseAuditOk, false);
+  assert.deepEqual(status.supportMatrixFindings, ['unexpected OpenClaw host surface remains: adapters/openclaw']);
+});
+
+test('buildStatus: requires every supported adapter version to be present and synced', () => {
   const missingHermes = buildStatus({
     pkg: { version: '1.9.1' },
     claude: { version: '1.9.1' },
     codex: { version: '1.9.1' },
-    openclaw: { version: '1.9.1' },
-    openclawHookPack: { version: '1.9.1' },
     hermesYaml: '',
     changelog: '# Changelog\n\n## [1.9.1] - 2026-04-20\n',
     latestTag: 'v1.9.1',
@@ -104,13 +131,11 @@ test('buildStatus: requires every adapter version to be present and synced', () 
   });
   assert.equal(missingHermes.versionSyncOk, false);
 
-  const mismatchedOpenClaw = buildStatus({
+  const mismatchedHermes = buildStatus({
     pkg: { version: '1.9.1' },
     claude: { version: '1.9.1' },
     codex: { version: '1.9.1' },
-    openclaw: { version: '1.9.0' },
-    openclawHookPack: { version: '1.9.1' },
-    hermesYaml: '1.9.1',
+    hermesYaml: '1.9.0',
     changelog: '# Changelog\n\n## [1.9.1] - 2026-04-20\n',
     latestTag: 'v1.9.1',
     headCommit: 'abc123',
@@ -118,5 +143,28 @@ test('buildStatus: requires every adapter version to be present and synced', () 
     worktreeDirty: false,
     releaseProbe: { ok: true, exists: true, tagName: 'v1.9.1' },
   });
-  assert.equal(mismatchedOpenClaw.versionSyncOk, false);
+  assert.equal(mismatchedHermes.versionSyncOk, false);
+});
+
+test('buildSupportMatrixStatus: detects OpenClaw host bridge drift', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-support-matrix-'));
+  try {
+    fs.mkdirSync(path.join(tmp, 'adapters', 'openclaw'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({
+      scripts: {
+        'verify:host:openclaw': 'node scripts/verify-openclaw-adapter.cjs',
+      },
+    }));
+    fs.writeFileSync(path.join(tmp, 'install.sh'), '#!/usr/bin/env bash\n');
+    for (const relPath of ['README.md', 'README.zh.md', 'README.es.md', 'ARCHITECTURE.md', 'VERIFICATION.md']) {
+      fs.writeFileSync(path.join(tmp, relPath), 'OpenClaw host bridge supported.\n');
+    }
+
+    const status = buildSupportMatrixStatus(tmp);
+    assert.equal(status.ok, false);
+    assert.ok(status.findings.some((finding) => finding.includes('adapters/openclaw')));
+    assert.ok(status.findings.some((finding) => finding.includes('verify:host:openclaw')));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

@@ -3,22 +3,62 @@
 # capability-orchestrator
 
 > Conciencia de capacidades y auto-enrutamiento para Claude Code y Codex, con
-> adaptadores experimentales verificados para OpenClaw y Hermes.
+> un adaptador experimental verificado para Hermes y compatibilidad de escaneo
+> de solo lectura para OpenClaw.
 
 [![CI](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DZMing/capability-orchestrator/actions/workflows/ci.yml)
 
 `capability-orchestrator` escanea el entorno local del agente, resume las skills,
 commands, plugins, agents y MCP servers disponibles, y enruta cada prompt hacia
-la mejor superficie de ejecución.
+la mejor superficie de ejecución. También incluye una capa independiente de
+Intent Router que convierte instrucciones operativas breves en un contrato de
+ejecución de cinco partes.
 
 ## Qué Hace
 
 - Inyecta un resumen de capacidades al iniciar una sesión de Claude Code o Codex.
 - Enruta prompts a la skill, command o MCP server correspondiente.
+- Convierte frases cortas como "seguir", "ejecuta" o "qué falta" en un contrato
+  completo con What / Guardrails / Success / Budget / Verify.
+- Exige confirmación antes de publicar, hacer push, desplegar, borrar, pagar,
+  tocar credenciales o cambiar producción o decisiones reales de producto / UX.
 - Soporta Claude Code y Codex como hosts principales estables.
-- Incluye bridges experimentales, pero verificados, para OpenClaw y Hermes.
+- Incluye un bridge experimental, pero verificado, para Hermes.
+- Mantiene OpenClaw limitado a escaneo local de solo lectura; la instalación del
+  host bridge de OpenClaw está congelada.
 - Mantiene verificaciones ejecutables para instalación, reinstalación,
   desinstalación, ciclo de vida y release.
+
+## Intent Router
+
+La capa Intent Router sirve para instrucciones operativas breves, no para
+reemplazar el mapeo directo de capacidades. Primero clasifica el intent, luego
+recoge contexto de trabajo en vivo, aplica la barrera de seguridad y finalmente
+compone el contrato de ejecución completo.
+
+Intentos habituales:
+
+| Frase corta      | Intent                 | Resultado                                                         |
+| ---------------- | ---------------------- | ----------------------------------------------------------------- |
+| `继续`           | `continue_work`        | Continúa el trabajo técnico seguro según el contexto actual.      |
+| `执行吧`         | `execute_plan`         | Ejecuta un plan ya discutido con verificación.                    |
+| `还有什么没做完` | `work_status`          | Resume el trabajo pendiente y elige la siguiente tarea viable.    |
+| `做到可以商用`   | `commercial_readiness` | Lleva el proyecto a un estado publicable y comercialmente usable. |
+
+El contrato de ejecución siempre incluye:
+
+- `What`
+- `Guardrails`
+- `Success`
+- `Budget`
+- `Verify`
+
+Incorpora contexto acotado de las reglas del repositorio, el estado de git, los
+eventos recientes del route log y un perfil opcional de preferencias en
+`~/.config/capability-orchestrator/preferences.json`. Las preferencias son solo
+asesoría y nunca reducen el riesgo. Si el prompt no parece un intent operativo
+seguro, el matcher existente de skill / command / MCP sigue manejando el
+enrutamiento directo.
 
 ## Inicio Rápido
 
@@ -48,13 +88,14 @@ Para Codex, reemplaza `~/.claude` por `~/.codex`.
 | ----------- | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Claude Code | Estable                  | Usa hooks `SessionStart` y `UserPromptSubmit`                                                              |
 | Codex       | Estable                  | Nativo en Linux/macOS; Windows vía WSL2                                                                    |
-| OpenClaw    | Experimental, verificado | Runtime snapshot, route bridge, bootstrap hook, adapter commands, verificación de ciclo de vida            |
+| OpenClaw    | Congelado, solo escaneo  | Puede leer skills locales; sin instalación de host bridge, adapter commands ni compromiso de ciclo de vida |
 | Hermes      | Experimental, verificado | Runtime snapshot, route bridge, slash command bridge, `pre_llm_call` bridge, verificación de ciclo de vida |
 
-OpenClaw y Hermes ya no son integraciones solo de escaneo. Tienen verificación
-de instalación, reinstalación, desinstalación y bridge. Siguen marcados como
-experimentales hasta congelar compromisos más amplios de ciclo de vida y soporte
-nativo en Windows.
+Hermes ya no es una integración solo de escaneo: tiene verificación de
+instalación, reinstalación, desinstalación y bridge. Sigue marcado como
+experimental hasta congelar compromisos más amplios de ciclo de vida y soporte
+nativo en Windows. El host bridge de OpenClaw está congelado; solo se conserva
+el escaneo local de solo lectura.
 
 ## Instalación Avanzada
 
@@ -68,7 +109,6 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 # Seleccionar host explícitamente
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=codex
-curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=openclaw
 curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/master/install.sh | bash -s -- --platform=hermes
 ```
 
@@ -78,10 +118,10 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 npm test
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
-npm run verify:host:openclaw
 npm run verify:host:hermes
 npm run verify:host:lifecycle
 npm run verify:release
+npm run verify:release:strict  # solo antes de publicar un release/tag real
 ```
 
 Comprobaciones manuales útiles:
@@ -92,6 +132,10 @@ node ~/.claude/plugins/cache/capability-orchestrator/scripts/scan-environment.cj
 printf '%s' '{"prompt":"show all available capabilities","cwd":"."}' \
   | CLAUDE_USER_DIR="$HOME/.claude" \
     node ~/.claude/plugins/cache/capability-orchestrator/scripts/route-matcher.cjs --explain
+
+node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
+  tests/safety-gate.test.cjs tests/prompt-composer.test.cjs \
+  tests/work-context.test.cjs tests/preference-profile.test.cjs
 ```
 
 ## Modelo de Seguridad
@@ -100,8 +144,15 @@ printf '%s' '{"prompt":"show all available capabilities","cwd":"."}' \
 - Los hooks no relacionados se conservan durante install, reinstall y uninstall.
 - Los escaneos de runtime son best-effort y fault-open.
 - El scanner no ejecuta directorios de plugins escaneados.
-- La verificación de release comprueba package, manifests, versiones de adapters,
-  changelog, git tag, árbol limpio y estado de GitHub Release.
+- `verify:release` es una auditoría pre-landing: comprueba package, manifests,
+  versiones de adapters soportados, changelog, metadata del tag, estado de
+  GitHub Release, y rechaza cualquier superficie o script restante de OpenClaw
+  host bridge.
+- `verify:release:strict` es el hard release gate para publicación real; también
+  exige árbol limpio y `HEAD` igual al último release tag.
+- Los intents de alto riesgo, como publicar, hacer push, desplegar, borrar,
+  pagar, usar credenciales, cambiar producción o tomar decisiones reales de
+  producto / UX, requieren confirmación antes de actuar.
 
 ## Documentación
 
@@ -116,8 +167,13 @@ printf '%s' '{"prompt":"show all available capabilities","cwd":"."}' \
 
 - El soporte nativo en Windows solo está comprometido para Claude Code.
 - Codex en Windows debe usar WSL2.
-- OpenClaw y Hermes son bridges experimentales verificados, no una matriz formal
-  de soporte multiplataforma.
+- El host bridge de OpenClaw está congelado; solo se conserva compatibilidad de
+  escaneo de solo lectura.
+- Hermes es un bridge experimental verificado, todavía fuera de una matriz
+  formal de soporte multiplataforma.
+- La capa Intent Router está separada del matcher directo de capacidades; cuando
+  el prompt no es un intent operativo seguro, el matcher sigue encargándose del
+  enrutamiento de skill, command y MCP.
 
 ## Licencia
 

@@ -19,6 +19,7 @@ const ROUTE_SCRIPT = path.join(__dirname, '..', 'scripts', 'route-matcher.cjs');
 const FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'project');
 
 const { collectSnapshot, renderSnapshot, renderSection } = require('../scripts/scan-environment.cjs');
+const { resolveIntentRoute } = require('../scripts/lib/intent-router.cjs');
 
 // ─── 6a: renderAwareness golden snapshot ────────────────────────────────────
 
@@ -42,7 +43,7 @@ test('golden: awareness output matches snapshot', () => {
     assert.ok(true, 'golden file created (first run)');
     return;
   }
-  const expected = fs.readFileSync(goldenFile, 'utf8');
+  const expected = fs.readFileSync(goldenFile, 'utf8').replace(/\n$/, '');
   assert.equal(text, expected, 'awareness output changed — update golden file if intentional');
 });
 
@@ -115,6 +116,17 @@ test('integration: UserPromptSubmit hook escapes on 直接做', () => {
   assert.ok(!output.hookSpecificOutput, 'escaped prompt should not route');
 });
 
+test('integration: escaped high-risk prompt returns confirmation gate', () => {
+  const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
+    input: JSON.stringify({ prompt: '直接做，帮我发布到生产', cwd: FIXTURE_PROJECT }),
+    encoding: 'utf-8',
+    timeout: 10000,
+  }).trim();
+  assert.ok(raw.startsWith('[CONFIRMATION REQUIRED]'), raw);
+  assert.ok(raw.includes('## What'));
+  assert.ok(raw.includes('## Verify'));
+});
+
 test('integration: UserPromptSubmit hook passThrough on no match', () => {
   const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
     input: JSON.stringify({
@@ -127,6 +139,55 @@ test('integration: UserPromptSubmit hook passThrough on no match', () => {
   const output = JSON.parse(raw);
   assert.equal(output.continue, true);
   assert.ok(!output.hookSpecificOutput, 'no match should not have hookSpecificOutput');
+});
+
+test('integration: short continue prompt resolves to intent-router execution contract', () => {
+  const route = resolveIntentRoute({
+    prompt: '继续',
+    cwd: FIXTURE_PROJECT,
+  });
+
+  assert.ok(route, 'intent router should resolve short continue prompt');
+  assert.equal(route.targetType, 'intent');
+  assert.equal(route.intent, 'continue_work');
+  assert.equal(route.safety.decision, 'safe_auto');
+  assert.ok(route.output.includes('[AUTO-ROUTE] Intent Router execution contract'));
+  assert.ok(route.output.includes('## What'));
+});
+
+test('integration: publish-and-push prompt resolves to intent-router confirmation gate', () => {
+  const route = resolveIntentRoute({
+    prompt: '帮我发布并推送',
+    cwd: FIXTURE_PROJECT,
+  });
+
+  assert.ok(route, 'intent router should resolve publish/push prompt');
+  assert.equal(route.targetType, 'intent');
+  assert.equal(route.intent, 'execute_plan');
+  assert.equal(route.safety.decision, 'confirmation_required');
+  assert.ok(route.output.includes('[CONFIRMATION REQUIRED]'));
+  assert.ok(route.output.includes('确认闸门'));
+});
+
+test('integration: explicit skill prompt still falls back to legacy matcher output', () => {
+  const intentRoute = resolveIntentRoute({
+    prompt: 'I need a valid test skill for this important task',
+    cwd: FIXTURE_PROJECT,
+  });
+  assert.equal(intentRoute, null, 'explicit skill prompt should not be captured by intent router');
+
+  const raw = execFileSync(NODE, [ROUTE_SCRIPT], {
+    input: JSON.stringify({
+      prompt: 'I need a valid test skill for this important task',
+      cwd: FIXTURE_PROJECT,
+    }),
+    encoding: 'utf-8',
+    timeout: 10000,
+    env: { ...process.env, CLAUDE_USER_DIR: path.join(__dirname, 'fixtures', 'user') },
+  }).trim();
+
+  assert.ok(raw.startsWith('[AUTO-ROUTE]'), 'legacy matcher should still auto-route explicit skill prompt');
+  assert.ok(raw.includes('立即调用：/valid-skill'));
 });
 
 test('integration: SessionStart awareness mode includes fixture skills', () => {

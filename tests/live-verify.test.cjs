@@ -100,6 +100,36 @@ test('summarizeClaude: avoids duplicating matchedRouteSample when output and std
   assert.equal(summarizeClaude(stream).matchedRouteSample, '[AUTO-ROUTE] 立即调用：/valid-skill');
 });
 
+test('summarizeClaude: recognizes intent-router execution-contract evidence when target matches the contract header', () => {
+  const stream = JSON.stringify({
+    type: 'system',
+    subtype: 'hook_response',
+    hook_event: 'UserPromptSubmit',
+    output: '[AUTO-ROUTE] Intent Router execution contract\n\n## What\nContinue the current task.',
+    stdout: '[AUTO-ROUTE] Intent Router execution contract\n\n## What\nContinue the current task.',
+  });
+
+  const summary = summarizeClaude(stream, 'Intent Router execution contract');
+  assert.equal(summary.autoRouteSeen, true);
+  assert.equal(summary.matchedRouteSeen, true);
+  assert.match(summary.matchedRouteSample, /Intent Router execution contract/);
+});
+
+test('summarizeClaude: keeps confirmation-gate hook evidence separate from routed matches', () => {
+  const stream = JSON.stringify({
+    type: 'system',
+    subtype: 'hook_response',
+    hook_event: 'UserPromptSubmit',
+    output: '[CONFIRMATION REQUIRED]\n\n确认闸门：等待明确确认后才能执行发布、推送、部署。',
+    stdout: '[CONFIRMATION REQUIRED]\n\n确认闸门：等待明确确认后才能执行发布、推送、部署。',
+  });
+
+  const summary = summarizeClaude(stream, 'Intent Router execution contract');
+  assert.equal(summary.hookEvents, 1);
+  assert.equal(summary.autoRouteSeen, false);
+  assert.equal(summary.matchedRouteSeen, false);
+});
+
 test('summarizeCodexRouteLog: requires a real route entry to the target skill', () => {
   const positive = [
     JSON.stringify({

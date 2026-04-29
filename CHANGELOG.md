@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- OpenClaw host bridge support is frozen as a public support surface; only
+  read-only scan compatibility for local OpenClaw workspace skills remains.
+- `release-readiness-check.cjs` now separates the default pre-landing audit from
+  `verify:release:strict`, a hard release gate that also requires a clean
+  worktree and `HEAD` matching the latest release tag.
+- Release readiness now explicitly rejects any leftover OpenClaw host bridge
+  surface or script while preserving scan-only compatibility.
+- Documented the Intent Router execution-contract layer, its five-block
+  `What` / `Guardrails` / `Success` / `Budget` / `Verify` output, and the
+  confirmation gate for high-risk actions.
+
+### Fixed
+
+- Hermes installs now fail if the adapter cannot be enabled after installation,
+  avoiding a false-success install where the bridge remains disabled.
+- Intent Router now gates high-risk prompts even when they do not match a named
+  intent, preventing destructive shorthand from falling through silently.
+- Intent Router now gates high-risk prompts even when users add escape wording
+  such as `直接做`, `不用skill`, or `skip`.
+- Legacy command and MCP routing now stays advisory and no longer injects
+  scanned command bodies or treats MCP descriptions as execution instructions.
+
 ## [1.11.22] - 2026-04-21
 
 ### Fixed

@@ -8,6 +8,7 @@ const {
   createOutput,
   createCommandOutput,
   createMcpOutput,
+  createIntentOutput,
 } = require('./route-matcher.cjs');
 const { resolveUserDirWithSource } = require('./lib/user-dir.cjs');
 
@@ -17,7 +18,6 @@ function setHostUserDirEnv(platform, userDir) {
   const pairs = {
     claude: [['CLAUDE_USER_DIR', userDir]],
     codex: [['CODEX_USER_DIR', userDir]],
-    openclaw: [['OPENCLAW_USER_DIR', userDir]],
     hermes: [['HERMES_HOME', userDir], ['HERMES_USER_DIR', userDir]],
   };
   for (const [key, value] of pairs[platform] || []) {
@@ -60,11 +60,12 @@ function captureStdout(fn) {
 }
 
 function renderDecision(decision) {
-  if (!decision || !decision.match) {
+  if (!decision || (!decision.match && decision.targetType !== 'intent')) {
     return 'No route match.';
   }
   return captureStdout(() => {
-    if (decision.targetType === 'command') createCommandOutput(decision.match);
+    if (decision.targetType === 'intent') createIntentOutput(decision.intentRoute);
+    else if (decision.targetType === 'command') createCommandOutput(decision.match);
     else if (decision.targetType === 'mcp') createMcpOutput(decision.match);
     else createOutput(decision.match);
   });
@@ -89,6 +90,17 @@ function renderRoute({ platform, cwd, userDir, prompt }) {
 }
 
 function buildStatus({ platform, cwd, userDir, coreRoot }) {
+  if (platform === 'openclaw') {
+    return [
+      `capability-orchestrator host bridge`,
+      `platform: ${platform}`,
+      `cwd: ${cwd || process.cwd()}`,
+      `coreRoot: ${coreRoot || process.cwd()}`,
+      `state: frozen`,
+      `message: OpenClaw host bridge support is frozen; only read-only skill scanning remains.`,
+    ].join('\n');
+  }
+
   return withScopedHostEnv(platform, userDir, () => {
     const { dir: resolvedUserDir, source } = resolveUserDirWithSource();
     return [

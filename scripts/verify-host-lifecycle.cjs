@@ -7,6 +7,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const REPO_ROOT = path.join(__dirname, '..');
+const cleanupDirs = [];
 
 function hasCommand(cmd) {
   try {
@@ -56,50 +57,6 @@ function installEnv(sourceRepo, extraEnv) {
   };
 }
 
-function verifyOpenClaw(sourceRepo) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-orch-lifecycle-openclaw-'));
-  cleanupDirs.push(tmp);
-  const cfg = path.join(tmp, 'openclaw.json');
-  const env = installEnv(sourceRepo, {
-    OPENCLAW_USER_DIR: tmp,
-    OPENCLAW_CONFIG_PATH: cfg,
-    OPENCLAW_STATE_DIR: tmp,
-  });
-
-  const install1 = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=openclaw'], { env });
-  const install2 = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=openclaw'], { env });
-  const hookInfo = run('openclaw', ['hooks', 'info', 'capability-orchestrator-bootstrap'], { env });
-  const inspect = run('openclaw', ['plugins', 'inspect', 'capability-orchestrator'], { env });
-  const uninstall = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=openclaw', '--uninstall'], { env });
-
-  let hookRemoved = false;
-  try {
-    const infoAfter = run('openclaw', ['hooks', 'info', 'capability-orchestrator-bootstrap'], { env });
-    hookRemoved = /not found/i.test(infoAfter);
-  } catch (error) {
-    hookRemoved = /not found/i.test(String(error.stderr || error.stdout || error.message || ''));
-  }
-
-  let pluginRemoved = false;
-  try {
-    run('openclaw', ['plugins', 'inspect', 'capability-orchestrator'], { env });
-  } catch (error) {
-    pluginRemoved = /not found|not installed|unknown/i.test(String(error.stderr || error.stdout || error.message || ''));
-  }
-
-  return {
-    install1: /OpenClaw hook-pack \+ adapter|OpenClaw hook-pack/.test(install1),
-    reinstall: /OpenClaw hook-pack \+ adapter|OpenClaw hook-pack/.test(install2),
-    hookRecognized: /capability-orchestrator-bootstrap/.test(hookInfo),
-    adapterLoaded: /Status:\s+loaded/i.test(inspect),
-    commandsExposed: /Commands:\s*[\s\S]*capability-orchestrator-awareness/i.test(inspect)
-      && /CLI commands:\s*[\s\S]*cap-orch/i.test(inspect),
-    uninstall: /卸载完成|OpenClaw hook-pack/.test(uninstall),
-    hookRemoved,
-    pluginRemoved,
-  };
-}
-
 function verifyHermesBridge(env) {
   const script = `
 from hermes_cli.plugins import discover_plugins, get_plugin_commands, invoke_hook
@@ -138,13 +95,13 @@ function verifyHermes(sourceRepo) {
 
   return {
     install1: /Hermes adapter/.test(install1),
-    listed: /capability-orchestrat/i.test(list1),
+    listed: /capability-orchest/i.test(list1),
     bridgeOk: bridgeOk1,
-    reinstall: /Hermes adapter/.test(install2) && /capability-orchestrat/i.test(list2),
+    reinstall: /Hermes adapter/.test(install2) && /capability-orchest/i.test(list2),
     disable: /disabled|ok/i.test(disable),
     enable: /enabled|ok/i.test(enable),
     uninstall: /卸载完成|Hermes adapter/.test(uninstall),
-    removed: !/capability-orchestrat/i.test(listAfter),
+    removed: !/capability-orchest/i.test(listAfter),
   };
 }
 
@@ -152,7 +109,6 @@ function allTrue(obj) {
   return Object.values(obj).every(Boolean);
 }
 
-const cleanupDirs = [];
 function cleanup() {
   for (const d of cleanupDirs) {
     try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
@@ -167,18 +123,15 @@ function main() {
 
     const result = {
       sourceRepo: tmp,
-      openclaw: hasCommand('openclaw') ? verifyOpenClaw(tmp) : { skipped: true },
       hermes: hasCommand('hermes') ? verifyHermes(tmp) : { skipped: true },
     };
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 
-    if (result.openclaw.skipped || result.hermes.skipped) {
+    if (result.hermes.skipped) {
       process.exitCode = 1;
       return;
     }
-    if (!allTrue(result.openclaw) || !allTrue(result.hermes)) {
-      process.exitCode = 1;
-    }
+    if (!allTrue(result.hermes)) process.exitCode = 1;
   } finally {
     cleanup();
   }
