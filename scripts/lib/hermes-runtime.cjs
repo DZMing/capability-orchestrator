@@ -2,6 +2,15 @@
 
 const { execFileSync } = require('child_process');
 
+function runHermes(args) {
+  return execFileSync('hermes', args, {
+    encoding: 'utf8',
+    timeout: 10000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
+  });
+}
+
 function parseHermesSkillsTable(text, helpers) {
   const { sanitize, withCapabilityMeta } = helpers;
   const lines = String(text || '').split(/\r?\n/);
@@ -33,7 +42,7 @@ function parseHermesSkillsTable(text, helpers) {
 
 function scanHermesRuntimeSkills(errors, helpers) {
   try {
-    const stdout = execFileSync('hermes', ['skills', 'list'], { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout = runHermes(['skills', 'list']);
     return parseHermesSkillsTable(stdout, helpers);
   } catch (e) {
     if (errors) errors.push(`Hermes skills CLI: ${e.code || e.message}`);
@@ -71,7 +80,7 @@ function parseHermesPluginsList(text, helpers) {
 
 function scanHermesRuntimePlugins(errors, helpers) {
   try {
-    const stdout = execFileSync('hermes', ['plugins', 'list'], { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
+    const stdout = runHermes(['plugins', 'list']);
     if (/No plugins installed\./.test(stdout)) return [];
     return parseHermesPluginsList(stdout, helpers);
   } catch (e) {
