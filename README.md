@@ -29,8 +29,10 @@ layer that expands short operational prompts into a five-part execution contract
 ## Intent Router
 
 The Intent Router layer is for shorthand operational prompts, not for replacing
-direct capability matching. It classifies the prompt, collects live work
-context, applies the safety gate, and composes a full execution contract.
+direct capability matching. It first classifies the prompt and runs a
+prompt-level safety precheck. It reads live work context, route history, and
+preferences only when the prompt is a supported shorthand intent or a high-risk
+action that must fail closed.
 
 Typical intents include:
 
@@ -110,6 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 ```bash
 npm test
+npm run test:all
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
 npm run verify:scenarios
@@ -139,17 +142,26 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - Unrelated hooks are preserved during install, reinstall, and uninstall.
 - Runtime scans are best-effort and fault-open.
 - The scanner does not execute scanned plugin directories.
+- MCP servers, plugin manifests, legacy command bodies, and scanned
+  descriptions are advisory matching signals only. They are not executed or
+  treated as instructions.
 - `verify:release` is a pre-landing audit: it validates package, manifests,
   supported adapter versions, changelog, tag metadata, GitHub Release state, and
   rejects any leftover OpenClaw host bridge surface or script.
 - `verify:scenarios` runs a cross-host Claude/Codex scenario matrix for short
   prompts, high-risk confirmation gates, skill routing, MCP advisory routing,
   legacy command safety, and preference redaction.
+- The route corpus test adds precision/recall-style coverage for shorthand
+  prompts, escape handling, high-risk prompts, skill/command/MCP matches, and
+  no-match behavior.
 - `verify:release:strict` is the hard release gate for real publishing; it also
   requires a clean worktree and `HEAD` matching the latest release tag.
 - High-risk intents such as publish, push, deploy, delete, paid actions,
   credential-gated actions, production changes, and real product or UX decisions
   require confirmation before action.
+- Route logs keep only whitelisted, anonymized fields such as prompt type,
+  target type, confidence, host/source/scope, and MCP trust signals; they do not
+  store raw prompts or credentials.
 
 ## Documentation
 

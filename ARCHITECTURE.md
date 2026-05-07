@@ -37,15 +37,17 @@ Claude Code 本身就是路由器——它的 agent loop 已经会根据上下�
 1. `intent-classifier.cjs` 先按短 prompt 和关键词把输入映射到 intent
    （`continue_work` / `execute_plan` / `work_status` /
    `commercial_readiness` / `prompt_composition` / `capability_lookup`）
-2. `work-context.cjs` 读取受限工作上下文：项目规则、git status、最近的
-   route 记录
-3. `preference-profile.cjs` 读取可选偏好文件
+2. `safety-gate.cjs` 先做 prompt-level 高风险预检；普通未知 prompt 不会读取
+   工作上下文、偏好文件或 route log
+3. 只有命中短 prompt intent，或预检发现高风险动作时，`work-context.cjs`
+   才读取受限工作上下文：项目规则、git status、最近的 route 记录
+4. 同样只有上述路径需要时，`preference-profile.cjs` 才读取可选偏好文件
    `~/.config/capability-orchestrator/preferences.json`，并对 secret-like
    内容做 redaction
-4. `safety-gate.cjs` 根据 prompt 和上下文判断是否需要确认
-5. `prompt-composer.cjs` 生成五段式执行契约，并在高风险时输出
+5. `safety-gate.cjs` 结合 prompt 和上下文做完整风险判断
+6. `prompt-composer.cjs` 生成五段式执行契约，并在高风险时输出
    `[CONFIRMATION REQUIRED]`
-6. `intent-router.cjs` 负责把这些输入串起来；当 intent 不明确或置信度
+7. `intent-router.cjs` 负责把这些输入串起来；当 intent 不明确且预检无高风险时
    不足时返回 `null`，让现有的 skill / command / MCP matcher 继续处理
 
 安全规则：
@@ -54,8 +56,12 @@ Claude Code 本身就是路由器——它的 agent loop 已经会根据上下�
 - project preferences 优先于 global preferences
 - disabled 或低置信度偏好会被忽略
 - route log、AGENTS 规则和 git 状态都只读读取，不写入任何文件
-- 高风险动作包括发布、推送、部署、删除、付费、凭证、生产变更和真实
-  产品 / UX 决策，都会被闸门拦下并要求确认
+- 高风险动作按“动作 + 目标 + 作用域”组合判断；`HTML tag`、`brand color`
+  和局部 UX 调整这类普通技术词不会单独触发确认
+- `production ready`、release readiness audit、上线准备度评估这类准备度检查
+  走安全的 readiness 合同，不按生产变更拦截
+- 发布、推送、部署、删除、付费、凭证、生产变更、真实产品 / UX 决策，以及
+  `git tag` / release tag 这类发布边界动作，都会被闸门拦下并要求确认
 
 ### 核心机制：`!command` 动态注入
 
@@ -118,6 +124,8 @@ Claude Code skills 支持 `` !`command` `` 语法：在 SKILL.md 渲染时执行
 
 - 只读扫描：脚本只使用 `fs.readFileSync`、`fs.readdirSync`、`fs.openSync`+`fs.readSync`（tryReadHead）、`fs.existsSync`、`fs.statSync`、`fs.lstatSync`，不写入任何文件
 - 不执行插件代码：只读取 plugin.json manifest，不 `require()` 插件
+- 不执行 MCP / plugin 描述文本：MCP server、legacy command 和 plugin skill 的
+  manifest / markdown / command body 都只作为匹配线索，不作为执行指令
 - 不联网：零网络调用
 - 不修改权限：不改变任何文件的权限或所有者
 - route-matcher.cjs 遵循相同安全原则：只读扫描 + 零网络 + 故障开放（异常时放行）
@@ -199,8 +207,8 @@ Windows 原生 Claude 安装器会把 hook 命令写成 `cmd.exe /d /s /c ""...\
 每条用户消息经过 `route-matcher.cjs`：
 
 1. 从 stdin 读取 JSON（含 prompt 字段）
-2. Intent Router 先识别短 prompt（例如“继续”“执行吧”“还有什么没做完”“做到可以商用”）并生成 Harness Contract
-3. 高风险动作（发布、推送、部署、删除、付费、凭证、真实产品/UX 决策）先进入 confirmation gate
+2. Intent Router 先做 prompt-level 分类和高风险预检
+3. 只有短 prompt 或高风险动作才读取工作上下文 / 偏好 / 最近 route log，并生成 Harness Contract 或 confirmation gate
 4. 未命中 intent 时，扫描环境中所有 skill / legacy command 的 name + description
 5. 匹配到 skill → 注入明确的 `/<skill-name>` 调用指令
 6. 匹配到 legacy command → 输出明确的 `/<command>` 能力入口建议，不执行扫描到的命令正文或 markdown 定义
@@ -223,6 +231,7 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - 匹配到 skill 时注入明确的 `/<skill-name>` 调用指令，不注入未渲染的 `SKILL.md` 原文
 - 匹配到 legacy command 时只输出明确的 `/<command>` 能力入口建议，不注入、不执行扫描到的命令正文或 markdown 定义
 - MCP 匹配只作为能力建议；涉及外部、凭证、生产、付费或真实用户数据时必须先确认
+- route log 只写入匿名化、白名单字段，不记录原始 prompt、凭证或长文本
 
 ## explain 调试入口
 
@@ -236,6 +245,10 @@ CWD 解析：从 stdin JSON 的 `cwd` 字段读取项目目录，fallback 到环
 - `matchedKeywords`
 - `cwd`
 - `userDirSource`
+- `promptType`
+- `host` / `source` / `scope` / `surfaceType` / `invocation`
+- MCP 或插件信任信号：`transport` / `authRequired` / `mayWrite` /
+  `externalAccess`
 
 默认 hook 模式不输出 explain 信息，避免影响既有 Claude Code 行为。`/debug-route` skill 只是这个 explain 能力的人类可读包装。
 

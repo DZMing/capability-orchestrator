@@ -206,6 +206,22 @@ test('aggregateStats: aggregates byTargetType and topTargets', () => {
   assert.equal(stats.topTargets.context7, 1);
 });
 
+test('aggregateStats: reports anonymized prompt types, misses, gates, and low-confidence candidates', () => {
+  const entries = [
+    { action: 'route', reason: 'intent-router', targetType: 'intent', targetName: 'continue_work', promptType: 'short', confidence: 0.92, ts: new Date().toISOString() },
+    { action: 'route', reason: 'confirmation-required', targetType: 'intent', targetName: 'risk_review', promptType: 'high_risk', confidence: 0.66, ts: new Date().toISOString() },
+    { action: 'pass', reason: 'no-match', promptType: 'ordinary', confidence: 0, ts: new Date().toISOString() },
+    { action: 'route', reason: 'matched-skill', targetType: 'skill', targetName: 'maybe-wrong', promptType: 'ordinary', confidence: 0.34, ts: new Date().toISOString() },
+  ];
+  const stats = aggregateStats(entries);
+  assert.equal(stats.byPromptType.short, 1);
+  assert.equal(stats.byPromptType.high_risk, 1);
+  assert.equal(stats.byPromptType.ordinary, 2);
+  assert.equal(stats.misses, 1);
+  assert.equal(stats.confirmationGates, 1);
+  assert.equal(stats.lowConfidenceRoutes, 1);
+});
+
 test('aggregateStats: last24h only counts recent entries', () => {
   const now = Date.now();
   const entries = [
@@ -387,6 +403,8 @@ test('security: logged entry does not contain raw user prompt', () => {
     const allowedFields = new Set([
       'ts', 'action', 'reason', 'targetType', 'targetName',
       'confidence', 'matchedKeywords', 'cwd', 'userDirSource',
+      'promptType', 'host', 'source', 'scope', 'surfaceType', 'invocation',
+      'transport', 'authRequired', 'mayWrite', 'externalAccess',
     ]);
     for (const key of Object.keys(entry)) {
       assert.ok(allowedFields.has(key), `unexpected field: ${key}`);

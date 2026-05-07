@@ -10,6 +10,7 @@ const {
   buildGitHubHeaders,
   buildSupportMatrixStatus,
   buildStatus,
+  readInstallerFallbacks,
   readRepoSlug,
 } = require('../scripts/release-readiness-check.cjs');
 
@@ -144,6 +145,43 @@ test('buildStatus: requires every supported adapter version to be present and sy
     releaseProbe: { ok: true, exists: true, tagName: 'v1.9.1' },
   });
   assert.equal(mismatchedHermes.versionSyncOk, false);
+});
+
+test('readInstallerFallbacks: parses shell and PowerShell fallback versions', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-installer-fallbacks-'));
+  try {
+    fs.writeFileSync(path.join(tmp, 'install.sh'), 'VERSION_FALLBACK="2.0.0"\n');
+    fs.writeFileSync(path.join(tmp, 'install.ps1'), "$VersionFallback = '2.0.0'\n");
+    assert.deepEqual(readInstallerFallbacks(tmp), {
+      installShFallbackVersion: '2.0.0',
+      installPs1FallbackVersion: '2.0.0',
+    });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('buildStatus: installer fallback drift blocks version sync', () => {
+  const status = buildStatus({
+    pkg: { version: '2.0.0' },
+    claude: { version: '2.0.0' },
+    codex: { version: '2.0.0' },
+    hermesYaml: '2.0.0',
+    installerFallbacks: {
+      installShFallbackVersion: '2.0.0',
+      installPs1FallbackVersion: '1.11.22',
+    },
+    changelog: '# Changelog\n\n## [2.0.0] - 2026-04-29\n',
+    latestTag: 'v2.0.0',
+    headCommit: 'abc123',
+    latestTagCommit: 'abc123',
+    worktreeDirty: false,
+    releaseProbe: { ok: true, exists: true, tagName: 'v2.0.0' },
+    supportMatrix: { ok: true, findings: [] },
+  });
+  assert.equal(status.versionSyncOk, false);
+  assert.equal(status.installPs1FallbackVersion, '1.11.22');
+  assert.ok(status.strictReleaseBlockers.includes('version metadata is not synced'));
 });
 
 test('buildSupportMatrixStatus: detects OpenClaw host bridge drift', () => {

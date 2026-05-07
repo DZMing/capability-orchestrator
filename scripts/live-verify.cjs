@@ -239,6 +239,7 @@ function verifyCodex(timeoutSec) {
 
   const installEnv = {
     ...process.env,
+    CODEX_HOME: codexDir,
     CODEX_USER_DIR: codexDir,
   };
   const install = run('bash', [path.join(REPO_ROOT, 'install.sh'), '--platform=codex'], { env: installEnv });
@@ -249,6 +250,36 @@ function verifyCodex(timeoutSec) {
   const skillDir = path.join(project, '.agents', 'skills', 'valid-skill');
   ensureDir(skillDir);
   fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '---\nname: valid-skill\ndescription: A valid test skill\n---\n');
+
+  const pluginDir = path.join(codexDir, 'plugins', 'cache', 'capability-orchestrator');
+  const pluginDataDir = path.join(pluginDir, 'data');
+  const directHookEnv = {
+    ...process.env,
+    HOME: tmpHome,
+    CODEX_HOME: codexDir,
+    CODEX_USER_DIR: codexDir,
+    CODEX_PLUGIN_DATA: pluginDataDir,
+    CAPABILITY_PLATFORM: 'codex',
+  };
+  const hookInput = JSON.stringify({
+    prompt: 'I need a valid test skill for this important task',
+    cwd: project,
+  });
+  const directAwareness = run(process.execPath, [
+    path.join(pluginDir, 'scripts', 'scan-environment.cjs'),
+    '--mode=awareness',
+  ], {
+    env: directHookEnv,
+    input: JSON.stringify({ cwd: project }),
+    timeout: 10000,
+  });
+  const directRoute = run(process.execPath, [
+    path.join(pluginDir, 'scripts', 'route-matcher.cjs'),
+  ], {
+    env: directHookEnv,
+    input: hookInput,
+    timeout: 10000,
+  });
 
   const aliasPath = `/tmp/cap-orch-codex-live-${process.pid}`;
   try {
@@ -263,6 +294,7 @@ function verifyCodex(timeoutSec) {
   const env = {
     ...process.env,
     HOME: tmpHome,
+    CODEX_HOME: codexDir,
     CODEX_USER_DIR: codexDir,
     CODEX_HOOKS: '1',
     CODEX_REAL_BIN: realBin,
@@ -270,13 +302,15 @@ function verifyCodex(timeoutSec) {
   const proc = run(wrapperPath, [
     'exec',
     '--json',
+    '--enable',
+    'codex_hooks',
     '--skip-git-repo-check',
     '-C',
     aliasPath,
     'I need a valid test skill for this important task',
   ], { env, timeout: timeoutSec * 1000 });
 
-  const routeLogPath = path.join(codexDir, 'plugins', 'cache', 'capability-orchestrator', 'data', 'route-log.jsonl');
+  const routeLogPath = path.join(pluginDataDir, 'route-log.jsonl');
   const routeLog = fs.existsSync(routeLogPath) ? fs.readFileSync(routeLogPath, 'utf8') : '';
   const stdout = proc.stdout || '';
   const stderr = proc.stderr || '';
@@ -285,9 +319,14 @@ function verifyCodex(timeoutSec) {
   const summary = {
     platform: 'codex',
     installStatus: install.status,
+    directAwarenessStatus: directAwareness.status,
+    directAwarenessSeen: (directAwareness.stdout || '').includes('环境能力感知'),
+    directRouteStatus: directRoute.status,
+    directRouteOutputSeen: (directRoute.stdout || '').includes('[AUTO-ROUTE]') &&
+      (directRoute.stdout || '').includes('valid-skill'),
     exitStatus: proc.status,
     timedOut: !!proc.error && proc.error.code === 'ETIMEDOUT',
-    validSkillSeen: stdout.includes('valid-skill'),
+    codexExecSkillSeen: stdout.includes('valid-skill'),
     routeLogSeen: routeSummary.matchedRouteSeen,
     routeLogEntry: routeSummary.matchedRouteEntry,
     utf8HeaderErrorSeen: stderr.includes('x-codex-turn-metadata') || stdout.includes('x-codex-turn-metadata'),
@@ -319,7 +358,11 @@ function main() {
     return;
   }
 
-  if (!(result.routeLogSeen && !result.utf8HeaderErrorSeen)) process.exit(1);
+  if (!(result.directAwarenessSeen &&
+        result.directRouteOutputSeen &&
+        result.routeLogSeen &&
+        result.codexExecSkillSeen &&
+        !result.utf8HeaderErrorSeen)) process.exit(1);
 }
 
 if (require.main === module) {

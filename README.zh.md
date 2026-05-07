@@ -26,7 +26,8 @@ plugins、agents 和 MCP servers，然后把用户 prompt 路由到最合适的�
 ## Intent Router
 
 Intent Router 层只负责短操作口令，不替代直接的能力匹配。它会先识别
-intent，再收集实时工作上下文，套用安全闸门，最后生成完整执行契约。
+intent 并做 prompt-level 高风险预检；只有命中短口令或高风险动作时，才读取实时
+工作上下文、route 历史和偏好文件，再生成执行契约或确认闸门。
 
 常见 intent 包括：
 
@@ -104,6 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 ```bash
 npm test
+npm run test:all
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
 npm run verify:scenarios
@@ -133,15 +135,21 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - install、reinstall、uninstall 都保留无关 hooks。
 - runtime scan 是 best-effort 和 fault-open。
 - scanner 不执行被扫描的 plugin 目录。
+- MCP servers、plugin manifests、legacy command body 和扫描到的描述只作为匹配
+  线索，不会被执行，也不会被当作指令。
 - `verify:release` 是 pre-landing audit，会检查 package、manifests、已支持
   adapter versions、changelog、tag metadata、GitHub Release 状态，并拒绝任何残留
   OpenClaw host bridge surface 或脚本。
 - `verify:scenarios` 会同时跑 Claude / Codex 场景矩阵，覆盖短提示词、高风险确认闸门、
   skill 路由、MCP advisory、legacy command 安全和偏好脱敏。
+- route corpus 测试用 precision/recall 风格覆盖短提示词、逃逸、高风险 prompt、
+  skill / command / MCP 命中和 no-match。
 - `verify:release:strict` 是真实发布前的 hard release gate，还要求工作树 clean
   且 `HEAD` 等于最新 release tag。
 - 高风险意图，如发布、推送、部署、删除、付费、凭证操作、生产变更和真实产品 / UX
   决策，在执行前都需要确认。
+- route log 只保留白名单匿名字段，如 prompt type、target type、confidence、
+  host/source/scope 和 MCP 信任信号；不会记录原始 prompt 或凭证。
 
 ## 文档
 

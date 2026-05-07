@@ -36,3 +36,45 @@ test('evaluateSafety: treats destructive shell as confirmation-required', () => 
   assert.equal(result.decision, 'confirmation_required');
   assert.ok(result.reasons.some(reason => /destructive/.test(reason)));
 });
+
+test('evaluateSafety: requires confirmation for git tag release and push', () => {
+  for (const prompt of ['git tag v2.0.1 && git push --tags', 'create a release tag and push it']) {
+    const result = evaluateSafety({ prompt, intent: 'execute_plan' });
+    assert.equal(result.decision, 'confirmation_required', prompt);
+    assert.equal(result.confirmationRequired, true, prompt);
+    assert.ok(result.reasons.some(reason => /git|release|public|remote/i.test(reason)), prompt);
+  }
+});
+
+test('evaluateSafety: does not treat ordinary tag or brand styling as product risk', () => {
+  for (const prompt of ['fix the HTML tag nesting', 'adjust brand color in CSS', 'review UX spacing in this local component']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: treats readiness assessments as safe even when they mention production or release', () => {
+  for (const prompt of ['production ready', 'release readiness audit', '评估上线准备度', '检查生产可用性']) {
+    const result = evaluateSafety({ prompt, intent: 'commercial_readiness' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: escaped production deploy still requires confirmation', () => {
+  const result = evaluateSafety({
+    prompt: '直接做 部署生产',
+    intent: 'execute_plan',
+  });
+  assert.equal(result.decision, 'confirmation_required');
+  assert.equal(result.confirmationRequired, true);
+});
+
+test('evaluateSafety: execution against production still requires confirmation', () => {
+  for (const prompt of ['deploy to production now', '发布这个 release', '修改生产配置', '上线生产吧']) {
+    const result = evaluateSafety({ prompt, intent: 'execute_plan' });
+    assert.equal(result.decision, 'confirmation_required', prompt);
+    assert.equal(result.confirmationRequired, true, prompt);
+  }
+});

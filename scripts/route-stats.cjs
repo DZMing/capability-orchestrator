@@ -23,11 +23,22 @@ lines.push(`- 路由命中：${stats.routed}（${rate}%）`);
 lines.push(`- 直接放行：${stats.passed}`);
 lines.push(`- 过去 24h：${stats.last24h} 条`);
 lines.push(`- 平均置信度：${stats.avgConfidence}`);
+lines.push(`- no-match：${stats.misses}`);
+lines.push(`- 确认闸门命中：${stats.confirmationGates}`);
+lines.push(`- 误路由候选（低置信度）：${stats.lowConfidenceRoutes}`);
 
 if (Object.keys(stats.byTargetType).length > 0) {
   lines.push('');
   lines.push('### 按目标类型');
   for (const [type, count] of Object.entries(stats.byTargetType)) {
+    lines.push(`- ${type}: ${count}`);
+  }
+}
+
+if (Object.keys(stats.byPromptType).length > 0) {
+  lines.push('');
+  lines.push('### 按 Prompt 类型');
+  for (const [type, count] of Object.entries(stats.byPromptType)) {
     lines.push(`- ${type}: ${count}`);
   }
 }

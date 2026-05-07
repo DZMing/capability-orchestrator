@@ -11,6 +11,7 @@
 - 当前结论：`PASS`
 - 阻塞项：无 open `P0/P1`
 - 适用标准：高质量长期自用工业标准
+- 最近复核：2026-05-07，技术债收口分支 `codex/tech-debt-hardening`
 
 ## 已验证并修复的问题
 
@@ -92,13 +93,61 @@
 - 修复：切换为精确的 hook marker（`CAPABILITY_ORCHESTRATOR_HOOK=*`）与 legacy 脚本路径双轨识别
 - 证据：`tests/install-idempotent.test.sh` 现在覆盖带 `capability-orchestrator-helper.js` 的无关 hook 保留
 
+### P1 已修复：Windows 安装脚本 fallback 版本漂移
+
+- 现象：`install.ps1` 的 `$VersionFallback` 仍停在旧版本，`install.sh` 已是 `2.0.0`
+- 修复：同步 PowerShell fallback，并把 `install.sh` / `install.ps1` fallback 纳入 release readiness 版本一致性检查
+- 证据：`tests/release-readiness-check.test.cjs` 覆盖 fallback 解析和漂移阻断；`npm run verify:release` 输出 `installShFallbackVersion=2.0.0` 与 `installPs1FallbackVersion=2.0.0`
+
+### P2 已修复：路由和扫描热点文件过大
+
+- 现象：`scripts/route-matcher.cjs` 同时承担 tokenization、scoring、output rendering 和 CLI 主流程；`scripts/lib/scan-core.cjs` 同时承担 frontmatter、MCP、插件和宿主兼容扫描
+- 修复：拆出 `route-keywords`、`route-scoring`、`route-output`、`scan-text`、`scan-mcp`、`scan-host-skills`、`scan-plugins`，保留原外部 exports
+- 证据：`route-matcher.cjs` 从 662 行降到 411 行；`scan-core.cjs` 从 629 行降到 292 行；route/scan/integration focused tests 和全量 `npm test` 均通过
+
+### P2 已修复：route / scan 测试文件过度聚合
+
+- 现象：`tests/route-matcher.test.cjs` 与 `tests/scan.test.cjs` 同时承载纯单元、集成和端到端断言，后续改动容易误删边界覆盖
+- 修复：按模块边界拆出 `route-keywords`、`route-scoring`、`route-output`、`scan-text`、`scan-mcp`、`scan-plugins`、`scan-host-skills` focused tests；历史聚合文件保留端到端、快照、渲染和跨模块集成断言
+- 证据：`tests/route-matcher.test.cjs` 从 1585 行降到 951 行；`tests/scan.test.cjs` 从 1202 行降到 642 行；focused test 与全量 `npm test` 均通过
+
+### P1 已修复：普通 prompt 每轮 hook 成本偏高
+
+- 现象：Intent Router 在未知普通 prompt 上也可能读取 AGENTS、偏好文件和 route log
+- 修复：改成两段式路径，先做 prompt-level intent 分类和高风险预检；只有短 prompt 或高风险动作才读取受限上下文
+- 证据：`tests/intent-router.test.cjs` 覆盖普通未知 prompt 不读取上下文、短 prompt 读取上下文、高风险未知 prompt 进入 `risk_review`
+
+### P1 已修复：安全闸门误触发普通技术词
+
+- 现象：`tag`、`brand`、`ux` 等普通技术词可能触发确认，导致 HTML tag、CSS brand color、局部 UX spacing 这类低风险任务被拦
+- 修复：按“动作 + 目标 + 作用域”组合判断风险；保留 publish / push / deploy / delete / paid / credential / production / real product decision / release tag 的确认闸门
+- 证据：`tests/safety-gate.test.cjs` 覆盖 `git tag` / release / push 触发确认，`HTML tag` 和 `brand color in CSS` 不触发，`直接做 部署生产` 仍触发
+
+### P2 已修复：路由质量不可量化
+
+- 现象：只有离散场景测试，缺少覆盖短中文 prompt、英文 prompt、escape、高风险、MCP advisory、no-match 的统一 eval
+- 修复：新增 `tests/fixtures/route-corpus.json` 和 route corpus 断言，用 precision / recall 风格锁定路由行为
+- 证据：`tests/route-corpus.test.cjs` 已纳入默认 `npm test`
+
+### P2 已修复：MCP / 插件来源缺少信任分级
+
+- 现象：扫描结果能匹配 MCP / plugin，但 explain 和 route output 对 local / remote、auth、write、external access 的差异不够清楚
+- 修复：扫描结果保留 `host`、`source`、`scope`、`surfaceType`、`invocation`、`transport`、`authRequired`、`mayWrite`、`externalAccess`；MCP 仍 advisory-only
+- 证据：`tests/scan-mcp.test.cjs`、`tests/scan-plugins.test.cjs`、`tests/route-output.test.cjs`、`tests/route-matcher.test.cjs` 已覆盖
+
+### P2 已修复：route log 可观测性不足
+
+- 现象：只有单条路由记录，难以看到 no-match、误路由候选或确认闸门趋势
+- 修复：route log 白名单化字段并新增匿名聚合统计，覆盖 prompt type、no-match、confirmation gate 和 low-confidence route candidates
+- 证据：`tests/route-logger.test.cjs` 覆盖匿名字段白名单和聚合统计；`/stats` skill 已同步新指标
+
 ## 当前剩余风险
 
-- 真实 Claude Code GUI 会话尚未做肉眼验收，但功能级结论已由 clean-room CLI 的 hook 事件、输出和 debug 日志支撑
-- 当前机器上的 Claude OAuth 令牌在 live run 中返回 `401 authentication_failed`；路由证据已在重试前落出，这属于本机凭证噪音，不是插件路由缺陷
-- `OPEN_SOURCE_READINESS_AUDIT.md` 与 `ROADMAP.md` 属于研究/路线文档，不影响自用签字，但不应被误读为当前阻塞项清单
+- 真实 Claude Code GUI 会话尚未做肉眼验收；功能级结论仍由 clean-room CLI、hook 事件、真实 `claude` / `codex` live 验证、scenario matrix 和安装链路验证支撑
+- Windows 原生内核仍需 CI 的 `windows-latest` smoke；本机已用临时便携版 PowerShell Core 7.6.1 在当前工作区快照上跑通 `tests/install.windows.ps1`
+- 当前 worktree 未提交，因此 `npm run verify:release:strict` 仍会因为 clean-worktree 条件失败；这是发布流程状态阻塞，不是功能测试失败
 
 ## 审核签字建议
 
 - 按“长期稳定自用”标准：可以签字通过
-- 若以后要按“公开发布/对外支持”标准继续打磨，再补 GUI 手工验收和 release 体验优化
+- 若以后要按“公开发布/对外支持”标准继续打磨，再补 GUI 手工验收和 Windows 原生 CI 证据

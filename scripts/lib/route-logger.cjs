@@ -5,6 +5,13 @@ const path = require('path');
 
 const MAX_LOG_SIZE = 1 * 1024 * 1024; // 1MB
 const MAX_LOG_FILES = 3;
+const LOW_CONFIDENCE_ROUTE = 0.45;
+const LOG_FIELDS = [
+  'ts', 'action', 'reason', 'targetType', 'targetName',
+  'confidence', 'matchedKeywords', 'cwd', 'userDirSource',
+  'promptType', 'host', 'source', 'scope', 'surfaceType', 'invocation',
+  'transport', 'authRequired', 'mayWrite', 'externalAccess',
+];
 
 function getLogDir() {
   // 优先使用平台插件数据目录（插件更新后内容保留）
@@ -39,13 +46,29 @@ function rotateIfNeeded(logPath) {
   try { fs.renameSync(logPath, logPath + '.0'); } catch { /* ignore */ }
 }
 
+function normalizeLogEntry(explain) {
+  const entry = { ts: new Date().toISOString() };
+  for (const field of LOG_FIELDS) {
+    if (field === 'ts') continue;
+    if (explain && Object.prototype.hasOwnProperty.call(explain, field)) {
+      entry[field] = explain[field];
+    }
+  }
+  if (Array.isArray(entry.matchedKeywords)) {
+    entry.matchedKeywords = entry.matchedKeywords
+      .map((item) => String(item).slice(0, 80))
+      .slice(0, 12);
+  }
+  return entry;
+}
+
 function appendRouteLog(explain) {
   try {
     const logPath = getLogPath();
     rotateIfNeeded(logPath);
     // 确保目录存在
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    const entry = { ts: new Date().toISOString(), ...explain };
+    const entry = normalizeLogEntry(explain || {});
     fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
   } catch {
     // 故障开放：日志写入失败不影响路由
@@ -82,6 +105,10 @@ function aggregateStats(entries) {
     byTargetType: {},
     byReason: {},
     topTargets: {},
+    byPromptType: {},
+    misses: 0,
+    confirmationGates: 0,
+    lowConfidenceRoutes: 0,
     avgConfidence: 0,
     last24h: 0,
   };
@@ -94,6 +121,12 @@ function aggregateStats(entries) {
     else stats.passed++;
 
     stats.byReason[e.reason] = (stats.byReason[e.reason] || 0) + 1;
+    if (e.promptType) stats.byPromptType[e.promptType] = (stats.byPromptType[e.promptType] || 0) + 1;
+    if (e.reason === 'no-match') stats.misses++;
+    if (e.reason === 'confirmation-required') stats.confirmationGates++;
+    if (e.action === 'route' && Number(e.confidence || 0) > 0 && Number(e.confidence || 0) < LOW_CONFIDENCE_ROUTE) {
+      stats.lowConfidenceRoutes++;
+    }
 
     if (e.targetType) {
       stats.byTargetType[e.targetType] = (stats.byTargetType[e.targetType] || 0) + 1;
@@ -118,6 +151,8 @@ module.exports = {
   appendRouteLog,
   readLogs,
   aggregateStats,
+  normalizeLogEntry,
   MAX_LOG_SIZE,
   MAX_LOG_FILES,
+  LOW_CONFIDENCE_ROUTE,
 };
