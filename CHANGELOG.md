@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.0.1] - 2026-05-07
+
 ### Added
 
 - Added a route corpus eval covering Chinese shorthand prompts, English
