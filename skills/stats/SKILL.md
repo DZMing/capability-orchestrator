@@ -1,6 +1,6 @@
 ---
 name: stats
-description: "展示路由统计摘要：匹配率、热门目标、置信度分布。用于诊断路由健康度。"
+description: "展示匿名路由统计摘要：匹配率、prompt 类型、no-match、确认闸门、低置信度候选和热门目标。用于诊断路由健康度。"
 allowed-tools: Bash Read
 ---
 
@@ -19,8 +19,11 @@ allowed-tools: Bash Read
 1. 上方命令已自动执行并输出统计摘要。
 2. 把输出翻译成简短的中文解读：
    - 路由匹配率（routed / total）是否健康（>50% 正常）
+   - prompt 类型分布是否异常，例如普通 prompt、短 prompt 或高风险 prompt 激增
    - 最常用的目标是哪些
    - 如果 `no-match` 占比高，说明哪些类型的需求没被覆盖
+   - 确认闸门命中是否符合预期，尤其是 publish / push / deploy / delete / paid / credential / production
+   - 低置信度路由候选是否可能是误路由
    - 置信度均值是否合理
 3. 给出具体建议（如"考虑给 X 添加 skill"），但不要自行修改任何文件。
 4. 不修改任何文件，不执行 install / uninstall，不改 `settings.json`。

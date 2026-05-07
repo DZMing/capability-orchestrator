@@ -8,11 +8,13 @@ const OWNED_MARKERS = {
   sessionStart: [
     'CAPABILITY_ORCHESTRATOR_HOOK=session-start',
     'capability-orchestrator/scripts/scan-environment.cjs',
+    'capability-orchestrator/scripts/scan-environment.cmd',
     'capability-orchestrator\\scripts\\scan-environment.cmd',
   ],
   userPromptSubmit: [
     'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit',
     'capability-orchestrator/scripts/route-matcher.cjs',
+    'capability-orchestrator/scripts/route-matcher.cmd',
     'capability-orchestrator\\scripts\\route-matcher.cmd',
   ],
 };

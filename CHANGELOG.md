@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Added
+
+- Added a route corpus eval covering Chinese shorthand prompts, English
+  prompts, low-risk escape passthrough, high-risk escape handling, skill
+  routing, legacy commands, MCP advisory routing, and no-match behavior.
+- Route logs now expose anonymized aggregate statistics for prompt type,
+  no-match volume, confirmation gate hits, and low-confidence route candidates.
+- MCP and plugin scan results now carry trust metadata such as host, source,
+  scope, surface type, invocation style, transport, auth requirement, possible
+  write access, and possible external access.
+
+### Changed
+
+- Intent Router now uses a two-stage path: prompt-level intent classification
+  and safety precheck happen before reading bounded work context, preferences,
+  or route-log history.
+- MCP route output remains advisory-only and now explains local/remote,
+  auth, write, and external-access signals before recommending the capability.
+
+### Fixed
+
+- Safety gate matching now combines action, target, and scope instead of
+  matching isolated technical words, so normal terms such as HTML tags, brand
+  colors, and UX spacing do not trigger confirmation by themselves.
+- High-risk prompts such as git tag, release, push, production deploy, delete,
+  paid action, credential use, and real product or UX decisions still fail
+  closed even when the user adds escape wording.
+
 ## [2.0.0] - 2026-04-29
 
 ### Changed

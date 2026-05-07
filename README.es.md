@@ -32,9 +32,10 @@ ejecución de cinco partes.
 ## Intent Router
 
 La capa Intent Router sirve para instrucciones operativas breves, no para
-reemplazar el mapeo directo de capacidades. Primero clasifica el intent, luego
-recoge contexto de trabajo en vivo, aplica la barrera de seguridad y finalmente
-compone el contrato de ejecución completo.
+reemplazar el mapeo directo de capacidades. Primero clasifica el intent y hace
+un precheck de seguridad a nivel de prompt. Solo lee contexto de trabajo,
+historial de rutas y preferencias cuando el prompt es un intent breve soportado
+o una acción de alto riesgo que debe fallar cerrado.
 
 Intentos habituales:
 
@@ -116,6 +117,7 @@ curl -fsSL https://raw.githubusercontent.com/DZMing/capability-orchestrator/mast
 
 ```bash
 npm test
+npm run test:all
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
 npm run verify:scenarios
@@ -145,6 +147,9 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - Los hooks no relacionados se conservan durante install, reinstall y uninstall.
 - Los escaneos de runtime son best-effort y fault-open.
 - El scanner no ejecuta directorios de plugins escaneados.
+- Los MCP servers, manifests de plugins, cuerpos de legacy commands y
+  descripciones escaneadas son solo señales asesoras de matching. No se
+  ejecutan ni se tratan como instrucciones.
 - `verify:release` es una auditoría pre-landing: comprueba package, manifests,
   versiones de adapters soportados, changelog, metadata del tag, estado de
   GitHub Release, y rechaza cualquier superficie o script restante de OpenClaw
@@ -152,11 +157,17 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - `verify:scenarios` ejecuta una matriz Claude/Codex para prompts cortos,
   confirmaciones de alto riesgo, rutas de skill, MCP advisory, seguridad de
   legacy commands y redacción de preferencias.
+- El test de route corpus añade cobertura tipo precision/recall para prompts
+  breves, escapes, prompts de alto riesgo, matches de skill / command / MCP y
+  no-match.
 - `verify:release:strict` es el hard release gate para publicación real; también
   exige árbol limpio y `HEAD` igual al último release tag.
 - Los intents de alto riesgo, como publicar, hacer push, desplegar, borrar,
   pagar, usar credenciales, cambiar producción o tomar decisiones reales de
   producto / UX, requieren confirmación antes de actuar.
+- El route log conserva solo campos anónimos en allowlist, como prompt type,
+  target type, confidence, host/source/scope y señales de confianza de MCP; no
+  guarda prompts crudos ni credenciales.
 
 ## Documentación
 

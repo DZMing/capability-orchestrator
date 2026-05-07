@@ -64,6 +64,23 @@ test('claudeUninstall removes owned hooks but keeps unrelated helper wrapper', (
   assert.equal(settings.hooks.UserPromptSubmit, undefined);
 }));
 
+test('claudeUninstall removes PowerShell Core forward-slash cmd hooks', () => withTempFile((file) => {
+  fs.writeFileSync(file, JSON.stringify({
+    hooks: {
+      SessionStart: [
+        { hooks: [{ type: 'command', command: 'cmd.exe /d /s /c ""/tmp/home/plugins/cache/capability-orchestrator/scripts/scan-environment.cmd""' }] },
+      ],
+      UserPromptSubmit: [
+        { hooks: [{ type: 'command', command: 'cmd.exe /d /s /c ""/tmp/home/plugins/cache/capability-orchestrator/scripts/route-matcher.cmd""' }] },
+      ],
+    },
+  }, null, 2));
+
+  claudeUninstall(file);
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(settings.hooks, undefined);
+}));
+
 test('codexInstall and codexUninstall preserve non-owned entries', () => withTempFile((file) => {
   fs.writeFileSync(file, JSON.stringify({
     hooks: {

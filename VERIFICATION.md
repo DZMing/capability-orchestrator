@@ -13,6 +13,7 @@
 ## 环境
 
 - 本机 Node：`v25.8.1`
+- 本轮临时 PowerShell：便携版 PowerShell Core `7.6.1`（下载到 `/tmp`，未全局安装）
 - CI 矩阵：`ubuntu-latest` / `macos-latest` + `Node 18/20/22`，另有 `windows-latest` 的 PowerShell 安装冒烟
 - 本机无 `nvm/fnm/mise/asdf` 等版本管理器，因此未在本机重复跑 `18/20/22`
 
@@ -24,6 +25,7 @@
 
 ```bash
 npm test
+npm run test:all
 bash tests/install.test.sh
 bash tests/install-idempotent.test.sh
 ```
@@ -31,7 +33,8 @@ bash tests/install-idempotent.test.sh
 结果：
 
 - `npm test` 通过
-- 自动化总数以 `npm test` 的 TAP 汇总为准；本轮复验为 `413` tests
+- 自动化总数以 `npm test` 的 TAP 汇总为准；2026-05-07 复验为 `361` tests / `5` suites
+- `npm run test:all` 通过，包含 `npm test`、install smoke 和 idempotent smoke
 - `bash tests/install.test.sh` 通过
 - `bash tests/install-idempotent.test.sh` 通过
 
@@ -50,7 +53,15 @@ bash tests/install-idempotent.test.sh
 - 失败重装保留旧安装
 - `CODEX_USER_DIR` 自动检测走 Codex hooks 路径
 - Claude / Codex plugin manifest 版本一致
+- `install.sh` / `install.ps1` fallback 版本与 `package.json` 一致
+- route matcher / scan core 的拆分模块均有 focused tests，历史聚合测试保留集成与端到端覆盖
+- PowerShell Core 正斜杠 `.cmd` hook marker 可被卸载识别，避免非 Windows PowerShell smoke 残留 hook
 - `/debug-route` skill 合约测试
+- Intent Router 两段式路径：普通未知 prompt 不读取 work-context / profile / route log，短 prompt 和高风险 prompt 才读取受限上下文
+- safety gate 组合判断：`git tag` / release / push / production deploy 触发确认，`HTML tag` / `brand color in CSS` 不触发
+- route corpus eval 覆盖中文短 prompt、英文 prompt、低风险 escape、高风险 escape、skill、legacy command、MCP advisory 和 no-match
+- MCP / plugin 扫描结果保留 host / source / scope / surfaceType / invocation / transport / authRequired / mayWrite / externalAccess
+- route log 只写入白名单匿名字段，统计输出覆盖 prompt type、no-match、confirmation gate 和 low-confidence route candidates
 
 ### 2.1 Intent Router 执行契约层
 
@@ -72,6 +83,9 @@ node --test tests/intent-classifier.test.cjs tests/intent-router.test.cjs \
 - 发布、推送、部署、删除、付费、凭证、生产和真实产品 / UX 决策会触发确认闸门
 - 偏好文件会先去除 secret-like 内容，再按 project 优先于 global 的顺序收集
 - 工作上下文会读取受限的项目规则、git summary 和最近 route log
+- 未知普通 prompt 不读取工作上下文、偏好文件或 route log
+- `HTML tag`、`brand color in CSS`、局部 UX spacing 不会被普通技术词误判为高风险
+- 高风险未知 prompt 会输出 `risk_review` confirmation gate，即使包含 escape wording
 
 ## 安装链路验证
 
@@ -216,6 +230,7 @@ I need a valid test skill for this important task
 ```bash
 npm run verify:live:claude
 npm run verify:live:codex
+npm run test:all
 npm run verify:scenarios
 npm run verify:host:hermes
 npm run verify:host:lifecycle
@@ -226,7 +241,7 @@ npm run verify:release:strict
 说明：
 
 - `verify:live:claude`：隔离 `HOME + CLAUDE_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，并继承真实 `settings.json` 中的 `model + env` 运行时配置，调用真实 `claude` CLI，要求同一条 `UserPromptSubmit` hook 响应中同时出现 `[AUTO-ROUTE]` 和目标 skill
-- `verify:live:codex`：隔离 `HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照，调用真实 `codex exec`；为绕过 Codex 在非 ASCII 工作区路径下的 websocket header 编码问题，脚本会自动使用 ASCII 临时别名路径，并要求 fresh `route-log.jsonl` 里出现目标 skill 路由条目
+- `verify:live:codex`：隔离 `HOME + CODEX_HOME + CODEX_USER_DIR`，用 `install.sh` 注册 hooks 后再覆盖成当前工作区快照；脚本会直接执行安装后的 Codex `SessionStart` / `UserPromptSubmit` hook 命令并要求 fresh `route-log.jsonl` 出现目标 skill 路由条目，同时调用真实 `codex exec` 证明当前 Codex CLI 能加载并使用 `valid-skill`
 - `verify:scenarios`：在隔离 fixture 中分别模拟 Claude / Codex 目录表面，覆盖短提示词五段合同、高风险确认闸门、低风险 escape passthrough、skill 调用格式、MCP advisory-only、legacy command 不注入正文，以及偏好 / 项目规则里的 secret redaction
 - `verify:release`：pre-landing audit，用于检查版本/manifest/changelog 同步、GitHub Release 状态和 OpenClaw host bridge 冻结边界；它会报告 `HEAD` 是否已经等于最新 tag、以及工作树是否 clean，但不会把 dirty/ahead 工作树当作审查失败
 - `verify:release:strict`：真实发布前 hard release gate；除 `verify:release` 的检查外，还要求工作树 clean 且 `HEAD` 等于最新 release tag
@@ -246,9 +261,25 @@ npm run verify:release:strict
 - Claude live 验收更稳定地依赖 stream-json 中出现 `[AUTO-ROUTE]` 和目标 skill
 - Codex live 验收更稳定地依赖真实 `codex exec` 已进入目标 skill 工作流，route log 仍视为 best-effort 证据
 
+## 2026-05-07 全方位复验
+
+本轮在 `codex/tech-debt-hardening` 上完成以下验证：
+
+- `npm test`：通过，`361` tests / `5` suites
+- `npm run test:all`：通过，包含 `npm test`、`test:install`、`test:idempotent`
+- `npm run verify:scenarios`：通过，`31` 个 Claude / Codex 场景
+- `npm run verify:release`：通过 pre-landing audit，`prelandingAuditOk=true`，`releaseAuditOk=true`
+- `npm run verify:release:strict`：按预期失败，唯一 blocker 是 `worktree is not clean`
+- `npm run verify:host:hermes`：通过 install / list / bridge / disable / reenable / remove
+- `npm run verify:host:lifecycle`：通过 Hermes install / reinstall / bridge / disable / enable / uninstall / removed
+- `npm run verify:live:claude`：通过，真实 Claude CLI 触发 hook 并命中目标 skill route
+- `npm run verify:live:codex`：通过，真实 Codex CLI 可加载 skill，fresh route log 出现目标路由条目
+- `git diff --check`：通过
+
 ## 未完成的部分
 
 - 没有直接打开 Claude Code 桌面 GUI 做肉眼会话验收
+- 本机用临时 portable PowerShell Core 7.6.1 跑过当前工作区快照的 `tests/install.windows.ps1`；Windows 原生内核 smoke 仍交给 CI 的 `windows-latest`
 - 但当前功能级签字建立在 clean-room CLI + stream-json hook 事件 + debug 日志上；GUI 不再是功能正确性的前置条件
 - OpenClaw host bridge 当前冻结，仅保留 scan-only 兼容面
 - Hermes 当前仍是实验宿主路径，而非正式支持承诺
@@ -256,6 +287,7 @@ npm run verify:release:strict
 - Intent Router 已接入主 `UserPromptSubmit` hook；短 prompt 与高风险动作会先
   生成 execution contract 或 confirmation gate，未命中的请求再回退到
   skill / command / MCP matcher
+- 严格 release gate 仍要求 clean worktree；当前分支有未提交改动，因此不应直接发 tag
 
 ## 最终结论
 
@@ -263,6 +295,11 @@ npm run verify:release:strict
 - 安装/卸载/幂等链路：通过
 - 文档 / 实现 / 配置一致性：通过
 - clean-room Claude CLI：通过
+- live Claude / Codex：通过
+- Hermes host / lifecycle：通过
+- pre-landing release audit：通过
+- strict release gate：未通过，原因是 worktree 未提交
+- portable PowerShell Windows install smoke：通过
 - 严格手工 GUI 验收：未做
 
 如果标准是“高质量长期自用工业标准”，当前状态可签字通过。

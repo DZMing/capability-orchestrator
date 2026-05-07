@@ -1,0 +1,90 @@
+[
+  {
+    "name": "chinese short continuation",
+    "prompt": "继续",
+    "expected": {
+      "action": "route",
+      "reason": "intent-router",
+      "targetType": "intent",
+      "targetName": "continue_work"
+    }
+  },
+  {
+    "name": "english planning shorthand",
+    "prompt": "go ahead with the plan",
+    "expected": {
+      "action": "route",
+      "reason": "intent-router",
+      "targetType": "intent",
+      "targetName": "execute_plan"
+    }
+  },
+  {
+    "name": "low risk escape",
+    "prompt": "直接做：列出文件",
+    "expected": { "action": "pass", "reason": "escaped" }
+  },
+  {
+    "name": "high risk escape",
+    "prompt": "skip，部署生产",
+    "expected": {
+      "action": "route",
+      "reason": "confirmation-required",
+      "targetType": "intent"
+    }
+  },
+  {
+    "name": "skill match",
+    "prompt": "please use the artifact review helper",
+    "expected": {
+      "action": "route",
+      "reason": "matched-skill",
+      "targetType": "skill",
+      "targetName": "artifact-review",
+      "host": "claude",
+      "source": "project",
+      "scope": "project",
+      "surfaceType": "skill",
+      "invocation": "slash"
+    }
+  },
+  {
+    "name": "legacy command literal",
+    "prompt": "/ship-it",
+    "expected": {
+      "action": "route",
+      "reason": "matched-command-literal",
+      "targetType": "command",
+      "targetName": "ship-it",
+      "host": "claude",
+      "source": "project",
+      "scope": "project",
+      "surfaceType": "slash_command",
+      "invocation": "slash"
+    }
+  },
+  {
+    "name": "mcp advisory",
+    "prompt": "query database analytics report",
+    "expected": {
+      "action": "route",
+      "reason": "matched-mcp",
+      "targetType": "mcp",
+      "targetName": "data-tool",
+      "host": "claude",
+      "source": "project",
+      "scope": "project",
+      "surfaceType": "mcp",
+      "invocation": "mcp__data-tool__*",
+      "transport": "local",
+      "authRequired": false,
+      "mayWrite": false,
+      "externalAccess": false
+    }
+  },
+  {
+    "name": "no match",
+    "prompt": "tell me a tiny local joke",
+    "expected": { "action": "pass", "reason": "no-match" }
+  }
+]

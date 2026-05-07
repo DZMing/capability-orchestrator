@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { resolveUserDir } = require('./user-dir.cjs');
 const {
   detectPlatform,
@@ -12,224 +11,40 @@ const {
   getUserCommandsPaths,
 } = require('./platform.cjs');
 const {
+  MAX_DESC,
+  tryRead,
+  tryReadHead,
+  tryReadDir,
+  truncate,
+  compareSemver,
+  sanitize,
+  extractFrontmatter,
+  getDescription,
+  getName,
+  isSymlink,
+  withCapabilityMeta,
+} = require('./scan-text.cjs');
+const { readMcpServers } = require('./scan-mcp.cjs');
+const {
+  parsePlatformList,
+  extractSupportedPlatforms,
+  isPlatformCompatible,
+  scanCompatibleSkills,
+  getOpenClawSkillDir,
+  getHermesSkillDir,
+} = require('./scan-host-skills.cjs');
+const {
+  MAX_PLUGIN_DEPTH,
+  isPluginRoot,
+  findPluginRoots,
+  scanInstalledPlugins,
+} = require('./scan-plugins.cjs');
+const {
   parseHermesSkillsTable,
   parseHermesPluginsList,
   scanHermesRuntimeSkills,
   scanHermesRuntimePlugins,
 } = require('./hermes-runtime.cjs');
-
-const MAX_DESC = 100;
-const MAX_PLUGIN_DEPTH = 3;
-const HEAD_BYTES = 2048;
-
-function withCapabilityMeta(entity, meta = {}) {
-  return { ...entity, ...meta };
-}
-
-function tryRead(filePath, errors) {
-  try { return fs.readFileSync(filePath, 'utf8'); }
-  catch (e) {
-    if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
-    return null;
-  }
-}
-
-function tryReadHead(filePath, errors) {
-  let fd;
-  try {
-    fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(HEAD_BYTES);
-    const bytesRead = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
-    let str = buf.toString('utf8', 0, bytesRead);
-    str = str.replace(/\uFFFD+$/, '');
-    return str;
-  } catch (e) {
-    if (e.code !== 'ENOENT' && errors) errors.push(`读取 ${path.basename(filePath)}: ${e.code}`);
-    return null;
-  } finally {
-    if (fd !== undefined) fs.closeSync(fd);
-  }
-}
-
-function tryReadDir(dirPath, withTypes, errors) {
-  try {
-    return withTypes
-      ? fs.readdirSync(dirPath, { withFileTypes: true })
-      : fs.readdirSync(dirPath);
-  } catch (e) {
-    if (e.code !== 'ENOENT' && errors) errors.push(`列目录 ${path.basename(dirPath)}: ${e.code}`);
-    return [];
-  }
-}
-
-function truncate(str, max) {
-  if (!str) return '';
-  str = String(str).replace(/\r?\n/g, ' ').trim();
-  return str.length > max ? str.slice(0, max - 1) + '…' : str;
-}
-
-function compareSemver(a, b) {
-  const pa = a.replace(/^v/i, '').split('.').map(v => Number(v) || 0);
-  const pb = b.replace(/^v/i, '').split('.').map(v => Number(v) || 0);
-  const len = Math.max(pa.length, pb.length, 3);
-  for (let i = 0; i < len; i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff > 0 ? 1 : -1;
-  }
-  return 0;
-}
-
-const UNSAFE_UNICODE = /[\u200B\u200C\u200D\uFEFF\u00AD\u2060\u180E\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\u2061-\u2064\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFF9-\uFFFB]/g;
-
-function sanitize(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/\r?\n|\r/g, ' ')
-    .replace(UNSAFE_UNICODE, '')
-    .replace(/`/g, "'")
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    .replace(/<[^>]*>?/g, '')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/(^| )#{1,6} /g, '$1')
-    .trim();
-}
-
-function extractFrontmatter(content) {
-  if (!content) return {};
-  content = content.replace(/^\uFEFF/, '');
-  const result = {};
-  const blockRe = /(?:^|\n)---[ \t]*\r?\n([\s\S]*?)\r?\n---/g;
-  let blockMatch;
-  while ((blockMatch = blockRe.exec(content)) !== null) {
-    const lines = blockMatch[1].split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(/^(\w[\w-]*):\s*(.*?)\s*$/);
-      if (!m) continue;
-      const key = m[1];
-      const rawVal = m[2];
-      if (/^[>|][-+]?$/.test(rawVal)) {
-        const blockLines = [];
-        while (i + 1 < lines.length && (/^\s+/.test(lines[i + 1]) || lines[i + 1].trim() === '')) {
-          blockLines.push(lines[++i].trimStart());
-        }
-        result[key] = rawVal.startsWith('>')
-          ? blockLines.join(' ').trim()
-          : blockLines.join('\n').trim();
-      } else {
-        result[key] = rawVal.replace(/^["']|["']$/g, '').trim();
-      }
-    }
-  }
-  return result;
-}
-
-function getDescription(content) {
-  const fm = extractFrontmatter(content);
-  if (fm.description) return sanitize(truncate(fm.description, MAX_DESC));
-  if (!content) return '';
-  const afterFm = content.replace(/(?:^|\n)---[ \t]*\r?\n[\s\S]*?\r?\n---/g, '');
-  const firstPara = afterFm
-    .split('\n')
-    .find(l => l.trim() && !l.startsWith('#') && !/^---\s*$/.test(l));
-  return sanitize(truncate(firstPara || '', MAX_DESC));
-}
-
-function getName(content, fallback) {
-  const fm = extractFrontmatter(content);
-  return sanitize((fm.name || fallback || '').trim());
-}
-
-function getCurrentPlatformAliases() {
-  if (process.platform === 'darwin') return new Set(['macos', 'darwin']);
-  if (process.platform === 'win32') return new Set(['windows', 'win32']);
-  return new Set(['linux']);
-}
-
-function parsePlatformList(rawValue) {
-  if (!rawValue) return [];
-  const value = String(rawValue).trim();
-  if (!value) return [];
-  const normalized = value
-    .replace(/^\[/, '')
-    .replace(/\]$/, '')
-    .split(',')
-    .map((part) => part.trim().replace(/^["']|["']$/g, '').toLowerCase())
-    .filter(Boolean);
-  return [...new Set(normalized)];
-}
-
-function extractOpenClawOs(content) {
-  if (!content) return [];
-  const direct = content.match(/^metadata\.openclaw\.os:\s*(.+)$/m);
-  if (direct) return parsePlatformList(direct[1]);
-
-  const lines = content.split(/\r?\n/);
-  let inMetadata = false;
-  let metadataIndent = -1;
-  let inOpenClaw = false;
-  let openClawIndent = -1;
-
-  for (const line of lines) {
-    const indent = (line.match(/^\s*/) || [''])[0].length;
-    const trimmed = line.trim();
-
-    if (!trimmed) continue;
-
-    if (/^metadata:\s*$/.test(trimmed)) {
-      inMetadata = true;
-      metadataIndent = indent;
-      inOpenClaw = false;
-      continue;
-    }
-
-    if (inMetadata && indent <= metadataIndent) {
-      inMetadata = false;
-      inOpenClaw = false;
-    }
-
-    if (!inMetadata) continue;
-
-    if (/^openclaw:\s*$/.test(trimmed)) {
-      inOpenClaw = true;
-      openClawIndent = indent;
-      continue;
-    }
-
-    if (inOpenClaw && indent <= openClawIndent) {
-      inOpenClaw = false;
-    }
-
-    if (inOpenClaw) {
-      const osMatch = trimmed.match(/^os:\s*(.+)$/);
-      if (osMatch) return parsePlatformList(osMatch[1]);
-    }
-  }
-
-  return [];
-}
-
-function extractSupportedPlatforms(content, source) {
-  const fm = extractFrontmatter(content);
-  if (source === 'hermes') return parsePlatformList(fm.platforms);
-  if (source === 'openclaw') return extractOpenClawOs(content);
-  return [];
-}
-
-function isPlatformCompatible(content, source) {
-  const declared = extractSupportedPlatforms(content, source);
-  if (declared.length === 0) return true;
-  const aliases = getCurrentPlatformAliases();
-  return declared.some((item) => aliases.has(item));
-}
-
-function isSymlink(filePath, errors) {
-  try { return fs.lstatSync(filePath).isSymbolicLink(); }
-  catch (e) {
-    if (errors && e.code !== 'ENOENT') errors.push(`lstat ${path.basename(filePath)}: ${e.code}`);
-    return true;
-  }
-}
 
 function scanSkills(dir, errors, meta = {}) {
   const results = [];
@@ -243,26 +58,6 @@ function scanSkills(dir, errors, meta = {}) {
     const desc = getDescription(content);
     const filePath = path.join(fullPath, 'SKILL.md');
     results.push(withCapabilityMeta({ name, desc, filePath }, { surfaceType: 'skill', ...meta }));
-  }
-  return results;
-}
-
-function scanCompatibleSkills(dir, source, errors, meta = {}) {
-  const results = [];
-  for (const dirent of tryReadDir(dir, true, errors)) {
-    if (dirent.name.startsWith('.') || !dirent.isDirectory()) continue;
-    const fullPath = path.join(dir, dirent.name);
-    if (isSymlink(fullPath)) continue;
-    const content = tryReadHead(path.join(fullPath, 'SKILL.md'), errors);
-    if (content === null) continue;
-    if (!isPlatformCompatible(content, source)) continue;
-    const name = getName(content, dirent.name);
-    const desc = getDescription(content);
-    const filePath = path.join(fullPath, 'SKILL.md');
-    results.push(withCapabilityMeta(
-      { name, desc, filePath },
-      { host: source, surfaceType: 'skill', state: 'enabled', source, ...meta }
-    ));
   }
   return results;
 }
@@ -294,138 +89,6 @@ function scanCommands(dir, errors, meta = {}) {
       const desc = sanitize(fm.description || fm.name || '');
       return [withCapabilityMeta({ name, desc, filePath }, { surfaceType: 'slash_command', ...meta })];
     });
-}
-
-function readMcpServers(mcpFile, errors) {
-  const content = tryRead(mcpFile, errors);
-  if (!content) return [];
-
-  function extractServers(json) {
-    const servers = json.mcpServers || json.mcp_servers || {};
-    if (!servers || typeof servers !== 'object' || Array.isArray(servers)) return [];
-    return Object.entries(servers)
-      .filter(([, v]) => v && v.disabled !== true)
-      .map(([name, v]) => ({ name, desc: (v && v.description) || '' }));
-  }
-
-  try {
-    return extractServers(JSON.parse(content));
-  } catch {
-    try {
-      const stripped = content.split('\n').map(line => {
-        let inStr = false;
-        for (let i = 0; i < line.length - 1; i++) {
-          if (line[i] === '"') {
-            let bs = 0;
-            for (let j = i - 1; j >= 0 && line[j] === '\\'; j--) bs++;
-            if (bs % 2 === 0) inStr = !inStr;
-          }
-          if (!inStr && line[i] === '/' && line[i + 1] === '/') return line.slice(0, i).trimEnd();
-        }
-        return line;
-      }).join('\n');
-      return extractServers(JSON.parse(stripped));
-    } catch {
-      if (errors) errors.push(`${path.basename(mcpFile)} 解析失败（非标准 JSON？）`);
-      return [];
-    }
-  }
-}
-
-function isPluginRoot(dirPath, errors) {
-  if (fs.existsSync(path.join(dirPath, '.claude-plugin', 'plugin.json'))) return true;
-  if (fs.existsSync(path.join(dirPath, '.codex-plugin', 'plugin.json'))) return true;
-  if (fs.existsSync(path.join(dirPath, 'plugin.json'))) return true;
-  if (tryReadDir(path.join(dirPath, 'skills'), true, errors).some(d => d.isDirectory())) return true;
-  return tryReadDir(path.join(dirPath, 'agents'), true, errors).some(d => d.isFile() && d.name.endsWith('.md'));
-}
-
-function findPluginRoots(dir, maxDepth, errors) {
-  if (maxDepth <= 0) return [];
-  if (isPluginRoot(dir, errors)) return [dir];
-  const roots = [];
-  for (const d of tryReadDir(dir, true, errors)) {
-    if (!d.isDirectory() || d.name.startsWith('.')) continue;
-    const child = path.join(dir, d.name);
-    if (isSymlink(child)) continue;
-    roots.push(...findPluginRoots(child, maxDepth - 1, errors));
-  }
-  return roots;
-}
-
-function scanInstalledPlugins(claudeUserDir, errors) {
-  const cacheDir = path.join(claudeUserDir, 'plugins', 'cache');
-  const results = [];
-
-  for (const dirent of tryReadDir(cacheDir, true, errors)) {
-    if (!dirent.isDirectory()) continue;
-    const candidate = path.join(cacheDir, dirent.name);
-    if (isSymlink(candidate)) continue;
-    const pluginPaths = findPluginRoots(candidate, MAX_PLUGIN_DEPTH, errors);
-
-    for (const pluginPath of pluginPaths) {
-      const pluginName = path.basename(pluginPath);
-      const manifestContent =
-        tryRead(path.join(pluginPath, '.claude-plugin', 'plugin.json'), errors) ||
-        tryRead(path.join(pluginPath, '.codex-plugin', 'plugin.json'), errors) ||
-        tryRead(path.join(pluginPath, 'plugin.json'), errors);
-
-      let name = sanitize(pluginName);
-      let version = '';
-      let description = '';
-
-      if (manifestContent) {
-        try {
-          const manifest = JSON.parse(manifestContent);
-          name = sanitize(manifest.name || pluginName);
-          version = sanitize(manifest.version || '');
-          description = sanitize(truncate(manifest.description || '', MAX_DESC));
-        } catch { /* 解析失败，使用目录名 */ }
-      }
-
-      const skillItems = tryReadDir(path.join(pluginPath, 'skills'), true, errors)
-        .filter(d => !d.name.startsWith('.') && d.isDirectory()
-          && fs.existsSync(path.join(pluginPath, 'skills', d.name, 'SKILL.md')))
-        .map(d => {
-          const skillPath = path.join(pluginPath, 'skills', d.name, 'SKILL.md');
-          const head = tryReadHead(skillPath, errors);
-          return { name: sanitize(getName(head, d.name)), desc: head ? getDescription(head) : '', filePath: skillPath };
-        });
-      const agentNames = tryReadDir(path.join(pluginPath, 'agents'), true, errors)
-        .filter(d => !d.name.startsWith('.') && d.isFile() && d.name.endsWith('.md'))
-        .map(d => sanitize(d.name.replace(/\.md$/, '')));
-
-      results.push({
-        name,
-        version,
-        description,
-        skillItems,
-        agentNames,
-        surfaceType: 'plugin',
-        state: 'discovered',
-        source: 'plugin-cache',
-      });
-    }
-  }
-
-  const seen = new Map();
-  for (const p of results) {
-    const prev = seen.get(p.name);
-    if (!prev || (p.version && (!prev.version || compareSemver(p.version, prev.version) > 0))) {
-      seen.set(p.name, p);
-    }
-  }
-  return [...seen.values()];
-}
-
-function getOpenClawSkillDir() {
-  const root = process.env.OPENCLAW_USER_DIR || path.join(os.homedir(), '.openclaw');
-  return path.join(root, 'workspace', 'skills');
-}
-
-function getHermesSkillDir() {
-  const root = process.env.HERMES_USER_DIR || path.join(os.homedir(), '.hermes');
-  return path.join(root, 'skills');
 }
 
 function collectSnapshot(projectDir, userDir) {
@@ -465,17 +128,35 @@ function collectSnapshot(projectDir, userDir) {
 
   try {
     const mcpItems = [];
-    readMcpServers(path.join(cwd, '.mcp.json'), errors).forEach(s =>
-      mcpItems.push({ name: sanitize(s.name), desc: sanitize(truncate(s.desc, MAX_DESC)) || '项目级' }));
+    readMcpServers(path.join(cwd, '.mcp.json'), errors, {
+      host: platform,
+      source: 'project',
+      scope: 'project',
+    }).forEach(s =>
+      mcpItems.push({
+        ...s,
+        name: sanitize(s.name),
+        desc: sanitize(truncate(s.desc, MAX_DESC)) || '项目级',
+        extra: `source: ${s.source} | transport: ${s.transport} | auth: ${s.authRequired ? 'required' : 'none'} | write: ${s.mayWrite ? 'possible' : 'not indicated'} | external: ${s.externalAccess ? 'possible' : 'not indicated'}`,
+      }));
 
     const userMcpFile = fs.existsSync(path.join(activeUserDir, 'mcp.json'))
       ? path.join(activeUserDir, 'mcp.json')
       : path.join(activeUserDir, '.mcp.json');
     const projMcpNames = new Set(mcpItems.map(s => s.name));
-    readMcpServers(userMcpFile, errors).forEach(s => {
+    readMcpServers(userMcpFile, errors, {
+      host: platform,
+      source: 'user',
+      scope: 'user',
+    }).forEach(s => {
       const name = sanitize(s.name);
       if (!projMcpNames.has(name)) {
-        mcpItems.push({ name, desc: sanitize(truncate(s.desc, MAX_DESC)) || '用户级' });
+        mcpItems.push({
+          ...s,
+          name,
+          desc: sanitize(truncate(s.desc, MAX_DESC)) || '用户级',
+          extra: `source: ${s.source} | transport: ${s.transport} | auth: ${s.authRequired ? 'required' : 'none'} | write: ${s.mayWrite ? 'possible' : 'not indicated'} | external: ${s.externalAccess ? 'possible' : 'not indicated'}`,
+        });
       }
     });
     if (mcpItems.length > 0) sections.push({ label: 'MCP Servers', prefix: '', items: mcpItems });

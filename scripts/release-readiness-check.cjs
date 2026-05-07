@@ -90,6 +90,15 @@ function readYamlVersion(relPath) {
   } catch { return ''; }
 }
 
+function readInstallerFallbacks(repoRoot = root) {
+  const installSh = readText(repoRoot, 'install.sh');
+  const installPs1 = readText(repoRoot, 'install.ps1');
+  return {
+    installShFallbackVersion: (installSh.match(/\bVERSION_FALLBACK=["']([^"']+)["']/) || [null, ''])[1],
+    installPs1FallbackVersion: (installPs1.match(/\$VersionFallback\s*=\s*['"]([^'"]+)['"]/) || [null, ''])[1],
+  };
+}
+
 function pathExists(repoRoot, relPath) {
   return fs.existsSync(path.join(repoRoot, relPath));
 }
@@ -148,17 +157,23 @@ function buildSupportMatrixStatus(repoRoot = root) {
   return { ok: findings.length === 0, findings };
 }
 
-function buildStatus({ pkg, claude, codex, hermesYaml, changelog, latestTag, headCommit, latestTagCommit, worktreeDirty, releaseProbe, supportMatrix }) {
+function buildStatus({ pkg, claude, codex, hermesYaml, installerFallbacks, changelog, latestTag, headCommit, latestTagCommit, worktreeDirty, releaseProbe, supportMatrix }) {
   const topChangelog = (changelog.match(/^## \[([^\]]+)\]/m) || [null, ''])[1];
   const latestTagMatchesPackage = latestTag === `v${pkg.version}`;
   const githubReleaseReady = !!(releaseProbe && releaseProbe.ok && releaseProbe.exists && !releaseProbe.isDraft && !releaseProbe.isPrerelease);
   const githubReleaseCheckOk = !!(releaseProbe && releaseProbe.ok);
   const supportMatrixOk = supportMatrix ? !!supportMatrix.ok : true;
   const releaseAuditOk = supportMatrixOk && (!latestTagMatchesPackage || githubReleaseReady);
+  const fallbackVersions = installerFallbacks || {};
+  const installerVersions = installerFallbacks ? [
+    fallbackVersions.installShFallbackVersion,
+    fallbackVersions.installPs1FallbackVersion,
+  ] : [];
 
   const allVersions = [
     pkg.version, claude.version, codex.version,
     hermesYaml,
+    ...installerVersions,
   ];
   const versionSyncOk = allVersions.every(Boolean) && allVersions.every(v => v === pkg.version);
   const changelogSyncOk = topChangelog === pkg.version;
@@ -178,6 +193,8 @@ function buildStatus({ pkg, claude, codex, hermesYaml, changelog, latestTag, hea
     claudeManifestVersion: claude.version,
     codexManifestVersion: codex.version,
     hermesPluginVersion: hermesYaml,
+    installShFallbackVersion: fallbackVersions.installShFallbackVersion || '',
+    installPs1FallbackVersion: fallbackVersions.installPs1FallbackVersion || '',
     topChangelogVersion: topChangelog,
     latestGitTag: latestTag,
     headCommit,
@@ -224,12 +241,14 @@ async function main() {
   const worktreeDirty = runGit(['status', '--short']).length > 0;
   const releaseProbe = await fetchReleaseByTag(readRepoSlug(pkg), latestTag);
   const supportMatrix = buildSupportMatrixStatus(root);
+  const installerFallbacks = readInstallerFallbacks(root);
 
   const status = buildStatus({
     pkg,
     claude,
     codex,
     hermesYaml,
+    installerFallbacks,
     changelog,
     latestTag,
     headCommit,
@@ -254,6 +273,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     buildGitHubHeaders,
+    readInstallerFallbacks,
     buildSupportMatrixStatus,
     buildStatus,
     fetchReleaseByTag,
