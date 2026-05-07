@@ -1,7 +1,7 @@
 {
   "name": "capability-orchestrator",
   "description": "Capability awareness and routing guidance for Claude Code and Codex. Scans local skills, subagents, plugins, commands, and MCP servers, then injects routing context so the agent picks the right execution path.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "keywords": [
     "capability",
     "orchestration",
