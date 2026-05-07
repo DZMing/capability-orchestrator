@@ -20,6 +20,16 @@
     }
   },
   {
+    "name": "production readiness assessment",
+    "prompt": "production ready",
+    "expected": {
+      "action": "route",
+      "reason": "intent-router",
+      "targetType": "intent",
+      "targetName": "commercial_readiness"
+    }
+  },
+  {
     "name": "low risk escape",
     "prompt": "直接做：列出文件",
     "expected": { "action": "pass", "reason": "escaped" }

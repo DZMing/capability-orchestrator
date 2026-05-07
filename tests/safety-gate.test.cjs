@@ -54,6 +54,14 @@ test('evaluateSafety: does not treat ordinary tag or brand styling as product ri
   }
 });
 
+test('evaluateSafety: treats readiness assessments as safe even when they mention production or release', () => {
+  for (const prompt of ['production ready', 'release readiness audit', '评估上线准备度', '检查生产可用性']) {
+    const result = evaluateSafety({ prompt, intent: 'commercial_readiness' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
 test('evaluateSafety: escaped production deploy still requires confirmation', () => {
   const result = evaluateSafety({
     prompt: '直接做 部署生产',
@@ -61,4 +69,12 @@ test('evaluateSafety: escaped production deploy still requires confirmation', ()
   });
   assert.equal(result.decision, 'confirmation_required');
   assert.equal(result.confirmationRequired, true);
+});
+
+test('evaluateSafety: execution against production still requires confirmation', () => {
+  for (const prompt of ['deploy to production now', '发布这个 release', '修改生产配置', '上线生产吧']) {
+    const result = evaluateSafety({ prompt, intent: 'execute_plan' });
+    assert.equal(result.decision, 'confirmation_required', prompt);
+    assert.equal(result.confirmationRequired, true, prompt);
+  }
 });

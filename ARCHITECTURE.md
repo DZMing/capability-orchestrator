@@ -58,6 +58,8 @@ Claude Code 本身就是路由器——它的 agent loop 已经会根据上下�
 - route log、AGENTS 规则和 git 状态都只读读取，不写入任何文件
 - 高风险动作按“动作 + 目标 + 作用域”组合判断；`HTML tag`、`brand color`
   和局部 UX 调整这类普通技术词不会单独触发确认
+- `production ready`、release readiness audit、上线准备度评估这类准备度检查
+  走安全的 readiness 合同，不按生产变更拦截
 - 发布、推送、部署、删除、付费、凭证、生产变更、真实产品 / UX 决策，以及
   `git tag` / release tag 这类发布边界动作，都会被闸门拦下并要求确认
 

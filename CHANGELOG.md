@@ -26,6 +26,9 @@
 - Safety gate matching now combines action, target, and scope instead of
   matching isolated technical words, so normal terms such as HTML tags, brand
   colors, and UX spacing do not trigger confirmation by themselves.
+- Production or release readiness assessment prompts now stay in the
+  commercial-readiness contract path instead of being treated as production
+  changes by wording alone.
 - High-risk prompts such as git tag, release, push, production deploy, delete,
   paid action, credential use, and real product or UX decisions still fail
   closed even when the user adds escape wording.

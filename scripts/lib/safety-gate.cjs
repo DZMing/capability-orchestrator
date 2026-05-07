@@ -1,5 +1,14 @@
 'use strict';
 
+const READINESS_ASSESSMENT =
+  /(ready|readiness|prepared|preflight|audit|check|assess|evaluate|review|评估|检查|验收|准备度|可用性|是否可以|够不够|能不能|可不可以|商用)/i;
+const EXPLICIT_EXECUTION =
+  /(直接做|立即|马上|now|do it|execute|run|perform|git\s+push|force-?push|rm\s+-rf|drop\s+table|delete|删除|清空|rotate|轮换|use\s+(?:the\s+)?(?:secret|token|credential|api[_-]?key)|使用.*(?:凭证|密钥|密码)|deploy\s+(?:to|prod|production)|部署(?:到|生产|线上)|publish\s+(?:this|it|now|release)|发布(?:并|到|这个|它|版本)|上线(?:生产|线上|吧|这个|它)|create\s+(?:a\s+)?(?:release\s+)?tag|release\s+tag|git\s+tag|打标签|push|推送|charge|付款|付费|扣款)/i;
+
+function isReadinessAssessmentOnly(text) {
+  return READINESS_ASSESSMENT.test(text) && !EXPLICIT_EXECUTION.test(text);
+}
+
 const RISK_PATTERNS = [
   {
     label: 'destructive local action',
@@ -11,11 +20,13 @@ const RISK_PATTERNS = [
   },
   {
     label: 'public/external action',
-    matches: (text) => /(publish|发布|\brelease\b|deploy|部署|上线|public|external)/i.test(text),
+    matches: (text) => !isReadinessAssessmentOnly(text)
+      && /(publish|发布|\brelease\b|deploy|部署|上线|public|external)/i.test(text),
   },
   {
     label: 'production-impacting action',
-    matches: (text) => /(production|\bprod\b|生产|线上)/i.test(text),
+    matches: (text) => !isReadinessAssessmentOnly(text)
+      && /(production|\bprod\b|生产|线上)/i.test(text),
   },
   {
     label: 'credential-gated action',
@@ -61,4 +72,5 @@ function evaluateSafety({ prompt = '', intent = 'unknown', context = {}, prefere
 module.exports = {
   evaluateSafety,
   RISK_PATTERNS,
+  isReadinessAssessmentOnly,
 };

@@ -99,6 +99,18 @@ test('resolveIntentRoute: risky publishing prompt returns confirmation gate', ()
   assert.ok(route.output.includes('发布'));
 });
 
+test('resolveIntentRoute: production readiness assessment stays safe commercial-readiness contract', () => {
+  const route = resolveIntentRoute({
+    prompt: 'production ready',
+    cwd: os.tmpdir(),
+  });
+  assert.equal(route.intent, 'commercial_readiness');
+  assert.equal(route.safety.decision, 'safe_auto');
+  assert.equal(route.safety.confirmationRequired, false);
+  assert.ok(route.output.includes('[AUTO-ROUTE]'));
+  assert.ok(!route.output.includes('[CONFIRMATION REQUIRED]'));
+});
+
 test('resolveIntentRoute: unknown intent returns null for existing matcher fallback', () => {
   const route = resolveIntentRoute({
     prompt: 'I need a valid test skill for this important task',
