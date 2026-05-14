@@ -8,7 +8,9 @@
         "name": "JavaScript/TypeScript",
         "version": ">=18",
         "confidence": "high",
-        "markers": ["package.json"]
+        "markers": [
+          "package.json"
+        ]
       }
     ],
     "frameworks": [],
@@ -17,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "npm test",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -12",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -43,7 +45,11 @@
   "structure": {
     "isMonorepo": false,
     "workspaces": [],
-    "mainDirectories": ["docs", "scripts", "tests"],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "tests"
+    ],
     "gitBranches": {
       "defaultBranch": "master",
       "branchingStrategy": null
@@ -63,7 +69,9 @@
       "purpose": "Documentation",
       "fileCount": 1,
       "lastAccessed": 1778801504308,
-      "keyFiles": ["host-contract-hermes.md"]
+      "keyFiles": [
+        "host-contract-hermes.md"
+      ]
     },
     "scripts": {
       "path": "scripts",
@@ -124,8 +132,14 @@
   "hotPaths": [
     {
       "path": "tests/route-matcher.test.cjs",
+      "accessCount": 5,
+      "lastAccessed": 1778802167257,
+      "type": "file"
+    },
+    {
+      "path": "tests/route-keywords.test.cjs",
       "accessCount": 2,
-      "lastAccessed": 1778801844230,
+      "lastAccessed": 1778801891713,
       "type": "file"
     }
   ],

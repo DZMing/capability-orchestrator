@@ -148,3 +148,53 @@ test('_tokenizeStemmed: does not expand synonyms', () => {
   assert.ok(!stemmed.includes('调试'));
   assert.ok(expanded.includes('调试'));
 });
+
+// ─── 新增运维/数据同义词双向扩展 ─────────────────────────────────────────────
+
+test('synonym: 备份 ↔ backup (bidirectional)', () => {
+  assert.ok(extractKeywords('备份数据').includes('backup'), '备份 → backup');
+  assert.ok(extractKeywords('backup data').includes('备份'), 'backup → 备份');
+});
+
+test('synonym: 恢复 ↔ restore (bidirectional)', () => {
+  assert.ok(extractKeywords('数据恢复').includes('restore'), '恢复 → restore');
+  assert.ok(extractKeywords('restore service').includes('恢复'), 'restore → 恢复');
+});
+
+test('synonym: 迁移 ↔ migrate ↔ migration (bidirectional)', () => {
+  assert.ok(extractKeywords('数据迁移').includes('migrate'), '迁移 → migrate');
+  assert.ok(extractKeywords('migrate database').includes('迁移'), 'migrate → 迁移');
+  assert.ok(extractKeywords('migration script').includes('迁移'), 'migration → 迁移');
+});
+
+test('synonym: 回滚 ↔ rollback (bidirectional)', () => {
+  assert.ok(extractKeywords('代码回滚').includes('rollback'), '回滚 → rollback');
+  assert.ok(extractKeywords('rollback release').includes('回滚'), 'rollback → 回滚');
+});
+
+test('synonym: 监控 ↔ monitor ↔ monitoring (bidirectional)', () => {
+  assert.ok(extractKeywords('系统监控').includes('monitor'), '监控 → monitor');
+  assert.ok(extractKeywords('monitor service').includes('监控'), 'monitor → 监控');
+  assert.ok(extractKeywords('monitoring dashboard').includes('监控'), 'monitoring → 监控');
+});
+
+test('synonym: 告警 ↔ alert (bidirectional)', () => {
+  assert.ok(extractKeywords('告警通知').includes('alert'), '告警 → alert');
+  assert.ok(extractKeywords('alert rule').includes('告警'), 'alert → 告警');
+});
+
+test('synonym: 基准 ↔ benchmark (bidirectional)', () => {
+  assert.ok(extractKeywords('性能基准').includes('benchmark'), '基准 → benchmark');
+  assert.ok(extractKeywords('benchmark test').includes('基准'), 'benchmark → 基准');
+});
+
+test('synonym: 预置 ↔ provision (bidirectional)', () => {
+  assert.ok(extractKeywords('环境预置').includes('provision'), '预置 → provision');
+  assert.ok(extractKeywords('provision server').includes('预置'), 'provision → 预置');
+});
+
+test('synonym: schema → 表结构 (English to CJK)', () => {
+  // CJK→schema 方向：'表结构' 是 3 字符，bigram 只产生'表结'/'结构'，不产生完整词
+  // 仅英文→CJK 方向可通过同义词扩展到达
+  assert.ok(extractKeywords('database schema').includes('表结构'), 'schema → 表结构');
+});
