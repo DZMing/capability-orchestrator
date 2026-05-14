@@ -91,6 +91,28 @@ const SYNONYM_MAP = new Map([
   ['数据库', ['database', 'db', 'storage']],
   ['database', ['数据库', 'db']],
   ['db', ['数据库', 'database']],
+
+  // ── 运维 / 数据 / 监控 ───────────────────────────────────────────────────
+  ['备份', ['backup', 'dump']],
+  ['backup', ['备份', 'dump']],
+  ['恢复', ['restore', 'recovery', 'rollback']],
+  ['restore', ['恢复', 'recovery']],
+  ['迁移', ['migrate', 'migration']],
+  ['migrate', ['迁移', 'migration']],
+  ['migration', ['迁移', 'migrate']],
+  ['回滚', ['rollback', 'revert', 'restore']],
+  ['rollback', ['回滚', 'revert']],
+  ['监控', ['monitor', 'monitoring', 'observe']],
+  ['monitor', ['监控', 'monitoring']],
+  ['monitoring', ['监控', 'monitor']],
+  ['告警', ['alert', 'alarm', 'notification']],
+  ['alert', ['告警', 'alarm']],
+  ['基准', ['benchmark', 'baseline']],
+  ['benchmark', ['基准', 'baseline']],
+  ['预置', ['provision', 'setup', 'init']],
+  ['provision', ['预置', 'setup']],
+  ['表结构', ['schema', 'ddl']],
+  ['schema', ['表结构', 'ddl', 'database']],
 ]);
 
 function expandSynonyms(tokens) {

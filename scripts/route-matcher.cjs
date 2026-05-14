@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const {
   scanSkills,
+  scanAgents,
   sanitize,
   scanInstalledPlugins,
   scanCommands,
@@ -31,6 +32,7 @@ const {
   getPlatformPaths,
   getUserSkillsPaths,
   getUserCommandsPaths,
+  getUserAgentsPaths,
 } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
 const { resolveIntentRoute } = require('./lib/intent-router.cjs');
@@ -49,6 +51,7 @@ const {
   passThrough,
   createCommandOutput,
   createMcpOutput,
+  createSubagentOutput,
   createIntentOutput,
   canInvokeAsSlashCommand,
   getCommandExplainReason,
@@ -130,6 +133,14 @@ function isEscaped(prompt) {
   return false;
 }
 
+// 解析 desc 中显式声明的触发词（如"触发词：xxx、yyy"或"Trigger words: xxx, yyy"）
+function parseTriggerWords(desc) {
+  if (!desc) return [];
+  const m = desc.match(/(?:触发词[：:]\s*|[Tt]rigger(?:\s+[Ww]ords?)?[：:]\s*)([^\n.。]+)/);
+  if (!m) return [];
+  return m[1].split(/[、,，\/]+/).map(w => w.trim().toLowerCase()).filter(w => w.length >= 2);
+}
+
 // 改进2：命令名直接命中 — 用户说 "/commit" 或 "commit" 开头时跳过语义匹配
 function findLiteralMatch(prompt, skills) {
   const trimmed = prompt.trim();
@@ -146,6 +157,16 @@ function findLiteralMatch(prompt, skills) {
     for (const w of words) {
       const found = skills.find(s => s.name.toLowerCase() === w);
       if (found) return { ...found, confidence: 1, matchedKeywords: [w] };
+    }
+  }
+  // 触发词整词命中（confidence=0.9，低于 name 严格相等）
+  const lower = trimmed.toLowerCase();
+  for (const s of skills) {
+    if (!s.triggerWords || s.triggerWords.length === 0) continue;
+    for (const tw of s.triggerWords) {
+      if (lower.includes(tw)) {
+        return { ...s, confidence: 0.9, matchedKeywords: [tw] };
+      }
     }
   }
   return null;
@@ -220,13 +241,29 @@ function collectAllSkills(projectDir, userDir) {
     }
   } catch { /* fault-open */ }
 
+  // Subagents — 纳入路由候选池，优先级低于 skills，高于 legacy commands
+  const subagents = [];
+  try {
+    if (pp.projectAgentsDir) {
+      for (const s of scanAgents(path.join(projectDir, pp.projectAgentsDir), [], {
+        ...baseMeta, source: 'project', scope: 'project',
+      })) subagents.push({ ...s, type: 'subagent' });
+    }
+    for (const dir of getUserAgentsPaths(activeUserDir, platform)) {
+      for (const s of scanAgents(dir, [], {
+        ...baseMeta, source: 'user', scope: 'user',
+      })) subagents.push({ ...s, type: 'subagent' });
+    }
+  } catch { /* fault-open */ }
+
   const seen = new Set();
   const deduped = [];
-  // Skills 优先，legacy commands 最低优先
-  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...openClawSkills, ...hermesSkills, ...legacyCmds]) {
+  // Skills 优先，subagents 其次，legacy commands 最低优先
+  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...openClawSkills, ...hermesSkills, ...subagents, ...legacyCmds]) {
     if (!seen.has(s.name)) {
       seen.add(s.name);
-      deduped.push(s);
+      // 预解析触发词，供 findLiteralMatch 第二轮使用
+      deduped.push({ ...s, triggerWords: parseTriggerWords(s.desc) });
     }
   }
   return deduped;
@@ -352,15 +389,26 @@ function _resolveRouteDecisionInner(input) {
   const literalMatched = !!literal;
   const bestSkill = findBestMatch(prompt, skills);
   // 语义匹配低于最低置信度阈值视为噪音，不路由（字面量匹配不受限制）
-  const match = literal || (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE ? bestSkill : null);
+  // 若 top scorer 置信度不足，fallback 搜索次优有信心的候选（避免低置信度噪音阻断合法路由）
+  let confidentSkill = null;
+  if (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE) {
+    confidentSkill = bestSkill;
+  } else if (bestSkill) {
+    const alt = findBestMatch(prompt, skills.filter(s => s.name !== bestSkill.name));
+    if (alt && alt.confidence >= MIN_CONFIDENCE) confidentSkill = alt;
+  }
+  const match = literal || confidentSkill;
   if (match) {
     const isCommandLike = match.type === 'command'
       || match.surfaceType === 'slash_command'
       || match.surfaceType === 'plugin_command'
       || match.surfaceType === 'cli_subcommand';
-    const targetType = isCommandLike ? 'command' : 'skill';
+    const isSubagentLike = match.type === 'subagent' || match.surfaceType === 'agent';
+    const targetType = isCommandLike ? 'command' : isSubagentLike ? 'subagent' : 'skill';
     const reason = targetType === 'command'
       ? getCommandExplainReason(match, literalMatched)
+      : targetType === 'subagent'
+      ? 'matched-subagent'
       : 'matched-skill';
     return {
       match,
@@ -440,8 +488,8 @@ function resolveRouteDecision(input) {
 
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
-  findBestMatch, findBestMcpMatch, findLiteralMatch,
-  createOutput, createMcpOutput, createCommandOutput,
+  findBestMatch, findBestMcpMatch, findLiteralMatch, parseTriggerWords,
+  createOutput, createMcpOutput, createCommandOutput, createSubagentOutput,
   createIntentOutput,
   canInvokeAsSlashCommand, getCommandExplainReason,
   passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
@@ -464,6 +512,7 @@ else {
       if (!decision.match) return passThrough();
       if (decision.targetType === 'command') return createCommandOutput(decision.match);
       if (decision.targetType === 'mcp') return createMcpOutput(decision.match);
+      if (decision.targetType === 'subagent') return createSubagentOutput(decision.match);
       return createOutput(decision.match);
     } catch (err) {
       process.stderr.write('route-matcher error: ' + err.message + '\n');

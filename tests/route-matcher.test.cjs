@@ -949,3 +949,155 @@ test('resolveRouteDecision: confidence at documented threshold still routes', ()
     fs.rmSync(tmpProj, { recursive: true, force: true });
   }
 });
+
+// ─── parseTriggerWords unit tests ────────────────────────────────────────────
+
+const { parseTriggerWords } = require('../scripts/route-matcher.cjs');
+
+test('parseTriggerWords: extracts CJK trigger words from 触发词 field', () => {
+  const result = parseTriggerWords('Some skill desc. 触发词：亚马逊、Amazon、选品、FBA');
+  assert.ok(result.includes('亚马逊'), 'should include 亚马逊');
+  assert.ok(result.includes('amazon'), 'should include amazon (lowercased)');
+  assert.ok(result.includes('选品'), 'should include 选品');
+  assert.ok(result.includes('fba'), 'should include fba (lowercased)');
+});
+
+test('parseTriggerWords: returns empty array when no trigger word field', () => {
+  assert.deepEqual(parseTriggerWords('A skill that does things.'), []);
+  assert.deepEqual(parseTriggerWords(''), []);
+});
+
+test('parseTriggerWords: handles English Trigger: format', () => {
+  const result = parseTriggerWords('Skill description. Trigger: deploy, release, ship');
+  assert.ok(result.includes('deploy'));
+  assert.ok(result.includes('release'));
+  assert.ok(result.includes('ship'));
+});
+
+// ─── findLiteralMatch: trigger word hit ──────────────────────────────────────
+
+test('findLiteralMatch: trigger word hit returns confidence 0.9', () => {
+  const desc = '亚马逊跨境电商运营 agent。触发词：亚马逊、Amazon、选品、FBA';
+  const skills = [
+    { name: 'amazon-ops', desc, triggerWords: parseTriggerWords(desc) },
+    { name: 'other-skill', desc: 'some other stuff', triggerWords: [] },
+  ];
+  const match = findLiteralMatch('亚马逊选品调研帮我做', skills);
+  assert.ok(match !== null, 'should match via trigger word');
+  assert.equal(match.name, 'amazon-ops');
+  assert.equal(match.confidence, 0.9);
+  assert.ok(match.matchedKeywords.length > 0);
+});
+
+test('findLiteralMatch: trigger word does not fire when prompt is too short to include it', () => {
+  const desc = '触发词：ultraspecificword';
+  const skills = [{ name: 'alpha', desc, triggerWords: parseTriggerWords(desc) }];
+  const match = findLiteralMatch('something unrelated', skills);
+  assert.equal(match, null);
+});
+
+// ─── Subagent routing ────────────────────────────────────────────────────────
+
+function makeIsolatedAgentEnv(agentFiles) {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-subagent-'));
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-subagent-proj-'));
+  const agentsDir = path.join(tmpHome, 'agents');
+  fs.mkdirSync(agentsDir, { recursive: true });
+  for (const [filename, content] of Object.entries(agentFiles)) {
+    fs.writeFileSync(path.join(agentsDir, filename), content);
+  }
+  return { tmpHome, tmpProj };
+}
+
+function withIsolatedEnv(tmpHome, fn) {
+  const saved = {
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CAPABILITY_PLATFORM: process.env.CAPABILITY_PLATFORM,
+    OPENCLAW_USER_DIR: process.env.OPENCLAW_USER_DIR,
+    HERMES_USER_DIR: process.env.HERMES_USER_DIR,
+  };
+  process.env.CLAUDE_USER_DIR = tmpHome;
+  process.env.CAPABILITY_PLATFORM = 'claude';
+  process.env.OPENCLAW_USER_DIR = path.join(tmpHome, 'openclaw-empty');
+  process.env.HERMES_USER_DIR = path.join(tmpHome, 'hermes-empty');
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test('resolveRouteDecision: subagent routing — 写测试 → tester', () => {
+  const { tmpHome, tmpProj } = makeIsolatedAgentEnv({
+    'tester.md': '---\nname: tester\ndescription: 写测试 补测试 测试覆盖 TDD testing unit-test\n---\n',
+  });
+  try {
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = withIsolatedEnv(tmpHome, () =>
+      rrd(JSON.stringify({ prompt: '写测试', cwd: tmpProj }))
+    );
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.targetType, 'subagent');
+    assert.equal(decision.explain.targetName, 'tester');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: subagent routing — 做架构设计 → architect', () => {
+  const { tmpHome, tmpProj } = makeIsolatedAgentEnv({
+    'architect.md': '---\nname: architect\ndescription: 高层设计 架构设计 写 spec 出 plan 分析需求 architecture design system\n---\n',
+  });
+  try {
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = withIsolatedEnv(tmpHome, () =>
+      rrd(JSON.stringify({ prompt: '做架构设计', cwd: tmpProj }))
+    );
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.targetType, 'subagent');
+    assert.equal(decision.explain.targetName, 'architect');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
+// ─── 回归：备份数据库 不误推 mvp-scaffold ──────────────────────────────────────
+
+test('resolveRouteDecision: 备份数据库 does not false-positive to mvp-scaffold', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-regression-backup-'));
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-regression-backup-proj-'));
+  const savedVars = {
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CAPABILITY_PLATFORM: process.env.CAPABILITY_PLATFORM,
+    OPENCLAW_USER_DIR: process.env.OPENCLAW_USER_DIR,
+    HERMES_USER_DIR: process.env.HERMES_USER_DIR,
+  };
+  try {
+    const skillDir = path.join(tmpHome, 'skills', 'mvp-scaffold');
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'SKILL.md'),
+      '---\nname: mvp-scaffold\ndescription: Next.js MVP scaffold init database schema setup Supabase\n---\n'
+    );
+    process.env.CLAUDE_USER_DIR = tmpHome;
+    process.env.CAPABILITY_PLATFORM = 'claude';
+    process.env.OPENCLAW_USER_DIR = path.join(tmpHome, 'openclaw-empty');
+    process.env.HERMES_USER_DIR = path.join(tmpHome, 'hermes-empty');
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = rrd(JSON.stringify({ prompt: '备份数据库', cwd: tmpProj }));
+    const matched = decision.explain.action === 'route' ? decision.explain.targetName : null;
+    assert.notEqual(matched, 'mvp-scaffold', '备份数据库 must not route to mvp-scaffold');
+  } finally {
+    for (const [k, v] of Object.entries(savedVars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});

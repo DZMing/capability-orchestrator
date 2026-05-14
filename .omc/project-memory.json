@@ -1,0 +1,133 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1778801504317,
+  "projectRoot": "/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=18",
+        "confidence": "high",
+        "markers": ["package.json"]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "npm",
+    "runtime": "Node.js 18"
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": "npm test",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {
+      "test": "node --test tests/scan.test.cjs tests/scan-text.test.cjs tests/scan-mcp.test.cjs tests/scan-plugins.test.cjs tests/scan-host-skills.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-keywords.test.cjs tests/route-scoring.test.cjs tests/route-output.test.cjs tests/route-logger.test.cjs tests/route-corpus.test.cjs tests/intent-classifier.test.cjs tests/safety-gate.test.cjs tests/prompt-composer.test.cjs tests/preference-profile.test.cjs tests/work-context.test.cjs tests/intent-router.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
+      "test:install": "bash tests/install.test.sh",
+      "test:idempotent": "bash tests/install-idempotent.test.sh",
+      "test:all": "npm test && npm run test:install && npm run test:idempotent",
+      "verify:live:claude": "node scripts/live-verify.cjs --platform claude",
+      "verify:live:codex": "node scripts/live-verify.cjs --platform codex",
+      "verify:host:hermes": "node scripts/verify-hermes-adapter.cjs",
+      "verify:host:lifecycle": "node scripts/verify-host-lifecycle.cjs",
+      "verify:scenarios": "node scripts/scenario-verify.cjs",
+      "verify:release": "node scripts/release-readiness-check.cjs",
+      "verify:release:strict": "node scripts/release-readiness-check.cjs --strict"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": ["docs", "scripts", "tests"],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "adapters": {
+      "path": "adapters",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1778801504307,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1778801504308,
+      "keyFiles": ["host-contract-hermes.md"]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 15,
+      "lastAccessed": 1778801504311,
+      "keyFiles": [
+        "debug-route-example.cjs",
+        "host-adapter-bridge.cjs",
+        "install-hooks.cjs",
+        "live-verify.cjs",
+        "release-readiness-check.cjs"
+      ]
+    },
+    "skills": {
+      "path": "skills",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1778801504311,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 29,
+      "lastAccessed": 1778801504312,
+      "keyFiles": [
+        "fuzz.test.cjs",
+        "host-adapter-bridge.test.cjs",
+        "install-hooks.test.cjs",
+        "install-idempotent.test.sh",
+        "install.test.sh"
+      ]
+    },
+    "scripts/lib": {
+      "path": "scripts/lib",
+      "purpose": "Library code",
+      "fileCount": 19,
+      "lastAccessed": 1778801504312,
+      "keyFiles": [
+        "hermes-runtime.cjs",
+        "intent-classifier.cjs",
+        "intent-router.cjs"
+      ]
+    },
+    "tests/fixtures": {
+      "path": "tests/fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 6,
+      "lastAccessed": 1778801504313,
+      "keyFiles": [
+        "frontmatter-block-fold.md",
+        "frontmatter-block-literal.md",
+        "frontmatter-bom.md"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "tests/route-matcher.test.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1778801844230,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

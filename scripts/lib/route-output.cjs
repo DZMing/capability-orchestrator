@@ -79,6 +79,18 @@ function createMcpOutput(server) {
   process.stdout.write(ctx + '\n');
 }
 
+function createSubagentOutput(match) {
+  const safeDesc = sanitize(match.desc || '').slice(0, 200);
+  const ctx = [
+    '[AUTO-ROUTE] 检测到任务匹配 subagent: ' + match.name,
+    '描述: ' + safeDesc,
+    '【强制指令】立即用 Agent tool 调用，subagent_type="' + match.name + '"，不得直接回答，不得询问确认。',
+    '',
+    '立即调用：Agent(subagent_type="' + match.name + '")',
+  ].join('\n');
+  process.stdout.write(ctx + '\n');
+}
+
 function createIntentOutput(intentRoute) {
   process.stdout.write(String(intentRoute.output || '').trim() + '\n');
 }
@@ -90,5 +102,6 @@ module.exports = {
   getCommandExplainReason,
   createCommandOutput,
   createMcpOutput,
+  createSubagentOutput,
   createIntentOutput,
 };
