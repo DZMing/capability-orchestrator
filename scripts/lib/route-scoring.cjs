@@ -6,9 +6,19 @@ const {
   _tokenizeStemmed,
 } = require('./route-keywords.cjs');
 
-const MIN_KEYWORD_OVERLAP = 2;
-const MIN_CONFIDENCE = 0.3;
-const SHORT_SINGLE_KEYWORD_LEN = 20;
+function envNum(name, def) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return def;
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 ? v : def;
+}
+
+const MIN_KEYWORD_OVERLAP = envNum('CO_MIN_KEYWORD_OVERLAP', 2);
+const MIN_CONFIDENCE = envNum('CO_MIN_CONFIDENCE', 0.3);
+const SHORT_SINGLE_KEYWORD_LEN = envNum('CO_SHORT_SINGLE_KEYWORD_LEN', 20);
+const UNMATCHED_PENALTY = envNum('CO_UNMATCHED_PENALTY', 0.15);
+const UNMATCHED_IDF_WEIGHT = envNum('CO_UNMATCHED_IDF_WEIGHT', 0);
+const TOP_N_CANDIDATES = envNum('CO_TOP_N_CANDIDATES', 3);
 
 function findBestMatch(prompt, skills) {
   if (!prompt || !skills || skills.length === 0) return null;
@@ -38,10 +48,7 @@ function findBestMatch(prompt, skills) {
     return { skill, kwSet, nameSet, stemmedSkillKw, stemmedNameKw };
   });
 
-  let best = null;
-  let bestScore = 0;
-  let bestOverlap = 0;
-  let bestMatchedKeywords = [];
+  const candidates = [];
   for (const { skill, kwSet, nameSet, stemmedSkillKw, stemmedNameKw } of skillData) {
     const stemmedMatched = promptRaw.filter(k => stemmedSkillKw.has(k));
     let overlap = stemmedMatched.length;
@@ -72,18 +79,63 @@ function findBestMatch(prompt, skills) {
       if (nameSet.has(k)) w *= 2;
       score += w;
     }
+    // base bonus: 防止 N=1（单 skill 测试）时 idf=0 退化
+    score += matched.length * 0.05;
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestOverlap = overlap;
-      best = skill;
-      bestMatchedKeywords = [...new Set(matched)];
+    // A.1 负向惩罚：prompt 出现但 skill desc 缺失的 CJK 主题词
+    const unmatchedTopicKw = scorablePromptKw.filter(
+      k => !kwSet.has(k) && k.length >= 2 && CJK_RANGE.test(k)
+    );
+    let penalty = 0;
+    for (const k of unmatchedTopicKw) {
+      penalty += UNMATCHED_PENALTY;
+      if (UNMATCHED_IDF_WEIGHT > 0) {
+        const idf = Math.log(N / (df.get(k) || 1));
+        penalty += Math.max(idf, 0.5) * UNMATCHED_IDF_WEIGHT;
+      }
     }
+    score -= penalty;
+
+    candidates.push({
+      skill,
+      score,
+      overlap,
+      kwSetSize: kwSet.size,
+      matched: [...new Set(matched)],
+      unmatchedPenalty: penalty,
+      unmatchedTopicKw,
+    });
   }
-  if (!best) return null;
+  if (candidates.length === 0) return null;
+
+  // A.2 平局打破：score → overlap → 更聚焦（kwSetSize 小）
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+    return a.kwSetSize - b.kwSetSize;
+  });
+  const winner = candidates[0];
+  if (winner.score <= 0) return null;
+
   const rawPromptLen = Math.max(promptRaw.length, 1);
-  const conf = Math.min(bestOverlap / rawPromptLen, 1);
-  return { ...best, confidence: conf, matchedKeywords: bestMatchedKeywords };
+  const conf = Math.min(winner.overlap / rawPromptLen, 1);
+
+  // B.1 Top-N 候选透传
+  const topCandidates = candidates.slice(0, TOP_N_CANDIDATES).map(c => ({
+    name: c.skill.name,
+    score: Number(c.score.toFixed(3)),
+    overlap: c.overlap,
+    matchedKeywords: c.matched,
+    unmatchedPenalty: Number(c.unmatchedPenalty.toFixed(3)),
+  }));
+
+  return {
+    ...winner.skill,
+    confidence: conf,
+    matchedKeywords: winner.matched,
+    topCandidates,
+    unmatchedTopicKw: winner.unmatchedTopicKw,
+  };
 }
 
 function findBestMcpMatch(prompt, servers) {
@@ -96,4 +148,9 @@ module.exports = {
   findBestMatch,
   findBestMcpMatch,
   MIN_CONFIDENCE,
+  MIN_KEYWORD_OVERLAP,
+  SHORT_SINGLE_KEYWORD_LEN,
+  UNMATCHED_PENALTY,
+  UNMATCHED_IDF_WEIGHT,
+  TOP_N_CANDIDATES,
 };

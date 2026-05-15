@@ -17,6 +17,12 @@ const OWNED_MARKERS = {
     'capability-orchestrator/scripts/route-matcher.cmd',
     'capability-orchestrator\\scripts\\route-matcher.cmd',
   ],
+  postToolUse: [
+    'CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use',
+    'capability-orchestrator/scripts/post-tool-feedback.cjs',
+    'capability-orchestrator/scripts/post-tool-feedback.cmd',
+    'capability-orchestrator\\scripts\\post-tool-feedback.cmd',
+  ],
 };
 
 function matchesMarkers(command = '', markers = []) {
@@ -61,7 +67,7 @@ function registerHookEntry(entries, cmd, statusMessage, markers) {
   return next;
 }
 
-function claudeInstall(file, scanCmd, routeCmd) {
+function claudeInstall(file, scanCmd, routeCmd, postToolCmd) {
   const settings = readJsonFile(file);
   if (!settings.hooks) settings.hooks = {};
   const hadSession = (settings.hooks.SessionStart || []).some((entry) =>
@@ -69,6 +75,9 @@ function claudeInstall(file, scanCmd, routeCmd) {
   );
   const hadRoute = (settings.hooks.UserPromptSubmit || []).some((entry) =>
     entry.hooks && entry.hooks.some((hook) => hook.command && matchesMarkers(hook.command, OWNED_MARKERS.userPromptSubmit))
+  );
+  const hadPostTool = (settings.hooks.PostToolUse || []).some((entry) =>
+    entry.hooks && entry.hooks.some((hook) => hook.command && matchesMarkers(hook.command, OWNED_MARKERS.postToolUse))
   );
   settings.hooks.SessionStart = registerHookEntry(
     settings.hooks.SessionStart,
@@ -98,11 +107,28 @@ function claudeInstall(file, scanCmd, routeCmd) {
       }
     }
   }
+  if (postToolCmd) {
+    settings.hooks.PostToolUse = registerHookEntry(
+      settings.hooks.PostToolUse,
+      postToolCmd,
+      undefined,
+      OWNED_MARKERS.postToolUse,
+    );
+    for (const entry of settings.hooks.PostToolUse) {
+      if (!entry.hooks) continue;
+      for (const hook of entry.hooks) {
+        if (hook.command && matchesMarkers(hook.command, OWNED_MARKERS.postToolUse)) {
+          hook.timeout = 3;
+        }
+      }
+    }
+  }
 
   writeJsonFile(file, settings);
   return {
     sessionStatus: hadSession ? 'updated' : 'added',
     routeStatus: hadRoute ? 'updated' : 'added',
+    postToolStatus: postToolCmd ? (hadPostTool ? 'updated' : 'added') : 'skipped',
   };
 }
 
@@ -111,13 +137,15 @@ function claudeUninstall(file) {
   if (!settings.hooks) settings.hooks = {};
   settings.hooks.SessionStart = cleanEntryArray(settings.hooks.SessionStart, OWNED_MARKERS.sessionStart);
   settings.hooks.UserPromptSubmit = cleanEntryArray(settings.hooks.UserPromptSubmit, OWNED_MARKERS.userPromptSubmit);
+  settings.hooks.PostToolUse = cleanEntryArray(settings.hooks.PostToolUse, OWNED_MARKERS.postToolUse);
   if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
   if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
+  if (settings.hooks.PostToolUse.length === 0) delete settings.hooks.PostToolUse;
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   writeJsonFile(file, settings);
 }
 
-function codexInstall(file, scanCmd, routeCmd) {
+function codexInstall(file, scanCmd, routeCmd, postToolCmd) {
   const hooksConfig = readJsonFile(file);
   if (!hooksConfig.hooks) hooksConfig.hooks = {};
   hooksConfig.hooks.SessionStart = registerHookEntry(
@@ -132,6 +160,14 @@ function codexInstall(file, scanCmd, routeCmd) {
     'Routing prompt...',
     OWNED_MARKERS.userPromptSubmit,
   );
+  if (postToolCmd) {
+    hooksConfig.hooks.PostToolUse = registerHookEntry(
+      hooksConfig.hooks.PostToolUse,
+      postToolCmd,
+      'Recording feedback...',
+      OWNED_MARKERS.postToolUse,
+    );
+  }
   writeJsonFile(file, hooksConfig);
 }
 
@@ -142,6 +178,7 @@ function codexUninstall(file) {
     hooksConfig.hooks[key] = cleanEntryArray(hooksConfig.hooks[key], [
       ...OWNED_MARKERS.sessionStart,
       ...OWNED_MARKERS.userPromptSubmit,
+      ...OWNED_MARKERS.postToolUse,
     ]);
   }
   hooksConfig.hooks = Object.fromEntries(
@@ -172,15 +209,16 @@ function main() {
   const file = args.file;
   const scanCmd = args['scan-cmd'] || '';
   const routeCmd = args['route-cmd'] || '';
+  const postToolCmd = args['post-tool-cmd'] || '';
 
   if (!mode || !file) {
-    console.error('Usage: install-hooks.cjs --mode <claude-install|claude-uninstall|codex-install|codex-uninstall> --file <path> [--scan-cmd ...] [--route-cmd ...]');
+    console.error('Usage: install-hooks.cjs --mode <claude-install|claude-uninstall|codex-install|codex-uninstall> --file <path> [--scan-cmd ...] [--route-cmd ...] [--post-tool-cmd ...]');
     process.exit(2);
   }
 
   if (mode === 'claude-install') {
-    const { sessionStatus, routeStatus } = claudeInstall(file, scanCmd, routeCmd);
-    process.stdout.write(JSON.stringify({ sessionStatus, routeStatus }));
+    const result = claudeInstall(file, scanCmd, routeCmd, postToolCmd);
+    process.stdout.write(JSON.stringify(result));
     return;
   }
   if (mode === 'claude-uninstall') {
@@ -188,7 +226,7 @@ function main() {
     return;
   }
   if (mode === 'codex-install') {
-    codexInstall(file, scanCmd, routeCmd);
+    codexInstall(file, scanCmd, routeCmd, postToolCmd);
     return;
   }
   if (mode === 'codex-uninstall') {

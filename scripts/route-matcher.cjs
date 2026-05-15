@@ -58,12 +58,19 @@ const {
 } = require('./lib/route-output.cjs');
 
 const STDIN_TIMEOUT = 3000;
-const MIN_PROMPT_LEN = 5;
+function envNum(name, def) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return def;
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 ? v : def;
+}
+const MIN_PROMPT_LEN = envNum('CO_MIN_PROMPT_LEN', 5);
 
 const ESCAPE_PATTERNS = ['直接做', '直接执行', '直接回答', '不要用skill', '不用skill', 'skip'];
 const EXPLAIN_META_FIELDS = [
   'host', 'source', 'scope', 'surfaceType', 'invocation',
   'transport', 'authRequired', 'mayWrite', 'externalAccess',
+  'topCandidates', 'unmatchedTopicKw',
 ];
 
 function resolveUserDir() {
@@ -288,6 +295,7 @@ function pickExplainMeta(match) {
 }
 
 function buildExplainResult({ action, reason, targetType = null, targetName = null, confidence = 0, matchedKeywords = [], cwd = '', userDirSource = '', prompt = '', match = null }) {
+  const promptText = String(prompt || '');
   return {
     action,
     reason,
@@ -297,7 +305,8 @@ function buildExplainResult({ action, reason, targetType = null, targetName = nu
     matchedKeywords,
     cwd,
     userDirSource,
-    promptType: classifyPromptType(prompt, reason),
+    promptType: classifyPromptType(promptText, reason),
+    promptPreview: promptText.slice(0, 200),
     ...pickExplainMeta(match),
   };
 }

@@ -11,7 +11,11 @@ const LOG_FIELDS = [
   'confidence', 'matchedKeywords', 'cwd', 'userDirSource',
   'promptType', 'host', 'source', 'scope', 'surfaceType', 'invocation',
   'transport', 'authRequired', 'mayWrite', 'externalAccess',
+  'topCandidates', 'unmatchedTopicKw', 'adopted', 'promptPreview',
 ];
+const MAX_TOP_CANDIDATES = 5;
+const MAX_UNMATCHED_KW = 8;
+const PROMPT_PREVIEW_LEN = 120;
 
 function getLogDir() {
   // 优先使用平台插件数据目录（插件更新后内容保留）
@@ -27,6 +31,10 @@ function getLogDir() {
 
 function getLogPath() {
   return path.join(getLogDir(), 'route-log.jsonl');
+}
+
+function getFeedbackPath() {
+  return path.join(getLogDir(), 'route-feedback.jsonl');
 }
 
 function rotateIfNeeded(logPath) {
@@ -58,6 +66,27 @@ function normalizeLogEntry(explain) {
     entry.matchedKeywords = entry.matchedKeywords
       .map((item) => String(item).slice(0, 80))
       .slice(0, 12);
+  }
+  if (Array.isArray(entry.topCandidates)) {
+    entry.topCandidates = entry.topCandidates
+      .slice(0, MAX_TOP_CANDIDATES)
+      .map((c) => ({
+        name: String(c.name || '').slice(0, 80),
+        score: Number(c.score) || 0,
+        overlap: Number(c.overlap) || 0,
+        matchedKeywords: Array.isArray(c.matchedKeywords)
+          ? c.matchedKeywords.map((k) => String(k).slice(0, 40)).slice(0, 8)
+          : [],
+        unmatchedPenalty: Number(c.unmatchedPenalty) || 0,
+      }));
+  }
+  if (Array.isArray(entry.unmatchedTopicKw)) {
+    entry.unmatchedTopicKw = entry.unmatchedTopicKw
+      .map((k) => String(k).slice(0, 40))
+      .slice(0, MAX_UNMATCHED_KW);
+  }
+  if (typeof entry.promptPreview === 'string' && entry.promptPreview.length > PROMPT_PREVIEW_LEN) {
+    entry.promptPreview = entry.promptPreview.slice(0, PROMPT_PREVIEW_LEN) + '…';
   }
   return entry;
 }
@@ -94,7 +123,66 @@ function readLogs() {
   }
   // 按时间排序
   results.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+  // 关联 feedback：在 30s 窗口内匹配 targetName，标记 adopted
+  try {
+    const feedbacks = readFeedback();
+    if (feedbacks.length > 0) joinFeedback(results, feedbacks);
+  } catch { /* fault-open */ }
   return results;
+}
+
+function readFeedback() {
+  const fb = [];
+  try {
+    const lines = fs.readFileSync(getFeedbackPath(), 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try { fb.push(JSON.parse(line)); } catch { /* skip */ }
+    }
+  } catch { /* file doesn't exist */ }
+  return fb;
+}
+
+const FEEDBACK_WINDOW_MS = 30 * 1000;
+
+function joinFeedback(entries, feedbacks) {
+  // 简单关联：route 事件后 30s 内出现的 feedback 视为同一次决策
+  // adopted: 用户实际触发了对应 target；rejected: 用户触发了不同 target
+  for (const e of entries) {
+    if (e.action !== 'route' || !e.ts || !e.targetName) continue;
+    const eMs = new Date(e.ts).getTime();
+    let nearest = null;
+    let nearestDelta = FEEDBACK_WINDOW_MS;
+    for (const f of feedbacks) {
+      if (!f.ts) continue;
+      const fMs = new Date(f.ts).getTime();
+      const delta = fMs - eMs;
+      if (delta < 0 || delta > FEEDBACK_WINDOW_MS) continue;
+      if (delta < nearestDelta) {
+        nearest = f;
+        nearestDelta = delta;
+      }
+    }
+    if (nearest) {
+      e.adopted = nearest.toolTarget === e.targetName;
+      e.feedbackTool = nearest.toolName;
+      e.feedbackTarget = nearest.toolTarget;
+    }
+  }
+}
+
+function appendFeedback(record) {
+  try {
+    const fbPath = getFeedbackPath();
+    fs.mkdirSync(path.dirname(fbPath), { recursive: true });
+    const entry = {
+      ts: new Date().toISOString(),
+      toolName: String(record.toolName || '').slice(0, 80),
+      toolTarget: String(record.toolTarget || '').slice(0, 80),
+    };
+    fs.appendFileSync(fbPath, JSON.stringify(entry) + '\n');
+  } catch {
+    // 故障开放
+  }
 }
 
 function aggregateStats(entries) {
@@ -102,18 +190,24 @@ function aggregateStats(entries) {
     total: entries.length,
     routed: 0,
     passed: 0,
+    adopted: 0,
+    rejected: 0,
     byTargetType: {},
     byReason: {},
     topTargets: {},
     byPromptType: {},
+    topUnmatchedTopics: {},
+    adoptionRate: '0',
     misses: 0,
     confirmationGates: 0,
     lowConfidenceRoutes: 0,
     avgConfidence: 0,
     last24h: 0,
+    last7d: 0,
   };
 
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   let confSum = 0;
 
   for (const e of entries) {
@@ -135,24 +229,44 @@ function aggregateStats(entries) {
       stats.topTargets[e.targetName] = (stats.topTargets[e.targetName] || 0) + 1;
     }
 
+    if (Array.isArray(e.unmatchedTopicKw)) {
+      for (const kw of e.unmatchedTopicKw) {
+        stats.topUnmatchedTopics[kw] = (stats.topUnmatchedTopics[kw] || 0) + 1;
+      }
+    }
+
+    if (e.action === 'route' && e.adopted === true) stats.adopted++;
+    if (e.action === 'route' && e.adopted === false) stats.rejected++;
+
     confSum += e.confidence || 0;
 
-    if (e.ts && new Date(e.ts).getTime() > oneDayAgo) stats.last24h++;
+    if (e.ts) {
+      const t = new Date(e.ts).getTime();
+      if (t > oneDayAgo) stats.last24h++;
+      if (t > sevenDaysAgo) stats.last7d++;
+    }
   }
 
   stats.avgConfidence = entries.length > 0 ? (confSum / entries.length).toFixed(2) : '0';
+  const decided = stats.adopted + stats.rejected;
+  stats.adoptionRate = decided > 0 ? ((stats.adopted / decided) * 100).toFixed(1) : '0';
   return stats;
 }
 
 module.exports = {
   getLogDir,
   getLogPath,
+  getFeedbackPath,
   rotateIfNeeded,
   appendRouteLog,
+  appendFeedback,
   readLogs,
+  readFeedback,
+  joinFeedback,
   aggregateStats,
   normalizeLogEntry,
   MAX_LOG_SIZE,
   MAX_LOG_FILES,
   LOW_CONFIDENCE_ROUTE,
+  FEEDBACK_WINDOW_MS,
 };

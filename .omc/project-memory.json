@@ -8,9 +8,7 @@
         "name": "JavaScript/TypeScript",
         "version": ">=18",
         "confidence": "high",
-        "markers": [
-          "package.json"
-        ]
+        "markers": ["package.json"]
       }
     ],
     "frameworks": [],
@@ -19,7 +17,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -12",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -10",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -45,11 +43,7 @@
   "structure": {
     "isMonorepo": false,
     "workspaces": [],
-    "mainDirectories": [
-      "docs",
-      "scripts",
-      "tests"
-    ],
+    "mainDirectories": ["docs", "scripts", "tests"],
     "gitBranches": {
       "defaultBranch": "master",
       "branchingStrategy": null
@@ -69,9 +63,7 @@
       "purpose": "Documentation",
       "fileCount": 1,
       "lastAccessed": 1778801504308,
-      "keyFiles": [
-        "host-contract-hermes.md"
-      ]
+      "keyFiles": ["host-contract-hermes.md"]
     },
     "scripts": {
       "path": "scripts",
@@ -131,15 +123,99 @@
   },
   "hotPaths": [
     {
+      "path": "scripts/lib/route-logger.cjs",
+      "accessCount": 7,
+      "lastAccessed": 1778805081172,
+      "type": "file"
+    },
+    {
+      "path": "scripts/install-hooks.cjs",
+      "accessCount": 7,
+      "lastAccessed": 1778805298051,
+      "type": "file"
+    },
+    {
       "path": "tests/route-matcher.test.cjs",
+      "accessCount": 6,
+      "lastAccessed": 1778804439946,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/scan-render.cjs",
+      "accessCount": 6,
+      "lastAccessed": 1778805017563,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-keywords.cjs",
       "accessCount": 5,
-      "lastAccessed": 1778802167257,
+      "lastAccessed": 1778804778233,
+      "type": "file"
+    },
+    {
+      "path": "scripts/route-matcher.cjs",
+      "accessCount": 4,
+      "lastAccessed": 1778804847402,
+      "type": "file"
+    },
+    {
+      "path": "install.sh",
+      "accessCount": 4,
+      "lastAccessed": 1778805373433,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-scoring.cjs",
+      "accessCount": 3,
+      "lastAccessed": 1778804842012,
+      "type": "file"
+    },
+    {
+      "path": "tests/install-hooks.test.cjs",
+      "accessCount": 3,
+      "lastAccessed": 1778805427279,
       "type": "file"
     },
     {
       "path": "tests/route-keywords.test.cjs",
       "accessCount": 2,
       "lastAccessed": 1778801891713,
+      "type": "file"
+    },
+    {
+      "path": "scripts/route-stats.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1778804917513,
+      "type": "file"
+    },
+    {
+      "path": "scripts/synonyms.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778804752001,
+      "type": "file"
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "accessCount": 1,
+      "lastAccessed": 1778805022120,
+      "type": "file"
+    },
+    {
+      "path": ".codex-plugin/plugin.json",
+      "accessCount": 1,
+      "lastAccessed": 1778805022442,
+      "type": "file"
+    },
+    {
+      "path": "scripts/post-tool-feedback.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778805096441,
+      "type": "file"
+    },
+    {
+      "path": "tests/post-tool-feedback.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778805472442,
       "type": "file"
     }
   ],

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator/.claude-plugin/hooks.json\"}",
+  "error": "File does not exist. Note: your current working directory is /Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator.",
+  "timestamp": "2026-05-15T00:29:31.426Z",
+  "retry_count": 1
+}

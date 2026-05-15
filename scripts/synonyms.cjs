@@ -113,6 +113,63 @@ const SYNONYM_MAP = new Map([
   ['provision', ['预置', 'setup']],
   ['表结构', ['schema', 'ddl']],
   ['schema', ['表结构', 'ddl', 'database']],
+
+  // ── 容器 / 编排 ──────────────────────────────────────────────────────────
+  ['docker', ['容器', 'container']],
+  ['容器', ['docker', 'container']],
+  ['container', ['docker', '容器']],
+  ['k8s', ['kubernetes', '编排']],
+  ['kubernetes', ['k8s', '编排']],
+  ['编排', ['orchestration', 'k8s', 'kubernetes']],
+  ['helm', ['chart', 'kubernetes']],
+
+  // ── 性能 / 可观测 ────────────────────────────────────────────────────────
+  ['apm', ['性能监控', 'observability', '可观测']],
+  ['observability', ['可观测', 'apm']],
+  ['可观测', ['observability', 'apm']],
+  ['tracing', ['链路追踪', 'trace']],
+  ['trace', ['链路追踪', 'tracing']],
+  ['链路追踪', ['tracing', 'trace']],
+  ['profiling', ['性能剖析', 'profile']],
+  ['profile', ['profiling', '性能剖析']],
+  ['性能剖析', ['profiling', 'profile']],
+  ['metrics', ['指标', 'monitor']],
+  ['指标', ['metrics']],
+
+  // ── 安全 ─────────────────────────────────────────────────────────────────
+  ['漏洞', ['vuln', 'vulnerability', 'cve']],
+  ['vuln', ['漏洞', 'vulnerability']],
+  ['vulnerability', ['漏洞', 'vuln']],
+  ['扫描', ['scan', 'scanning']],
+  ['scan', ['扫描', 'scanning']],
+  ['scanning', ['扫描', 'scan']],
+  ['渗透测试', ['pentest', 'penetration']],
+  ['pentest', ['渗透测试', 'penetration']],
+  ['penetration', ['渗透测试', 'pentest']],
+
+  // ── 数据 / 仓库 / 管道 ───────────────────────────────────────────────────
+  ['etl', ['数据管道', 'pipeline']],
+  ['pipeline', ['数据管道', 'etl']],
+  ['数据管道', ['etl', 'pipeline']],
+  ['warehouse', ['数据仓库', 'dwh']],
+  ['数据仓库', ['warehouse', 'dwh']],
+  ['dwh', ['warehouse', '数据仓库']],
+  ['lake', ['数据湖']],
+  ['数据湖', ['lake', 'datalake']],
+  ['同步', ['sync', 'replication']],
+  ['sync', ['同步', 'replication']],
+  ['replication', ['同步', 'sync']],
+
+  // ── 前端 ─────────────────────────────────────────────────────────────────
+  ['component', ['组件']],
+  ['组件', ['component']],
+  ['state', ['状态管理', 'store']],
+  ['状态管理', ['state', 'store']],
+  ['store', ['state', '状态管理']],
+  ['router', ['路由']],
+  ['路由', ['router', 'routing']],
+  ['ssr', ['服务端渲染']],
+  ['服务端渲染', ['ssr', 'server-side-rendering']],
 ]);
 
 function expandSynonyms(tokens) {

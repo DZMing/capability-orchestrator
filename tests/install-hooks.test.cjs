@@ -33,10 +33,10 @@ test('claudeInstall preserves unrelated hooks and reports added/updated correctl
   }, null, 2));
 
   const first = claudeInstall(file, 'CAPABILITY_ORCHESTRATOR_HOOK=session-start node scan', 'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit node route');
-  assert.deepEqual(first, { sessionStatus: 'added', routeStatus: 'added' });
+  assert.deepEqual(first, { sessionStatus: 'added', routeStatus: 'added', postToolStatus: 'skipped' });
 
   const second = claudeInstall(file, 'CAPABILITY_ORCHESTRATOR_HOOK=session-start node scan2', 'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit node route2');
-  assert.deepEqual(second, { sessionStatus: 'updated', routeStatus: 'updated' });
+  assert.deepEqual(second, { sessionStatus: 'updated', routeStatus: 'updated', postToolStatus: 'skipped' });
 
   const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(settings.hooks.SessionStart.length, 2);
@@ -97,4 +97,61 @@ test('codexInstall and codexUninstall preserve non-owned entries', () => withTem
   hooks = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(hooks.hooks.SessionStart.length, 1);
   assert.equal(hooks.hooks.UserPromptSubmit, undefined);
+}));
+
+test('claudeInstall registers PostToolUse hook with timeout when postToolCmd provided', () => withTempFile((file) => {
+  const result = claudeInstall(
+    file,
+    'CAPABILITY_ORCHESTRATOR_HOOK=session-start node scan',
+    'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit node route',
+    'CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use node post-tool-feedback',
+  );
+  assert.deepEqual(result, { sessionStatus: 'added', routeStatus: 'added', postToolStatus: 'added' });
+
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(settings.hooks.PostToolUse.length, 1);
+  const hook = settings.hooks.PostToolUse[0].hooks[0];
+  assert.ok(hook.command.includes('post-tool-use'));
+  assert.equal(hook.timeout, 3);
+
+  // 二次安装应当 'updated'
+  const second = claudeInstall(
+    file,
+    'CAPABILITY_ORCHESTRATOR_HOOK=session-start node scan',
+    'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit node route',
+    'CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use node post-tool-feedback-v2',
+  );
+  assert.equal(second.postToolStatus, 'updated');
+}));
+
+test('claudeUninstall removes PostToolUse owned hooks', () => withTempFile((file) => {
+  fs.writeFileSync(file, JSON.stringify({
+    hooks: {
+      PostToolUse: [
+        { hooks: [{ type: 'command', command: 'CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use node feedback', timeout: 3 }] },
+        { hooks: [{ type: 'command', command: 'node /unrelated/post-tool.js', timeout: 5 }] },
+      ],
+    },
+  }, null, 2));
+
+  claudeUninstall(file);
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(settings.hooks.PostToolUse.length, 1);
+  assert.ok(settings.hooks.PostToolUse[0].hooks[0].command.includes('/unrelated/post-tool.js'));
+}));
+
+test('codexInstall registers PostToolUse and codexUninstall removes it', () => withTempFile((file) => {
+  codexInstall(
+    file,
+    'CAPABILITY_ORCHESTRATOR_HOOK=session-start node scan',
+    'CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit node route',
+    'CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use node post-tool-feedback',
+  );
+  let hooks = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(hooks.hooks.PostToolUse.length, 1);
+  assert.equal(hooks.hooks.PostToolUse[0].hooks[0].statusMessage, 'Recording feedback...');
+
+  codexUninstall(file);
+  hooks = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(hooks.hooks, undefined);
 }));
