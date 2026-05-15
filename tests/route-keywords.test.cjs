@@ -13,12 +13,14 @@ test('extractKeywords: splits English text', () => {
   const kw = extractKeywords('debug this error now');
   assert.ok(kw.includes('debug'));
   assert.ok(kw.includes('error'));
-  assert.ok(kw.includes('now'));
+  // 'now' is a stop word (time adverb, no routing signal)
+  assert.ok(!kw.includes('now'));
 });
 
 test('extractKeywords: splits Chinese text into individual characters', () => {
   const kw = extractKeywords('调试代码问题');
-  for (const token of ['调', '试', '代', '码', '问', '题']) {
+  // '问题' is now a CJK stop phrase — its chars '问','题' are pre-removed before tokenization
+  for (const token of ['调', '试', '代', '码']) {
     assert.ok(kw.includes(token), `should include ${token}`);
   }
 });
@@ -197,4 +199,33 @@ test('synonym: schema → 表结构 (English to CJK)', () => {
   // CJK→schema 方向：'表结构' 是 3 字符，bigram 只产生'表结'/'结构'，不产生完整词
   // 仅英文→CJK 方向可通过同义词扩展到达
   assert.ok(extractKeywords('database schema').includes('表结构'), 'schema → 表结构');
+});
+
+// ─── trigram whitelist 测试 ────────────────────────────────────────────────────
+
+test('trigram: 数据库 作为整体 trigram token 输出', () => {
+  const kw = extractKeywords('数据库迁移');
+  assert.ok(kw.includes('数据库'), '数据库 should be in tokens as a trigram');
+});
+
+test('trigram: 微服务 作为整体 trigram token 输出', () => {
+  const kw = extractKeywords('微服务架构设计');
+  assert.ok(kw.includes('微服务'), '微服务 should be in tokens as a trigram');
+});
+
+test('trigram: 区块链 作为整体 trigram token 输出', () => {
+  const kw = extractKeywords('区块链技术');
+  assert.ok(kw.includes('区块链'), '区块链 should be in tokens as a trigram');
+});
+
+test('trigram: _tokenizeStemmed 也产出 trigram', () => {
+  const tokens = _tokenizeStemmed('云原生部署方案');
+  assert.ok(tokens.includes('云原生'), '云原生 should appear in stemmed tokens');
+});
+
+test('trigram: 大数据 trigram 不影响 bigram 生成', () => {
+  const kw = extractKeywords('大数据分析');
+  assert.ok(kw.includes('大数据'), '大数据 trigram hit');
+  // bigram 也应保留
+  assert.ok(kw.includes('数据') || kw.includes('大数'), 'bigram also present');
 });

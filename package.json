@@ -3,7 +3,7 @@
   "version": "2.0.1",
   "description": "Auto-routing plugin for Claude Code and Codex — intent routing, capability hints, and confirmation gates for skills, commands, and MCP metadata",
   "scripts": {
-    "test": "node --test tests/scan.test.cjs tests/scan-text.test.cjs tests/scan-mcp.test.cjs tests/scan-plugins.test.cjs tests/scan-host-skills.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-keywords.test.cjs tests/route-scoring.test.cjs tests/route-output.test.cjs tests/route-logger.test.cjs tests/route-corpus.test.cjs tests/intent-classifier.test.cjs tests/safety-gate.test.cjs tests/prompt-composer.test.cjs tests/preference-profile.test.cjs tests/work-context.test.cjs tests/intent-router.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
+    "test": "node --test tests/scan.test.cjs tests/scan-text.test.cjs tests/scan-mcp.test.cjs tests/scan-plugins.test.cjs tests/scan-host-skills.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-keywords.test.cjs tests/route-scoring.test.cjs tests/route-output.test.cjs tests/route-logger.test.cjs tests/route-corpus.test.cjs tests/scan-render.test.cjs tests/route-regression.test.cjs tests/route-invariants.test.cjs tests/intent-classifier.test.cjs tests/safety-gate.test.cjs tests/prompt-composer.test.cjs tests/preference-profile.test.cjs tests/work-context.test.cjs tests/intent-router.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
     "test:install": "bash tests/install.test.sh",
     "test:idempotent": "bash tests/install-idempotent.test.sh",
     "test:all": "npm test && npm run test:install && npm run test:idempotent",
@@ -13,7 +13,8 @@
     "verify:host:lifecycle": "node scripts/verify-host-lifecycle.cjs",
     "verify:scenarios": "node scripts/scenario-verify.cjs",
     "verify:release": "node scripts/release-readiness-check.cjs",
-    "verify:release:strict": "node scripts/release-readiness-check.cjs --strict"
+    "verify:release:strict": "node scripts/release-readiness-check.cjs --strict",
+    "verify:routing": "node --test tests/route-corpus.test.cjs tests/route-regression.test.cjs tests/route-invariants.test.cjs"
   },
   "keywords": [
     "claude-code",

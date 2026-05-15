@@ -170,6 +170,55 @@ const SYNONYM_MAP = new Map([
   ['路由', ['router', 'routing']],
   ['ssr', ['服务端渲染']],
   ['服务端渲染', ['ssr', 'server-side-rendering']],
+
+  // ── AI / ML ──────────────────────────────────────────────────────────────
+  ['embedding', ['向量', '嵌入', 'vector']],
+  ['向量', ['embedding', '嵌入', 'vector']],
+  ['嵌入', ['embedding', '向量']],
+  ['vector', ['向量', 'embedding']],
+  ['llm', ['大模型', 'ai', '语言模型']],
+  ['大模型', ['llm', 'ai', '语言模型']],
+  ['语言模型', ['llm', '大模型']],
+  ['rag', ['检索增强', '向量检索', '知识库']],
+  ['检索增强', ['rag', '向量检索']],
+  ['微调', ['fine-tune', 'finetune', 'training']],
+  ['fine-tune', ['微调', 'finetune']],
+  ['finetune', ['微调', 'fine-tune']],
+  ['推理', ['inference', 'infer']],
+  ['inference', ['推理', 'infer']],
+  ['prompt', ['提示词', 'prompting']],
+  ['提示词', ['prompt', 'prompting']],
+
+  // ── 移动端 ────────────────────────────────────────────────────────────────
+  ['ios', ['苹果', 'iphone', 'swift', 'apple']],
+  ['苹果', ['ios', 'apple', 'iphone']],
+  ['android', ['安卓', 'kotlin']],
+  ['安卓', ['android', 'kotlin']],
+  ['flutter', ['跨端', 'dart']],
+  ['跨端', ['flutter', 'react-native', 'rn']],
+  ['react-native', ['rn', 'mobile', '移动端']],
+  ['rn', ['react-native', 'mobile', '移动端']],
+  ['移动端', ['ios', 'android', 'flutter', 'mobile']],
+  ['mobile', ['移动端', '移动']],
+
+  // ── CI / CD ───────────────────────────────────────────────────────────────
+  ['流水线', ['pipeline', 'ci', 'cicd']],
+  ['ci', ['cicd', 'pipeline', '持续集成', '流水线']],
+  ['cicd', ['ci', '持续集成', '持续交付', 'pipeline']],
+  ['持续集成', ['ci', 'cicd']],
+  ['持续交付', ['cd', 'cicd']],
+  ['workflow', ['工作流', 'action', 'runner']],
+  ['工作流', ['workflow', 'action']],
+  ['action', ['workflow', 'runner', '自动化']],
+
+  // ── API 风格 ──────────────────────────────────────────────────────────────
+  ['graphql', ['gql', 'graph']],
+  ['gql', ['graphql', 'graph']],
+  ['grpc', ['rpc', 'protobuf']],
+  ['rpc', ['grpc', 'protobuf']],
+  ['restful', ['rest', 'api', 'http']],
+  ['接口', ['api', 'interface', 'endpoint']],
+  ['api', ['接口', 'endpoint']],
 ]);
 
 function expandSynonyms(tokens) {

@@ -8,7 +8,9 @@
         "name": "JavaScript/TypeScript",
         "version": ">=18",
         "confidence": "high",
-        "markers": ["package.json"]
+        "markers": [
+          "package.json"
+        ]
       }
     ],
     "frameworks": [],
@@ -17,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -10",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | grep -E \"^ℹ|fail|error\" | head -10 && npm run verify:routing 2>&1 | tail -12",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -43,7 +45,11 @@
   "structure": {
     "isMonorepo": false,
     "workspaces": [],
-    "mainDirectories": ["docs", "scripts", "tests"],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "tests"
+    ],
     "gitBranches": {
       "defaultBranch": "master",
       "branchingStrategy": null
@@ -63,7 +69,9 @@
       "purpose": "Documentation",
       "fileCount": 1,
       "lastAccessed": 1778801504308,
-      "keyFiles": ["host-contract-hermes.md"]
+      "keyFiles": [
+        "host-contract-hermes.md"
+      ]
     },
     "scripts": {
       "path": "scripts",
@@ -124,14 +132,38 @@
   "hotPaths": [
     {
       "path": "scripts/lib/route-logger.cjs",
-      "accessCount": 7,
-      "lastAccessed": 1778805081172,
+      "accessCount": 17,
+      "lastAccessed": 1778809294641,
+      "type": "file"
+    },
+    {
+      "path": "CLAUDE.md",
+      "accessCount": 10,
+      "lastAccessed": 1778810744858,
+      "type": "file"
+    },
+    {
+      "path": "scripts/route-matcher.cjs",
+      "accessCount": 9,
+      "lastAccessed": 1778809271701,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-keywords.cjs",
+      "accessCount": 9,
+      "lastAccessed": 1778809655069,
       "type": "file"
     },
     {
       "path": "scripts/install-hooks.cjs",
-      "accessCount": 7,
-      "lastAccessed": 1778805298051,
+      "accessCount": 8,
+      "lastAccessed": 1778809377990,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/scan-render.cjs",
+      "accessCount": 8,
+      "lastAccessed": 1778810295299,
       "type": "file"
     },
     {
@@ -141,21 +173,27 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/scan-render.cjs",
+      "path": "tests/route-keywords.test.cjs",
       "accessCount": 6,
-      "lastAccessed": 1778805017563,
+      "lastAccessed": 1778809502148,
       "type": "file"
     },
     {
-      "path": "scripts/lib/route-keywords.cjs",
+      "path": "scripts/post-tool-feedback.cjs",
       "accessCount": 5,
-      "lastAccessed": 1778804778233,
+      "lastAccessed": 1778809317053,
       "type": "file"
     },
     {
-      "path": "scripts/route-matcher.cjs",
-      "accessCount": 4,
-      "lastAccessed": 1778804847402,
+      "path": "tests/fixtures/route-corpus.json",
+      "accessCount": 5,
+      "lastAccessed": 1778810124767,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-scoring.cjs",
+      "accessCount": 5,
+      "lastAccessed": 1778810613956,
       "type": "file"
     },
     {
@@ -165,9 +203,9 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/route-scoring.cjs",
-      "accessCount": 3,
-      "lastAccessed": 1778804842012,
+      "path": "scripts/route-stats.cjs",
+      "accessCount": 4,
+      "lastAccessed": 1778809415276,
       "type": "file"
     },
     {
@@ -177,15 +215,27 @@
       "type": "file"
     },
     {
-      "path": "tests/route-keywords.test.cjs",
-      "accessCount": 2,
-      "lastAccessed": 1778801891713,
+      "path": "scripts/scan-environment.cjs",
+      "accessCount": 3,
+      "lastAccessed": 1778809761593,
       "type": "file"
     },
     {
-      "path": "scripts/route-stats.cjs",
+      "path": "package.json",
+      "accessCount": 3,
+      "lastAccessed": 1778810257422,
+      "type": "file"
+    },
+    {
+      "path": "tests/route-corpus.test.cjs",
       "accessCount": 2,
-      "lastAccessed": 1778804917513,
+      "lastAccessed": 1778809992891,
+      "type": "file"
+    },
+    {
+      "path": "tests/scan-render.test.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1778810328985,
       "type": "file"
     },
     {
@@ -207,15 +257,45 @@
       "type": "file"
     },
     {
-      "path": "scripts/post-tool-feedback.cjs",
-      "accessCount": 1,
-      "lastAccessed": 1778805096441,
-      "type": "file"
-    },
-    {
       "path": "tests/post-tool-feedback.test.cjs",
       "accessCount": 1,
       "lastAccessed": 1778805472442,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/debug-log.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778809210207,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/intent-router.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778810016920,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/intent-classifier.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778810024850,
+      "type": "file"
+    },
+    {
+      "path": "tests/route-regression.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778810176631,
+      "type": "file"
+    },
+    {
+      "path": "tests/route-invariants.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778810211635,
+      "type": "file"
+    },
+    {
+      "path": "scripts/route-explain.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1778810377711,
       "type": "file"
     }
   ],

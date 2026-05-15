@@ -242,7 +242,19 @@ if (require.main === module) {
   try {
     main();
   } catch (error) {
-    console.error(error.message);
+    const code = error.code || '';
+    const file = error.path || '';
+    let msg;
+    if (error instanceof SyntaxError) {
+      msg = `settings.json 解析失败：${file || '配置文件'} 格式不合法（可能少了逗号或括号），请用编辑器检查。`;
+    } else if (code === 'EACCES' || code === 'EPERM') {
+      msg = `无写入权限：${file || '目标文件'}。请检查文件归属或用 sudo 重试。`;
+    } else if (code === 'ENOENT') {
+      msg = `目标文件不存在：${file || '未知路径'}。请确认路径正确。`;
+    } else {
+      msg = `hook 注册失败：${error.message}`;
+    }
+    console.error(msg);
     process.exit(1);
   }
 } else {

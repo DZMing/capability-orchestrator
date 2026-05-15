@@ -2,8 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const { debugError } = require('./debug-log.cjs');
 
 const MAX_LOG_SIZE = 1 * 1024 * 1024; // 1MB
+const MAX_FEEDBACK_SIZE = 256 * 1024; // 256KB（够 30s 窗口用，避免高频会话膨胀）
 const MAX_LOG_FILES = 3;
 const LOW_CONFIDENCE_ROUTE = 0.45;
 const LOG_FIELDS = [
@@ -54,6 +56,22 @@ function rotateIfNeeded(logPath) {
   try { fs.renameSync(logPath, logPath + '.0'); } catch { /* ignore */ }
 }
 
+function rotateFeedbackIfNeeded(fbPath) {
+  try {
+    const stat = fs.statSync(fbPath);
+    if (stat.size < MAX_FEEDBACK_SIZE) return;
+  } catch { return; }
+  for (let i = MAX_LOG_FILES - 1; i >= 1; i--) {
+    const older = fbPath + '.' + i;
+    const newer = fbPath + '.' + (i - 1);
+    if (i === MAX_LOG_FILES - 1) {
+      try { fs.unlinkSync(older); } catch { /* ignore */ }
+    }
+    try { fs.renameSync(newer, older); } catch { /* ignore */ }
+  }
+  try { fs.renameSync(fbPath, fbPath + '.0'); } catch { /* ignore */ }
+}
+
 function normalizeLogEntry(explain) {
   const entry = { ts: new Date().toISOString() };
   for (const field of LOG_FIELDS) {
@@ -99,8 +117,8 @@ function appendRouteLog(explain) {
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     const entry = normalizeLogEntry(explain || {});
     fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
-  } catch {
-    // 故障开放：日志写入失败不影响路由
+  } catch (e) {
+    debugError('appendRouteLog', e);
   }
 }
 
@@ -127,7 +145,7 @@ function readLogs() {
   try {
     const feedbacks = readFeedback();
     if (feedbacks.length > 0) joinFeedback(results, feedbacks);
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('readLogs.joinFeedback', e); }
   return results;
 }
 
@@ -145,20 +163,28 @@ function readFeedback() {
 const FEEDBACK_WINDOW_MS = 30 * 1000;
 
 function joinFeedback(entries, feedbacks) {
-  // 简单关联：route 事件后 30s 内出现的 feedback 视为同一次决策
+  // 双指针 O(routes + feedbacks)：entries 和 feedbacks 均按 ts 升序
   // adopted: 用户实际触发了对应 target；rejected: 用户触发了不同 target
+  if (!feedbacks.length) return;
+  let fi = 0;
   for (const e of entries) {
     if (e.action !== 'route' || !e.ts || !e.targetName) continue;
     const eMs = new Date(e.ts).getTime();
+    // 推进 fi 跳过早于当前 route 事件的 feedback（已过期）
+    while (fi < feedbacks.length) {
+      const fMs = new Date(feedbacks[fi].ts || 0).getTime();
+      if (fMs >= eMs) break;
+      fi++;
+    }
+    // 在窗口 [eMs, eMs+FEEDBACK_WINDOW_MS] 内找最近的 feedback
     let nearest = null;
-    let nearestDelta = FEEDBACK_WINDOW_MS;
-    for (const f of feedbacks) {
-      if (!f.ts) continue;
-      const fMs = new Date(f.ts).getTime();
+    let nearestDelta = FEEDBACK_WINDOW_MS + 1;
+    for (let j = fi; j < feedbacks.length; j++) {
+      const fMs = new Date(feedbacks[j].ts || 0).getTime();
       const delta = fMs - eMs;
-      if (delta < 0 || delta > FEEDBACK_WINDOW_MS) continue;
-      if (delta < nearestDelta) {
-        nearest = f;
+      if (delta > FEEDBACK_WINDOW_MS) break;
+      if (delta >= 0 && delta < nearestDelta) {
+        nearest = feedbacks[j];
         nearestDelta = delta;
       }
     }
@@ -171,8 +197,10 @@ function joinFeedback(entries, feedbacks) {
 }
 
 function appendFeedback(record) {
+  if (process.env.CO_DISABLE_FEEDBACK === '1') return;
   try {
     const fbPath = getFeedbackPath();
+    rotateFeedbackIfNeeded(fbPath);
     fs.mkdirSync(path.dirname(fbPath), { recursive: true });
     const entry = {
       ts: new Date().toISOString(),
@@ -180,8 +208,8 @@ function appendFeedback(record) {
       toolTarget: String(record.toolTarget || '').slice(0, 80),
     };
     fs.appendFileSync(fbPath, JSON.stringify(entry) + '\n');
-  } catch {
-    // 故障开放
+  } catch (e) {
+    debugError('appendFeedback', e);
   }
 }
 
@@ -258,6 +286,7 @@ module.exports = {
   getLogPath,
   getFeedbackPath,
   rotateIfNeeded,
+  rotateFeedbackIfNeeded,
   appendRouteLog,
   appendFeedback,
   readLogs,
@@ -266,6 +295,7 @@ module.exports = {
   aggregateStats,
   normalizeLogEntry,
   MAX_LOG_SIZE,
+  MAX_FEEDBACK_SIZE,
   MAX_LOG_FILES,
   LOW_CONFIDENCE_ROUTE,
   FEEDBACK_WINDOW_MS,

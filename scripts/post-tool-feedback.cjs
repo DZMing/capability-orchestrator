@@ -57,6 +57,10 @@ function extractToolInfo(input) {
 }
 
 async function main() {
+  if (process.env.CO_DISABLE_FEEDBACK === '1') {
+    process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
+    return;
+  }
   const input = await readStdin(STDIN_TIMEOUT);
   const { toolName, toolTarget } = extractToolInfo(input);
   // 仅记录可关联的 tool 调用
@@ -72,7 +76,9 @@ async function main() {
   try {
     const { appendFeedback } = require('./lib/route-logger.cjs');
     appendFeedback({ toolName, toolTarget });
-  } catch { /* fault-open */ }
+  } catch (e) {
+    try { require('./lib/debug-log.cjs').debugError('postToolFeedback', e); } catch { /* never throw */ }
+  }
   process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + '\n');
 }
 

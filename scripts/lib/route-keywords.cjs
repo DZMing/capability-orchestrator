@@ -39,7 +39,20 @@ const STOP_WORDS = new Set([
   '让', '给', '用', '下', '被', '得', '还', '那', '些', '吧',
   '帮', '帮我', '请', '想',
   '功能', '系统', '工具', '服务',
+  // E.2: 礼貌/语气词（英文）
+  'please', 'thanks', 'thank', 'now', 'today', 'help', 'want', 'need',
+  'make', 'get', 'use', 'here', 'there', 'really', 'actually', 'kind', 'sort',
+  // E.2: 礼貌/虚词（中文）— 也作为 bigram 白名单外的过滤基础
+  '麻烦', '谢谢', '现在', '可以', '需要', '给我', '一下', '看看', '试试',
+  '这个', '那个', '东西', '事情', '问题',
 ]);
+
+// CJK 多字停用短语 — 分字前从 CJK 串中整体移除，防止停用词分字后残留单字噪音
+// 仅包含礼貌/语气虚词；'服务'/'系统'/'功能'/'工具' 等通用词可能出现在技术词内部，排除在外
+const STOP_PHRASES_CJK_EXCLUDE = new Set(['功能', '系统', '工具', '服务']);
+const STOP_PHRASES_CJK = [...STOP_WORDS].filter(
+  w => w.length >= 2 && CJK_RANGE.test(w) && !STOP_PHRASES_CJK_EXCLUDE.has(w)
+);
 
 // 在 CJK 串中扫描 whitelist trigram（整词命中），返回命中的 3-gram 列表
 function _scanTrigrams(cjkRun) {
@@ -61,10 +74,19 @@ function _tokenizeStemmed(text) {
     if (CJK_RANGE.test(t)) {
       const cjkRuns = t.match(CJK_RUN) || [];
       for (const run of cjkRuns) {
-        const chars = [...run];
+        // 先移除多字停用短语，防止分字后残留噪音单字
+        let r = run;
+        for (const p of STOP_PHRASES_CJK) if (r.includes(p)) r = r.split(p).join('');
+        if (!r) continue;
+        const chars = [...r];
         for (const c of chars) tokens.push(c);
-        for (let i = 0; i < chars.length - 1; i++) tokens.push(chars[i] + chars[i + 1]);
-        for (const tri of _scanTrigrams(run)) tokens.push(tri);
+        for (let i = 0; i < chars.length - 1; i++) {
+        // 两个分量都是停用词则跳过，避免 "这个"/"那个" 等噪音 bigram
+        if (!STOP_WORDS.has(chars[i]) || !STOP_WORDS.has(chars[i + 1])) {
+          tokens.push(chars[i] + chars[i + 1]);
+        }
+      }
+        for (const tri of _scanTrigrams(r)) tokens.push(tri);
       }
     } else {
       tokens.push(t);
@@ -84,10 +106,19 @@ function extractKeywords(text) {
     if (CJK_RANGE.test(t)) {
       const cjkRuns = t.match(CJK_RUN) || [];
       for (const run of cjkRuns) {
-        const chars = [...run];
+        // 先移除多字停用短语，防止分字后残留噪音单字
+        let r = run;
+        for (const p of STOP_PHRASES_CJK) if (r.includes(p)) r = r.split(p).join('');
+        if (!r) continue;
+        const chars = [...r];
         for (const c of chars) tokens.push(c);
-        for (let i = 0; i < chars.length - 1; i++) tokens.push(chars[i] + chars[i + 1]);
-        for (const tri of _scanTrigrams(run)) tokens.push(tri);
+        for (let i = 0; i < chars.length - 1; i++) {
+        // 两个分量都是停用词则跳过，避免 "这个"/"那个" 等噪音 bigram
+        if (!STOP_WORDS.has(chars[i]) || !STOP_WORDS.has(chars[i + 1])) {
+          tokens.push(chars[i] + chars[i + 1]);
+        }
+      }
+        for (const tri of _scanTrigrams(r)) tokens.push(tri);
       }
       const nonCjkRuns = t.match(NON_CJK_RUN) || [];
       for (const run of nonCjkRuns) {

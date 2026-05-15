@@ -35,6 +35,7 @@ const {
   getUserAgentsPaths,
 } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
+const { debugError } = require('./lib/debug-log.cjs');
 const { resolveIntentRoute } = require('./lib/intent-router.cjs');
 const {
   extractKeywords,
@@ -137,6 +138,8 @@ function isEscaped(prompt) {
   const lower = prompt.toLowerCase().replace(/\s+/g, '');
   if (ESCAPE_PATTERNS.some(p => lower.includes(p.replace(/\s+/g, '')))) return true;
   if (prompt.trimEnd().endsWith('?') && prompt.length < 15 && !/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(prompt)) return true;
+  // E.4: \u4e2d\u6587\u77ed\u95ee\u53e5 \u22648 \u5b57\u7b26 + \u7591\u95ee\u8bcd \u2192 \u4fe1\u53f7\u592a\u5f31\uff0c\u76f4\u63a5\u653e\u884c
+  if (prompt.length <= 8 && /[\uff1f\u5417\u5462]/.test(prompt) && /[\u4e00-\u9fff]/.test(prompt)) return true;
   return false;
 }
 
@@ -225,7 +228,7 @@ function collectAllSkills(projectDir, userDir) {
     for (const p of scanInstalledPlugins(activeUserDir, [])) {
       for (const s of (p.skillItems || [])) pluginSkills.push(s);
     }
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('scanInstalledPlugins', e); }
 
   // Legacy /commands — 有描述才纳入匹配池，优先级低于 skills
   const legacyCmds = [];
@@ -246,7 +249,7 @@ function collectAllSkills(projectDir, userDir) {
         if (c.desc) legacyCmds.push({ ...c, type: 'command' });
       }
     }
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('scanCommands', e); }
 
   // Subagents — 纳入路由候选池，优先级低于 skills，高于 legacy commands
   const subagents = [];
@@ -261,7 +264,7 @@ function collectAllSkills(projectDir, userDir) {
         ...baseMeta, source: 'user', scope: 'user',
       })) subagents.push({ ...s, type: 'subagent' });
     }
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('scanAgents', e); }
 
   const seen = new Set();
   const deduped = [];
@@ -475,7 +478,7 @@ function _resolveRouteDecisionInner(input) {
         }),
       };
     }
-  } catch { /* fault-open: mcp explain falls through to no-match */ }
+  } catch (e) { debugError('mcpExplain', e); }
 
   return {
     explain: buildExplainResult({

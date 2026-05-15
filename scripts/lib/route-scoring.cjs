@@ -20,7 +20,7 @@ const UNMATCHED_PENALTY = envNum('CO_UNMATCHED_PENALTY', 0.15);
 const UNMATCHED_IDF_WEIGHT = envNum('CO_UNMATCHED_IDF_WEIGHT', 0);
 const TOP_N_CANDIDATES = envNum('CO_TOP_N_CANDIDATES', 3);
 
-function findBestMatch(prompt, skills) {
+function findBestMatch(prompt, skills, options = {}) {
   if (!prompt || !skills || skills.length === 0) return null;
   const promptKw = extractKeywords(prompt);
   if (promptKw.length === 0) return null;
@@ -94,7 +94,7 @@ function findBestMatch(prompt, skills) {
         penalty += Math.max(idf, 0.5) * UNMATCHED_IDF_WEIGHT;
       }
     }
-    score -= penalty;
+    if (!options.skipUnmatchedPenalty) score -= penalty;
 
     candidates.push({
       skill,
@@ -141,7 +141,8 @@ function findBestMatch(prompt, skills) {
 function findBestMcpMatch(prompt, servers) {
   if (!prompt || !servers || servers.length === 0) return null;
   const asMcpSkills = servers.map(s => ({ ...s, name: s.name, desc: s.desc || '' }));
-  return findBestMatch(prompt, asMcpSkills);
+  // MCP desc 通常极短，跳过主题词惩罚避免兜底失效
+  return findBestMatch(prompt, asMcpSkills, { skipUnmatchedPenalty: true });
 }
 
 module.exports = {
