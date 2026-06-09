@@ -49,6 +49,34 @@ test('createOutput: active OpenClaw host uses /skill invocation for skills', () 
   }
 });
 
+test('createOutput: topCandidates 注入备选行（排除主选，至多 2 个）', () => {
+  const captured = captureStdout(() => {
+    createOutput({
+      name: 'main-skill',
+      desc: 'primary match',
+      topCandidates: [
+        { name: 'main-skill', score: 1.2 },
+        { name: 'alt-one', score: 0.8 },
+        { name: 'alt-two', score: 0.5 },
+        { name: 'alt-three', score: 0.3 },
+      ],
+    });
+  });
+  assert.ok(captured.includes('备选'), '应包含备选提示行');
+  assert.ok(captured.includes('/alt-one'), '第 1 备选可调用形式');
+  assert.ok(captured.includes('/alt-two'), '第 2 备选可调用形式');
+  assert.ok(!captured.includes('alt-three'), '备选至多 2 个');
+  assert.ok(captured.includes('立即调用：/main-skill'), '主选强制指令保持不变');
+});
+
+test('createOutput: 无 topCandidates 时不输出备选行', () => {
+  const captured = captureStdout(() => {
+    createOutput({ name: 'solo-skill', desc: 'only match' });
+  });
+  assert.ok(!captured.includes('备选'));
+  assert.ok(captured.includes('立即调用：/solo-skill'));
+});
+
 test('createCommandOutput: outputs safe slash command route', () => {
   const captured = captureStdout(() => {
     createCommandOutput({ name: 'commit', desc: 'Create well-formatted commits', filePath: null });
