@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"/Users/zhimingdeng/Documents/自动命令插件\\\" && git add capability-orchestrator/scripts/lib/safety-gate.cjs capability-orchestrator/tests/safety-gate.test.cjs && git commit -m \\\"fix(safety-g...",
-  "error": "Exit code 128\n致命错误：路径规格 'capability-orchestrator/scripts/lib/safety-gate.cjs' 在子模组 'capability-orchestrator' 中",
-  "timestamp": "2026-06-09T22:10:51.378Z",
+  "tool_input_preview": "{\"command\":\"cd \\\"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\\\" && gh pr create --base master --head codex/smart-routing-v3 --title \\\"feat: 智能路由 P1 优化 — 能力注入放量 + 误判修复 + skill 优先级调整\\\" --...",
+  "error": "Exit code 1\na pull request for branch \"codex/smart-routing-v3\" into branch \"master\" already exists:\nhttps://github.com/DZMing/capability-orchestrator/pull/8",
+  "timestamp": "2026-06-09T22:31:25.113Z",
   "retry_count": 1
 }
