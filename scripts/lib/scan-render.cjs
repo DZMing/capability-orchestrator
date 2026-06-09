@@ -2,11 +2,22 @@
 
 const { truncate } = require('./scan-core.cjs');
 
-const MAX_TOTAL_CHARS = 5000;
-const TOP_N = 15;
-const AWARENESS_MCP_DESC = 80;
-const AWARENESS_AGENT_DESC = 60;
-const AWARENESS_SKILL_DESC = 40;
+// P1 预算放开：desc 携带触发词 = 路由信号，截太狠会让模型不知道能力何时可用。
+// 默认 12000 字符（约 3000 tokens）；env 运行时可调，便于低预算环境收紧。
+const DEFAULT_MAX_TOTAL_CHARS = 12000;
+const DEFAULT_TOP_N = 40;
+
+function envNum(name, fallback) {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
+function maxTotalChars() { return envNum('CO_AWARENESS_MAX_CHARS', DEFAULT_MAX_TOTAL_CHARS); }
+function topN() { return envNum('CO_AWARENESS_TOP_N', DEFAULT_TOP_N); }
+
+const AWARENESS_MCP_DESC = 120;
+const AWARENESS_AGENT_DESC = 100;
+const AWARENESS_SKILL_DESC = 120;
 const ROUTING_HINT_MIN_SAMPLES = 10;
 const ROUTING_HINT_MAX_CHARS = 280;
 
@@ -52,11 +63,12 @@ const BUILTINS_COMPACT = '内置 24 个（/help 查看）';
 
 function renderSection(section, level) {
   const { label, prefix, items } = section;
+  const cap = topN();
   if (level >= 4) return `### ${label}\n${items.length} 个`;
   if (level >= 3) {
-    if (items.length <= TOP_N) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
-    const shown = items.slice(0, TOP_N).map(i => prefix + i.name).join(', ');
-    return `### ${label}\n${shown}, +${items.length - TOP_N} 个`;
+    if (items.length <= cap) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
+    const shown = items.slice(0, cap).map(i => prefix + i.name).join(', ');
+    return `### ${label}\n${shown}, +${items.length - cap} 个`;
   }
   if (level >= 2) return `### ${label}\n${items.map(i => prefix + i.name).join(', ')}`;
   const descMax = level >= 1 ? 50 : 100;
@@ -99,14 +111,15 @@ function renderAwareness(snapshot) {
     parts.push('');
   }
 
+  const cap = topN();
   const allAgents = [...find('项目级 Subagents'), ...find('用户级 Subagents')];
   if (allAgents.length > 0) {
     parts.push('### Subagents');
-    const shown = allAgents.slice(0, TOP_N);
+    const shown = allAgents.slice(0, cap);
     for (const a of shown) {
       parts.push(a.desc ? `- ${a.name}: ${truncate(a.desc, AWARENESS_AGENT_DESC)}` : `- ${a.name}`);
     }
-    if (allAgents.length > TOP_N) parts.push(`+${allAgents.length - TOP_N} 个`);
+    if (allAgents.length > cap) parts.push(`+${allAgents.length - cap} 个`);
     parts.push('');
   }
 
@@ -114,19 +127,19 @@ function renderAwareness(snapshot) {
   const ecosystemSkills = [...find('OpenClaw Skills'), ...find('Hermes Skills')];
   if (allSkills.length > 0) {
     parts.push('### Skills');
-    for (const s of allSkills.slice(0, TOP_N)) {
+    for (const s of allSkills.slice(0, cap)) {
       parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_SKILL_DESC)}` : `- ${s.name}`);
     }
-    if (allSkills.length > TOP_N) parts.push(`+${allSkills.length - TOP_N} 个`);
+    if (allSkills.length > cap) parts.push(`+${allSkills.length - cap} 个`);
     parts.push('');
   }
 
   if (ecosystemSkills.length > 0) {
     parts.push('### 兼容生态 Skills');
-    for (const s of ecosystemSkills.slice(0, TOP_N)) {
+    for (const s of ecosystemSkills.slice(0, cap)) {
       parts.push(s.desc ? `- ${s.name}: ${truncate(s.desc, AWARENESS_SKILL_DESC)}` : `- ${s.name}`);
     }
-    if (ecosystemSkills.length > TOP_N) parts.push(`+${ecosystemSkills.length - TOP_N} 个`);
+    if (ecosystemSkills.length > cap) parts.push(`+${ecosystemSkills.length - cap} 个`);
     parts.push('');
   }
 
@@ -148,7 +161,7 @@ function renderAwareness(snapshot) {
   const HINT_RAW = buildRoutingHint();
   const HINT = HINT_RAW ? '\n' + HINT_RAW : '';
   const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
-  const listBudget = MAX_TOTAL_CHARS - ROUTING.length - HINT.length - FOOTER.length;
+  const listBudget = maxTotalChars() - ROUTING.length - HINT.length - FOOTER.length;
 
   let listOutput = parts.join('\n');
   if (listOutput.length > listBudget) {
@@ -169,8 +182,9 @@ function renderSnapshot(snapshot, mode) {
     return `## 当前环境能力摘要\n\n${header}\n\n${parts.join('\n\n')}`;
   }
 
+  const budgetCap = maxTotalChars();
   let output = assemble();
-  while (output.length > MAX_TOTAL_CHARS) {
+  while (output.length > budgetCap) {
     let maxLen = -1;
     let maxIdx = -1;
     for (let i = 0; i < sections.length; i++) {
@@ -187,7 +201,7 @@ function renderSnapshot(snapshot, mode) {
   }
 
   const FOOTER = errors.length > 0 ? '\n\n[部分扫描失败，详见 stderr]' : '';
-  const budget = MAX_TOTAL_CHARS - FOOTER.length;
+  const budget = budgetCap - FOOTER.length;
   if (output.length > budget) {
     output = output.slice(0, budget - 20) + '\n\n…（已截断）';
   }
@@ -195,7 +209,8 @@ function renderSnapshot(snapshot, mode) {
 }
 
 module.exports = {
-  MAX_TOTAL_CHARS,
+  // 兼容导出：默认预算值；运行时实际预算经 CO_AWARENESS_MAX_CHARS 调整
+  MAX_TOTAL_CHARS: DEFAULT_MAX_TOTAL_CHARS,
   renderSection,
   renderAwareness,
   renderSnapshot,

@@ -15,7 +15,7 @@ process.env.HERMES_USER_DIR = path.join(ISOLATED_ECOSYSTEM_ROOT, 'hermes');
 const {
   sanitize, scanSkills, scanAgents, scanCommands, renderSection,
   collectSnapshot, renderSnapshot, truncate, withCapabilityMeta,
-  parseHermesSkillsTable, parseHermesPluginsList,
+  parseHermesSkillsTable, parseHermesPluginsList, MAX_TOTAL_CHARS,
 } = require('../scripts/scan-environment.cjs');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -293,7 +293,7 @@ test('renderSnapshot: output never exceeds MAX_TOTAL_CHARS', () => {
     errors: [],
   };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 5000, `output ${text.length} should be ≤ 5000`);
+  assert.ok(text.length <= MAX_TOTAL_CHARS, `output ${text.length} should be ≤ ${MAX_TOTAL_CHARS}`);
 });
 
 test('renderSnapshot: empty snapshot outputs header only', () => {
@@ -312,7 +312,7 @@ test('renderSnapshot: error footer stays within budget', () => {
     errors: ['EACCES /foo/bar'],
   };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 5000, `output with error footer ${text.length} should be ≤ 5000`);
+  assert.ok(text.length <= MAX_TOTAL_CHARS, `output with error footer ${text.length} should be ≤ ${MAX_TOTAL_CHARS}`);
   assert.match(text, /部分扫描失败/);
 });
 
@@ -339,20 +339,20 @@ test('renderSnapshot: list mode uses compact builtins', () => {
 
 // ─── renderSnapshot level 3/4 ──────────────────────────────────────────────
 
-test('renderSnapshot: level 3 shows top-15 names + fold count', () => {
-  // 名字必须够长，使 level 2（仅名逗号拼接）超过 5000 字符，才会降级到 level 3
-  // 45 个 ~120 字符的名字：45*120 + 44*2 ≈ 5448 > 5000
-  const items = Array.from({ length: 45 }, (_, i) => ({
+test('renderSnapshot: level 3 shows top-N names + fold count', () => {
+  // 名字必须够长，使 level 2（仅名逗号拼接）超过预算 12000 字符，才会降级到 level 3
+  // 100 个 ~120 字符的名字：100*120 + 99*2 ≈ 12198 > 12000
+  const items = Array.from({ length: 100 }, (_, i) => ({
     name: `skill-${'x'.repeat(110)}-${String(i).padStart(2, '0')}`, desc: 'A'.repeat(100),
   }));
   const snap = { sections: [{ label: '测试 Skills', prefix: '', items }], errors: [] };
   const { text } = renderSnapshot(snap, 'route');
   assert.ok(text.includes('skill-'), 'first skill should appear');
-  assert.ok(text.includes('+30 个'), 'fold count should show +30');
+  assert.ok(text.includes('+60 个'), 'fold count should show +60 (TOP_N=40)');
 });
 
 test('renderSnapshot: level 4 pure count on extreme name length', () => {
-  // 名字极长使 top-15 都超预算，强制 level 4
+  // 名字极长使 top-N 都超预算，强制 level 4
   const items = Array.from({ length: 50 }, (_, i) => ({
     name: `x${'A'.repeat(150)}-${i}`, desc: 'D'.repeat(100),
   }));
@@ -361,7 +361,7 @@ test('renderSnapshot: level 4 pure count on extreme name length', () => {
   }));
   const snap = { sections, errors: [] };
   const { text } = renderSnapshot(snap, 'route');
-  assert.ok(text.length <= 5000, `output ${text.length} should be ≤ 5000`);
+  assert.ok(text.length <= MAX_TOTAL_CHARS, `output ${text.length} should be ≤ ${MAX_TOTAL_CHARS}`);
   assert.match(text, /50 个/, 'extreme names should degrade to pure count');
 });
 
@@ -381,7 +381,7 @@ test('collectSnapshot: empty dirs produce no crash', () => {
 test('renderSnapshot awareness: output within budget', () => {
   const snap = collectSnapshot(PROJECT_DIR, USER_DIR);
   const { text } = renderSnapshot(snap, 'awareness');
-  assert.ok(text.length <= 5000, `awareness output ${text.length} should be ≤ 5000`);
+  assert.ok(text.length <= MAX_TOTAL_CHARS, `awareness output ${text.length} should be ≤ ${MAX_TOTAL_CHARS}`);
 });
 
 test('renderSnapshot awareness: contains mandatory routing rules', () => {
@@ -459,7 +459,7 @@ test('P0: awareness 路由策略在内容极长时仍保留', () => {
   const snap = { sections, errors: [] };
   const { text } = renderSnapshot(snap, 'awareness');
   assert.ok(text.includes('路由规则'), 'routing rules must survive truncation');
-  assert.ok(text.length <= 5000, `total ${text.length} within budget`);
+  assert.ok(text.length <= MAX_TOTAL_CHARS, `total ${text.length} within budget`);
 });
 
 test('P1: MCP 跨级别去重（项目级优先）', () => {
@@ -514,11 +514,11 @@ test('renderSection level 2: 仅名逗号分隔', () => {
   assert.ok(!out.includes('ignored'), 'level 2 should not show desc');
 });
 
-test('renderSection level 3: top-15 折叠', () => {
-  const items = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, desc: '' }));
+test('renderSection level 3: top-N 折叠', () => {
+  const items = Array.from({ length: 45 }, (_, i) => ({ name: `s${i}`, desc: '' }));
   const section = { label: 'Test', prefix: '', items };
   const out = renderSection(section, 3);
-  assert.ok(out.includes('+5 个'), 'level 3 should fold excess items');
+  assert.ok(out.includes('+5 个'), 'level 3 should fold excess items (TOP_N=40)');
   assert.ok(out.includes('s0'), 'level 3 should show first item');
 });
 
@@ -533,14 +533,14 @@ test('renderSection level 4: 纯计数', () => {
 // ─── 4f: renderSection level 2 vs level 3 mutation guard ─────────────────────
 
 test('mutation: renderSection level 2 and level 3 produce different output', () => {
-  const items = Array.from({ length: 20 }, (_, i) => ({ name: `skill-${i}`, desc: `desc ${i}` }));
+  const items = Array.from({ length: 45 }, (_, i) => ({ name: `skill-${i}`, desc: `desc ${i}` }));
   const section = { label: 'Test', prefix: '', items };
   const out2 = renderSection(section, 2);
   const out3 = renderSection(section, 3);
   assert.notEqual(out2, out3, 'level 2 and level 3 must differ');
-  // Level 2 shows all names, level 3 shows only top-15 + fold
-  assert.ok(out2.includes('skill-19'), 'level 2 should show all names');
-  assert.ok(!out3.includes('skill-19'), 'level 3 should NOT show items beyond top-15');
+  // Level 2 shows all names, level 3 shows only top-N(40) + fold
+  assert.ok(out2.includes('skill-44'), 'level 2 should show all names');
+  assert.ok(!out3.includes('skill-44'), 'level 3 should NOT show items beyond top-N');
   assert.ok(out3.includes('+5 个'), 'level 3 should fold');
 });
 

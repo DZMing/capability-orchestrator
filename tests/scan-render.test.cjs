@@ -78,3 +78,52 @@ test('renderSnapshot: 输出 text 不超过 MAX_TOTAL_CHARS 上限', () => {
 test('MAX_TOTAL_CHARS: 正整数', () => {
   assert.ok(typeof MAX_TOTAL_CHARS === 'number' && MAX_TOTAL_CHARS > 0);
 });
+
+// ── P1 预算放开：awareness 注入更多路由信号 ──────────────────────────────────
+
+function bigSnapshot(n = 60) {
+  const items = Array.from({ length: n }, (_, i) => ({
+    name: `skill-${String(i).padStart(2, '0')}`,
+    desc: `触发词与场景描述 trigger words for routing case ${i} `.repeat(3),
+  }));
+  return { sections: [{ label: '项目级 Skills', prefix: '/', items }], errors: [] };
+}
+
+test('renderSnapshot: awareness 默认预算 12000，60 个 skill 不再被 5000 截断', () => {
+  const prev = process.env.CO_AWARENESS_MAX_CHARS;
+  delete process.env.CO_AWARENESS_MAX_CHARS;
+  try {
+    const { text } = renderSnapshot(bigSnapshot(60), 'awareness');
+    assert.equal(MAX_TOTAL_CHARS, 12000);
+    assert.ok(text.length > 5000, `期望超过旧预算 5000，实际 ${text.length}`);
+    assert.ok(text.length <= MAX_TOTAL_CHARS, `超出新预算：${text.length}`);
+    assert.ok(!text.includes('（已截断）'), '默认预算下 60 skill 不应触发截断');
+    // TOP_N 15→40：第 40 个 skill（index 39）必须可见
+    assert.ok(text.includes('skill-39'), 'TOP_N 应放宽到 40');
+    assert.ok(!text.includes('skill-41'), 'TOP_N=40 之外不展示');
+  } finally {
+    if (prev !== undefined) process.env.CO_AWARENESS_MAX_CHARS = prev;
+  }
+});
+
+test('renderSnapshot: CO_AWARENESS_MAX_CHARS 运行时可调且被遵守', () => {
+  const prev = process.env.CO_AWARENESS_MAX_CHARS;
+  process.env.CO_AWARENESS_MAX_CHARS = '800';
+  try {
+    const { text } = renderSnapshot(bigSnapshot(60), 'awareness');
+    assert.ok(text.length <= 800, `env 预算 800 未被遵守：${text.length}`);
+  } finally {
+    if (prev === undefined) delete process.env.CO_AWARENESS_MAX_CHARS;
+    else process.env.CO_AWARENESS_MAX_CHARS = prev;
+  }
+});
+
+test('renderAwareness: skill desc 展示放宽到 120 字符（触发词不再被 40 截掉）', () => {
+  const longDesc = 'D'.repeat(110);
+  const snap = {
+    sections: [{ label: '项目级 Skills', prefix: '/', items: [{ name: 'long-desc-skill', desc: longDesc }] }],
+    errors: [],
+  };
+  const { text } = renderSnapshot(snap, 'awareness');
+  assert.ok(text.includes(longDesc), '110 字符 desc 应完整展示，不被旧上限 40 截断');
+});

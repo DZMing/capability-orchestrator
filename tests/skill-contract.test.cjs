@@ -5,7 +5,7 @@
  * 验证每个 skill 的 !command 在真实 shell 环境下能正常运行：
  *   - CLAUDE_SKILL_DIR 正确设置时 exit 0
  *   - 输出不为空
- *   - 输出不超过 MAX_CHARS (3000)
+ *   - 输出不超过 MAX_CHARS（与 scan-render 预算一致）
  *   - stderr 不含未捕获的 JS 异常
  */
 
@@ -20,7 +20,7 @@ const SCRIPT = path.join(REPO_ROOT, 'scripts', 'scan-environment.cjs');
 const PACKAGE_JSON = path.join(REPO_ROOT, 'package.json');
 const CLAUDE_PLUGIN_JSON = path.join(REPO_ROOT, '.claude-plugin', 'plugin.json');
 const CODEX_PLUGIN_JSON = path.join(REPO_ROOT, '.codex-plugin', 'plugin.json');
-const MAX_CHARS = 5000;
+const { MAX_TOTAL_CHARS: MAX_CHARS } = require('../scripts/lib/scan-render.cjs');
 
 // 从 SKILL.md 提取 !`...` 命令字符串
 function extractCommand(skillMd) {
@@ -132,9 +132,9 @@ test('capabilities skill: --mode=list 输出更紧凑', () => {
     timeout: 15000,
   });
   // list 模式从 level 2 开始（仅名称），route 从 level 0 开始但可能降级更多
-  // 两者都应在预算内
-  assert.ok(stdout.length <= 5100, `list 模式输出 (${stdout.length}) 应在预算范围内`);
-  assert.ok(stdoutRoute.length <= 5100, `route 模式输出 (${stdoutRoute.length}) 应在预算范围内`);
+  // 两者都应在预算内（+100 容差：list/route 的 builtin 头部行）
+  assert.ok(stdout.length <= MAX_CHARS + 100, `list 模式输出 (${stdout.length}) 应在预算范围内`);
+  assert.ok(stdoutRoute.length <= MAX_CHARS + 100, `route 模式输出 (${stdoutRoute.length}) 应在预算范围内`);
 });
 
 test('script: 从不同 cwd 调用，exit 0，输出合法', () => {
