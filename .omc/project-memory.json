@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1778801504317,
+  "lastScanned": 1781043456973,
   "projectRoot": "/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator",
   "techStack": {
     "languages": [
@@ -17,11 +17,11 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && gh pr create \\\n  --title \"feat(routing): 智能路由 v3/v3.1 — 负向惩罚 + 反馈环 + 透明度 + 治理\" \\\n  --base master \\\n  --body \"$(cat <<'EOF'\n## 背景\n\nv2 实测发现两个问题：\n1. **\"备份数据库\" 误推 mvp-scaffold**：同义词扩展使 mvp-scaffold 积分远高于惩罚量\n2. **算法无反馈**：日志不记候选列表，采纳率无法统计，调试靠猜\n\n本 PR 补上「算法准确性 + 反馈闭环 + 决策透明度 + 工程治理」，共 v3 + v3.1 两轮，415 测试全绿。\n\n## 改动清单\n\n### Phase A — 算法准确性\n- **A.1 负向惩罚**：prompt 中出现但 skill desc 缺失的 CJK 主题词按 `CO_UNMATCHED_PENALTY` 扣分\n- **A.2 平局打破器**：score → overlap → kwSetSize 三键确定性排序\n- **A.3 Trigram whitelist**：30+ 高频技术词整体命中，防止语义漂移\n- **A.4 阈值 env 化**：5 个 `CO_*` 变量无需改代码可调灵敏度\n- **A.5 同义词扩充**：运维/AI-ML/移动端/CI-CD/API 约 80 条双向扩展\n\n### Phase B — 反馈环\n- **B.1 topCandidates**：日志记录前 3 候选（score/overlap/unmatchedPenalty）\n- **B.3 route-stats 健康度**：[良好]/[偏低]/[警告] 标记 + 异常概要段\n- **B.4 PostToolUse 钩子**：60s 窗口采纳率统计，`CO_DISABLE_FEEDBACK=1` 可关闭\n\n### Phase C — 测试保护\n- corpus 扩至 20 条，`route-regression.test.cjs`（6 历史误推），`route-invariants.test.cjs`（11 算法不变量）\n\n### Phase D — 治理\n- `route-explain.cjs`：Markdown 表格展示候选评分\n- CLAUDE.md：算法演进表 / 调优指南 / Skill 模板\n- `npm run verify:routing` 脚本\n\n### Phase E-H (v3.1)\n- E.1 MCP 跳过 penalty（修复 MCP 兜底失效）\n- E.2 STOP_WORDS 扩充 + STOP_PHRASES_CJK 预处理\n- F.1 joinFeedback O(n²)→O(n+m) + 256KB 轮转\n- F.2 `debug-log.cjs`（CO_DEBUG=1 写错误日志）\n- G.1 安装错误中文化，G.2 stats 健康度，H.1 scan-render 测试，H.2 stdin 超时\n\n## 验证\n\n```\nnpm test             → 415/415 全绿\nnpm run verify:routing → 21/21 全绿\n```\n\n## 已知限制\n\nA.1 为绝对值惩罚（0.15/词），无竞争 skill 时同义词爆炸分数（44+）远超惩罚（0.30）。\n解法：安装有\"备份\"关键词的 ops skill，或设 `CO_UNMATCHED_PENALTY=25`。\n算法在有竞争 skill 的 fixture 中完全正确（regression 测试证明）。\n\n## 调优指南\n\n详见 CLAUDE.md 新增「调优指南」节。关键：`CO_DEBUG=1` 开错误日志，`CO_DISABLE_FEEDBACK=1` 禁日志写入。\n\n🤖 Generated with [Claude Code](https://claude.ai/claude-code)\nEOF\n)\" 2>&1",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && sed -n 115,150p tests/skill-contract.test.cjs && npm test 2>&1 | grep -B2 -A6 \"输出更紧凑\" | head -25",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
-      "test": "node --test tests/scan.test.cjs tests/scan-text.test.cjs tests/scan-mcp.test.cjs tests/scan-plugins.test.cjs tests/scan-host-skills.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-keywords.test.cjs tests/route-scoring.test.cjs tests/route-output.test.cjs tests/route-logger.test.cjs tests/route-corpus.test.cjs tests/intent-classifier.test.cjs tests/safety-gate.test.cjs tests/prompt-composer.test.cjs tests/preference-profile.test.cjs tests/work-context.test.cjs tests/intent-router.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
+      "test": "node --test tests/scan.test.cjs tests/scan-text.test.cjs tests/scan-mcp.test.cjs tests/scan-plugins.test.cjs tests/scan-host-skills.test.cjs tests/skill-contract.test.cjs tests/install-hooks.test.cjs tests/route-matcher.test.cjs tests/route-keywords.test.cjs tests/route-scoring.test.cjs tests/route-output.test.cjs tests/route-logger.test.cjs tests/route-corpus.test.cjs tests/scan-render.test.cjs tests/route-regression.test.cjs tests/route-invariants.test.cjs tests/intent-classifier.test.cjs tests/safety-gate.test.cjs tests/prompt-composer.test.cjs tests/preference-profile.test.cjs tests/work-context.test.cjs tests/intent-router.test.cjs tests/live-verify.test.cjs tests/release-readiness-check.test.cjs tests/fuzz.test.cjs tests/stress.test.cjs tests/integration.test.cjs tests/platform.test.cjs tests/host-adapter-bridge.test.cjs",
       "test:install": "bash tests/install.test.sh",
       "test:idempotent": "bash tests/install-idempotent.test.sh",
       "test:all": "npm test && npm run test:install && npm run test:idempotent",
@@ -31,7 +31,8 @@
       "verify:host:lifecycle": "node scripts/verify-host-lifecycle.cjs",
       "verify:scenarios": "node scripts/scenario-verify.cjs",
       "verify:release": "node scripts/release-readiness-check.cjs",
-      "verify:release:strict": "node scripts/release-readiness-check.cjs --strict"
+      "verify:release:strict": "node scripts/release-readiness-check.cjs --strict",
+      "verify:routing": "node --test tests/route-corpus.test.cjs tests/route-regression.test.cjs tests/route-invariants.test.cjs"
     }
   },
   "conventions": {
@@ -55,41 +56,41 @@
       "path": "adapters",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1778801504307,
+      "lastAccessed": 1781043456962,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1778801504308,
+      "lastAccessed": 1781043456962,
       "keyFiles": ["host-contract-hermes.md"]
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
-      "fileCount": 15,
-      "lastAccessed": 1778801504311,
+      "fileCount": 17,
+      "lastAccessed": 1781043456965,
       "keyFiles": [
         "debug-route-example.cjs",
         "host-adapter-bridge.cjs",
         "install-hooks.cjs",
         "live-verify.cjs",
-        "release-readiness-check.cjs"
+        "post-tool-feedback.cjs"
       ]
     },
     "skills": {
       "path": "skills",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1778801504311,
+      "lastAccessed": 1781043456965,
       "keyFiles": []
     },
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 29,
-      "lastAccessed": 1778801504312,
+      "fileCount": 33,
+      "lastAccessed": 1781043456965,
       "keyFiles": [
         "fuzz.test.cjs",
         "host-adapter-bridge.test.cjs",
@@ -101,19 +102,19 @@
     "scripts/lib": {
       "path": "scripts/lib",
       "purpose": "Library code",
-      "fileCount": 19,
-      "lastAccessed": 1778801504312,
+      "fileCount": 20,
+      "lastAccessed": 1781043456965,
       "keyFiles": [
+        "debug-log.cjs",
         "hermes-runtime.cjs",
-        "intent-classifier.cjs",
-        "intent-router.cjs"
+        "intent-classifier.cjs"
       ]
     },
     "tests/fixtures": {
       "path": "tests/fixtures",
       "purpose": "Test fixtures",
       "fileCount": 6,
-      "lastAccessed": 1778801504313,
+      "lastAccessed": 1781043456966,
       "keyFiles": [
         "frontmatter-block-fold.md",
         "frontmatter-block-literal.md",
@@ -129,15 +130,27 @@
       "type": "file"
     },
     {
+      "path": "scripts/lib/scan-render.cjs",
+      "accessCount": 17,
+      "lastAccessed": 1781043684633,
+      "type": "file"
+    },
+    {
       "path": "CLAUDE.md",
-      "accessCount": 10,
-      "lastAccessed": 1778810744858,
+      "accessCount": 12,
+      "lastAccessed": 1781043949556,
       "type": "file"
     },
     {
       "path": "scripts/route-matcher.cjs",
-      "accessCount": 9,
-      "lastAccessed": 1778809271701,
+      "accessCount": 11,
+      "lastAccessed": 1781043239039,
+      "type": "file"
+    },
+    {
+      "path": "tests/scan.test.cjs",
+      "accessCount": 11,
+      "lastAccessed": 1781043849912,
       "type": "file"
     },
     {
@@ -147,21 +160,15 @@
       "type": "file"
     },
     {
+      "path": "tests/route-matcher.test.cjs",
+      "accessCount": 9,
+      "lastAccessed": 1781043189857,
+      "type": "file"
+    },
+    {
       "path": "scripts/install-hooks.cjs",
       "accessCount": 8,
       "lastAccessed": 1778809377990,
-      "type": "file"
-    },
-    {
-      "path": "scripts/lib/scan-render.cjs",
-      "accessCount": 8,
-      "lastAccessed": 1778810295299,
-      "type": "file"
-    },
-    {
-      "path": "tests/route-matcher.test.cjs",
-      "accessCount": 6,
-      "lastAccessed": 1778804439946,
       "type": "file"
     },
     {
@@ -201,6 +208,18 @@
       "type": "file"
     },
     {
+      "path": "tests/scan-render.test.cjs",
+      "accessCount": 4,
+      "lastAccessed": 1781043606562,
+      "type": "file"
+    },
+    {
+      "path": "tests/skill-contract.test.cjs",
+      "accessCount": 4,
+      "lastAccessed": 1781043897019,
+      "type": "file"
+    },
+    {
       "path": "tests/install-hooks.test.cjs",
       "accessCount": 3,
       "lastAccessed": 1778805427279,
@@ -219,15 +238,33 @@
       "type": "file"
     },
     {
+      "path": "scripts/lib/safety-gate.cjs",
+      "accessCount": 3,
+      "lastAccessed": 1781043019974,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-output.cjs",
+      "accessCount": 3,
+      "lastAccessed": 1781043700066,
+      "type": "file"
+    },
+    {
       "path": "tests/route-corpus.test.cjs",
       "accessCount": 2,
       "lastAccessed": 1778809992891,
       "type": "file"
     },
     {
-      "path": "tests/scan-render.test.cjs",
+      "path": "tests/route-output.test.cjs",
       "accessCount": 2,
-      "lastAccessed": 1778810328985,
+      "lastAccessed": 1781043628475,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/scan-text.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781043709165,
       "type": "file"
     },
     {

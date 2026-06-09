@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd \\\"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\\\" && gh pr create \\\\\\n  --title \\\"feat(routing): 智能路由 v3/v3.1 — 负向惩罚 + 反馈环 + 透明度 + 治理\\\" \\\\\\n  --body \\\"$(cat <<'EOF'\\n## 背景...",
-  "error": "Exit code 1\nWarning: 3 uncommitted changes\npull request create failed: GraphQL: Head sha can't be blank, Base sha can't be blank, No commits between main and codex/smart-routing-v3, Base ref must be a branch (createPullRequest)",
-  "timestamp": "2026-05-15T02:07:14.732Z",
+  "tool_input_preview": "{\"command\":\"cd \\\"/Users/zhimingdeng/Documents/自动命令插件\\\" && git add capability-orchestrator/scripts/lib/safety-gate.cjs capability-orchestrator/tests/safety-gate.test.cjs && git commit -m \\\"fix(safety-g...",
+  "error": "Exit code 128\n致命错误：路径规格 'capability-orchestrator/scripts/lib/safety-gate.cjs' 在子模组 'capability-orchestrator' 中",
+  "timestamp": "2026-06-09T22:10:51.378Z",
   "retry_count": 1
 }
