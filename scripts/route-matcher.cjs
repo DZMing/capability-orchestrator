@@ -314,6 +314,21 @@ function buildExplainResult({ action, reason, targetType = null, targetName = nu
   };
 }
 
+// 具体能力匹配：字面量优先，语义匹配需过最低置信度阈值；
+// top scorer 置信度不足时 fallback 搜索次优有信心的候选（避免低置信度噪音阻断合法路由）
+function resolveCapabilityMatch(prompt, projectDir, userDir) {
+  const skills = collectAllSkills(projectDir, userDir);
+  const literal = findLiteralMatch(prompt, skills);
+  if (literal) return { ...literal, _literal: true };
+  const bestSkill = findBestMatch(prompt, skills);
+  if (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE) return bestSkill;
+  if (bestSkill) {
+    const alt = findBestMatch(prompt, skills.filter(s => s.name !== bestSkill.name));
+    if (alt && alt.confidence >= MIN_CONFIDENCE) return alt;
+  }
+  return null;
+}
+
 function _resolveRouteDecisionInner(input) {
   const prompt = extractPrompt(input);
   const stdinCwd = extractCwd(input);
@@ -366,7 +381,13 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  if (intentRoute) {
+  // 优先级：具体能力（skill/command/subagent）> 通用意图兜底。
+  // intent 是泛化执行契约，skill 才是环境里的具体能力——两者同时命中时 skill 赢
+  const match = prompt.length >= MIN_PROMPT_LEN
+    ? resolveCapabilityMatch(prompt, projectDir, userDir)
+    : null;
+  const literalMatched = !!(match && match._literal);
+  if (!match && intentRoute) {
     return {
       intentRoute,
       targetType: 'intent',
@@ -384,7 +405,7 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  if (prompt.length < MIN_PROMPT_LEN) {
+  if (!match && prompt.length < MIN_PROMPT_LEN) {
     return {
       explain: buildExplainResult({
         action: 'pass',
@@ -396,20 +417,6 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  const skills = collectAllSkills(projectDir, userDir);
-  const literal = findLiteralMatch(prompt, skills);
-  const literalMatched = !!literal;
-  const bestSkill = findBestMatch(prompt, skills);
-  // 语义匹配低于最低置信度阈值视为噪音，不路由（字面量匹配不受限制）
-  // 若 top scorer 置信度不足，fallback 搜索次优有信心的候选（避免低置信度噪音阻断合法路由）
-  let confidentSkill = null;
-  if (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE) {
-    confidentSkill = bestSkill;
-  } else if (bestSkill) {
-    const alt = findBestMatch(prompt, skills.filter(s => s.name !== bestSkill.name));
-    if (alt && alt.confidence >= MIN_CONFIDENCE) confidentSkill = alt;
-  }
-  const match = literal || confidentSkill;
   if (match) {
     const isCommandLike = match.type === 'command'
       || match.surfaceType === 'slash_command'

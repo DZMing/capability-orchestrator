@@ -128,6 +128,53 @@ test('resolveRouteDecision: short continuation prompt routes through Intent Rout
   }
 });
 
+test('resolveRouteDecision: specific skill match outranks generic intent fallback', () => {
+  const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-route-priority-'));
+  const project = path.join(root, 'project');
+  const userDir = path.join(root, 'user');
+  const dataDir = path.join(root, 'data');
+  fs.mkdirSync(path.join(project, '.claude', 'skills', 'artifact-review'), { recursive: true });
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(project, 'AGENTS.md'), 'Verify before claiming completion.\n');
+  fs.writeFileSync(path.join(project, '.claude', 'skills', 'artifact-review', 'SKILL.md'), [
+    '---',
+    'name: artifact-review',
+    'description: artifact review helper for evidence and quality review',
+    '---',
+    '',
+  ].join('\n'));
+
+  const previous = {
+    CAPABILITY_USER_DIR: process.env.CAPABILITY_USER_DIR,
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CLAUDE_PLUGIN_DATA: process.env.CLAUDE_PLUGIN_DATA,
+  };
+  process.env.CAPABILITY_USER_DIR = userDir;
+  process.env.CLAUDE_USER_DIR = userDir;
+  process.env.CLAUDE_PLUGIN_DATA = dataDir;
+
+  try {
+    // "继续" 命中 continue_work 意图，但 prompt 同时强匹配具体 skill——
+    // 具体能力应胜过通用意图兜底
+    const decision = resolveRouteDecision(JSON.stringify({
+      prompt: '继续 artifact review helper 的 evidence quality 检查',
+      cwd: project,
+    }));
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.reason, 'matched-skill');
+    assert.equal(decision.explain.targetType, 'skill');
+    assert.equal(decision.explain.targetName, 'artifact-review');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('resolveRouteDecision: risky publish prompt routes to confirmation gate', () => {
   const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
   const decision = resolveRouteDecision(JSON.stringify({
