@@ -9,10 +9,17 @@ function createOutput(match) {
   const platform = detectPlatform();
   const skillInvocation = formatInvocation(match.name, platform, match.surfaceType || 'skill');
   const safeDesc = sanitize(match.desc || '');
+  const isSuggest = process.env.CO_ROUTE_TONE === 'suggest';
+  const directive = isSuggest
+    ? '【建议】推荐调用 ' + skillInvocation + ' 执行该 skill。'
+    : '【强制指令】立即调用 ' + skillInvocation + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。';
+  const callLine = isSuggest
+    ? '建议调用：' + skillInvocation
+    : '立即调用：' + skillInvocation;
   const lines = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即调用 ' + skillInvocation + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。',
+    directive,
     '若平台支持 Skill tool，则等同于立刻执行该 skill 的完整流程。',
   ];
   // B.1 Top-N 候选透传 → 注入备选：主选明显不符时模型可立即换道，而非放弃路由
@@ -26,7 +33,7 @@ function createOutput(match) {
     });
     lines.push('仅当该 skill 与任务明显不符时，改用备选：' + rendered.join('、'));
   }
-  lines.push('', '立即调用：' + skillInvocation);
+  lines.push('', callLine);
   process.stdout.write(lines.join('\n') + '\n');
 }
 

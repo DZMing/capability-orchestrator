@@ -82,7 +82,7 @@ function rotateFeedbackIfNeeded(fbPath) {
 }
 
 function normalizeLogEntry(explain) {
-  const entry = { ts: new Date().toISOString(), version: PLUGIN_VERSION };
+  const entry = { ts: new Date().toISOString(), version: PLUGIN_VERSION, tone: process.env.CO_ROUTE_TONE || 'force' };
   for (const field of LOG_FIELDS) {
     if (field === 'ts' || field === 'version') continue;
     if (explain && Object.prototype.hasOwnProperty.call(explain, field)) {

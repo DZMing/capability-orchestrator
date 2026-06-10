@@ -23,6 +23,12 @@ const OWNED_MARKERS = {
     'capability-orchestrator/scripts/post-tool-feedback.cmd',
     'capability-orchestrator\\scripts\\post-tool-feedback.cmd',
   ],
+  preToolUse: [
+    'CAPABILITY_ORCHESTRATOR_HOOK=pre-tool-guard',
+    'capability-orchestrator/scripts/pre-tool-guard.cjs',
+    'capability-orchestrator/scripts/pre-tool-guard.cmd',
+    'capability-orchestrator\\scripts\\pre-tool-guard.cmd',
+  ],
 };
 
 function matchesMarkers(command = '', markers = []) {
@@ -67,7 +73,7 @@ function registerHookEntry(entries, cmd, statusMessage, markers) {
   return next;
 }
 
-function claudeInstall(file, scanCmd, routeCmd, postToolCmd) {
+function claudeInstall(file, scanCmd, routeCmd, postToolCmd, preToolGuardCmd) {
   const settings = readJsonFile(file);
   if (!settings.hooks) settings.hooks = {};
   const hadSession = (settings.hooks.SessionStart || []).some((entry) =>
@@ -78,6 +84,9 @@ function claudeInstall(file, scanCmd, routeCmd, postToolCmd) {
   );
   const hadPostTool = (settings.hooks.PostToolUse || []).some((entry) =>
     entry.hooks && entry.hooks.some((hook) => hook.command && matchesMarkers(hook.command, OWNED_MARKERS.postToolUse))
+  );
+  const hadPreTool = (settings.hooks.PreToolUse || []).some((entry) =>
+    entry.hooks && entry.hooks.some((hook) => hook.command && matchesMarkers(hook.command, OWNED_MARKERS.preToolUse))
   );
   settings.hooks.SessionStart = registerHookEntry(
     settings.hooks.SessionStart,
@@ -123,12 +132,30 @@ function claudeInstall(file, scanCmd, routeCmd, postToolCmd) {
       }
     }
   }
+  if (preToolGuardCmd) {
+    settings.hooks.PreToolUse = registerHookEntry(
+      settings.hooks.PreToolUse,
+      preToolGuardCmd,
+      undefined,
+      OWNED_MARKERS.preToolUse,
+    );
+    for (const entry of settings.hooks.PreToolUse) {
+      if (!entry.hooks) continue;
+      for (const hook of entry.hooks) {
+        if (hook.command && matchesMarkers(hook.command, OWNED_MARKERS.preToolUse)) {
+          hook.matcher = 'Bash';
+          hook.timeout = 5000;
+        }
+      }
+    }
+  }
 
   writeJsonFile(file, settings);
   return {
     sessionStatus: hadSession ? 'updated' : 'added',
     routeStatus: hadRoute ? 'updated' : 'added',
     postToolStatus: postToolCmd ? (hadPostTool ? 'updated' : 'added') : 'skipped',
+    preToolStatus: preToolGuardCmd ? (hadPreTool ? 'updated' : 'added') : 'skipped',
   };
 }
 
@@ -138,14 +165,16 @@ function claudeUninstall(file) {
   settings.hooks.SessionStart = cleanEntryArray(settings.hooks.SessionStart, OWNED_MARKERS.sessionStart);
   settings.hooks.UserPromptSubmit = cleanEntryArray(settings.hooks.UserPromptSubmit, OWNED_MARKERS.userPromptSubmit);
   settings.hooks.PostToolUse = cleanEntryArray(settings.hooks.PostToolUse, OWNED_MARKERS.postToolUse);
+  settings.hooks.PreToolUse = cleanEntryArray(settings.hooks.PreToolUse, OWNED_MARKERS.preToolUse);
   if (settings.hooks.SessionStart.length === 0) delete settings.hooks.SessionStart;
   if (settings.hooks.UserPromptSubmit.length === 0) delete settings.hooks.UserPromptSubmit;
   if (settings.hooks.PostToolUse.length === 0) delete settings.hooks.PostToolUse;
+  if ((settings.hooks.PreToolUse || []).length === 0) delete settings.hooks.PreToolUse;
   if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
   writeJsonFile(file, settings);
 }
 
-function codexInstall(file, scanCmd, routeCmd, postToolCmd) {
+function codexInstall(file, scanCmd, routeCmd, postToolCmd, preToolGuardCmd) {
   const hooksConfig = readJsonFile(file);
   if (!hooksConfig.hooks) hooksConfig.hooks = {};
   hooksConfig.hooks.SessionStart = registerHookEntry(
@@ -168,6 +197,23 @@ function codexInstall(file, scanCmd, routeCmd, postToolCmd) {
       OWNED_MARKERS.postToolUse,
     );
   }
+  if (preToolGuardCmd) {
+    hooksConfig.hooks.PreToolUse = registerHookEntry(
+      hooksConfig.hooks.PreToolUse,
+      preToolGuardCmd,
+      'Checking command safety...',
+      OWNED_MARKERS.preToolUse,
+    );
+    for (const entry of hooksConfig.hooks.PreToolUse) {
+      if (!entry.hooks) continue;
+      for (const hook of entry.hooks) {
+        if (hook.command && matchesMarkers(hook.command, OWNED_MARKERS.preToolUse)) {
+          hook.matcher = 'Bash';
+          hook.timeout = 5000;
+        }
+      }
+    }
+  }
   writeJsonFile(file, hooksConfig);
 }
 
@@ -179,6 +225,7 @@ function codexUninstall(file) {
       ...OWNED_MARKERS.sessionStart,
       ...OWNED_MARKERS.userPromptSubmit,
       ...OWNED_MARKERS.postToolUse,
+      ...OWNED_MARKERS.preToolUse,
     ]);
   }
   hooksConfig.hooks = Object.fromEntries(
@@ -210,14 +257,15 @@ function main() {
   const scanCmd = args['scan-cmd'] || '';
   const routeCmd = args['route-cmd'] || '';
   const postToolCmd = args['post-tool-cmd'] || '';
+  const preToolGuardCmd = args['pre-tool-guard-cmd'] || '';
 
   if (!mode || !file) {
-    console.error('Usage: install-hooks.cjs --mode <claude-install|claude-uninstall|codex-install|codex-uninstall> --file <path> [--scan-cmd ...] [--route-cmd ...] [--post-tool-cmd ...]');
+    console.error('Usage: install-hooks.cjs --mode <claude-install|claude-uninstall|codex-install|codex-uninstall> --file <path> [--scan-cmd ...] [--route-cmd ...] [--post-tool-cmd ...] [--pre-tool-guard-cmd ...]');
     process.exit(2);
   }
 
   if (mode === 'claude-install') {
-    const result = claudeInstall(file, scanCmd, routeCmd, postToolCmd);
+    const result = claudeInstall(file, scanCmd, routeCmd, postToolCmd, preToolGuardCmd);
     process.stdout.write(JSON.stringify(result));
     return;
   }
@@ -226,7 +274,7 @@ function main() {
     return;
   }
   if (mode === 'codex-install') {
-    codexInstall(file, scanCmd, routeCmd, postToolCmd);
+    codexInstall(file, scanCmd, routeCmd, postToolCmd, preToolGuardCmd);
     return;
   }
   if (mode === 'codex-uninstall') {

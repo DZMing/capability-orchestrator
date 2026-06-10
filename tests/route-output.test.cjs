@@ -151,3 +151,38 @@ test('createMcpOutput: sanitizes HTML tags in server.name', () => {
   assert.ok(!captured.includes('<script>'));
   assert.ok(captured.includes('mcp__test'));
 });
+
+// ─── CO_ROUTE_TONE 措辞实验 ──────────────────────────────────────────────────
+
+test('CO_ROUTE_TONE 默认 force: createOutput 输出含"强制指令"', () => {
+  const origTone = process.env.CO_ROUTE_TONE;
+  delete process.env.CO_ROUTE_TONE;
+  try {
+    const captured = captureStdout(() => {
+      createOutput({ name: 'test-skill', desc: '测试 skill' });
+    });
+    assert.ok(captured.includes('【强制指令】'), '默认应含强制指令措辞');
+    assert.ok(captured.includes('立即调用：'), '默认应含立即调用');
+    assert.ok(!captured.includes('【建议】'), '默认不应含建议措辞');
+  } finally {
+    if (origTone !== undefined) process.env.CO_ROUTE_TONE = origTone;
+  }
+});
+
+test('CO_ROUTE_TONE=suggest: createOutput 输出含"建议"而非"强制指令"', () => {
+  const origTone = process.env.CO_ROUTE_TONE;
+  process.env.CO_ROUTE_TONE = 'suggest';
+  try {
+    const captured = captureStdout(() => {
+      createOutput({ name: 'test-skill', desc: '测试 skill' });
+    });
+    assert.ok(captured.includes('【建议】'), 'suggest 模式应含建议措辞');
+    assert.ok(captured.includes('建议调用：'), 'suggest 模式应含建议调用');
+    assert.ok(!captured.includes('【强制指令】'), 'suggest 模式不应含强制指令');
+    assert.ok(!captured.includes('立即调用：'), 'suggest 模式不应含立即调用');
+    assert.ok(captured.includes('[AUTO-ROUTE]'), 'AUTO-ROUTE 标记应保持不变');
+  } finally {
+    if (origTone !== undefined) process.env.CO_ROUTE_TONE = origTone;
+    else delete process.env.CO_ROUTE_TONE;
+  }
+});

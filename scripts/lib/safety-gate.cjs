@@ -1,5 +1,7 @@
 'use strict';
 
+const { RESET_HARD_RE, DROP_RE } = require('./danger-rules.cjs');
+
 const READINESS_ASSESSMENT =
   /(ready|readiness|prepared|preflight|audit|check|assess|evaluate|review|评估|检查|验收|准备度|可用性|是否可以|够不够|能不能|可不可以|商用)/i;
 
@@ -37,6 +39,7 @@ const RISK_PATTERNS = [
   {
     label: 'destructive local action',
     matches: (text) => /(rm\s+-rf|drop\s+table|truncate\s+table|reset\s+--hard|\bwipe\b|删库)/i.test(text)
+      || DROP_RE.test(text) || RESET_HARD_RE.test(text)
       || DESTRUCTIVE_SCOPE.test(text),
   },
   {
