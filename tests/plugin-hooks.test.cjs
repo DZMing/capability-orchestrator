@@ -18,7 +18,7 @@ const CODEX_PLUGIN_JSON = path.join(REPO_ROOT, '.codex-plugin', 'plugin.json');
 const HERMES_YAML = path.join(REPO_ROOT, 'adapters', 'hermes', 'plugin.yaml');
 const SCRIPTS_DIR = path.join(REPO_ROOT, 'scripts');
 
-const EXPECTED_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PreToolUse'];
+const EXPECTED_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PreToolUse', 'Stop'];
 
 test('hooks/hooks.json exists', () => {
   assert.ok(fs.existsSync(HOOKS_FILE), 'hooks/hooks.json file not found');
@@ -36,7 +36,7 @@ test('hooks/hooks.json is valid JSON', () => {
   assert.ok(parsed.hooks && typeof parsed.hooks === 'object', 'hooks.json should have hooks field');
 });
 
-test('hooks.json contains 4 required events', () => {
+test('hooks.json contains 5 required events', () => {
   const parsed = JSON.parse(fs.readFileSync(HOOKS_FILE, 'utf8'));
   const hooks = parsed.hooks;
   for (const event of EXPECTED_EVENTS) {
