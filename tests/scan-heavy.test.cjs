@@ -20,6 +20,7 @@ const {
   releaseLock,
   collectHeavySignals,
   renderHeavyReport,
+  defaultRunCommand,
 } = require('../scripts/lib/scan-heavy.cjs');
 
 function makeTmpDir(prefix) {
@@ -195,6 +196,29 @@ test('B2:默认不跑 audit;信任 + CO_PATROL_AUDIT=1 才跑', async () => {
 });
 
 // ─── 故障开放 ────────────────────────────────────────────────────────────────
+
+test('defaultRunCommand:子进程剔除插件环境变量(防 worker 把 PLUGIN_DATA 传染给被测项目)', () => {
+  const saved = {
+    CLAUDE_PLUGIN_DATA: process.env.CLAUDE_PLUGIN_DATA,
+    CODEX_PLUGIN_DATA: process.env.CODEX_PLUGIN_DATA,
+  };
+  process.env.CLAUDE_PLUGIN_DATA = '/tmp/co-fake-claude-data';
+  process.env.CODEX_PLUGIN_DATA = '/tmp/co-fake-codex-data';
+  try {
+    const r = defaultRunCommand(
+      process.execPath,
+      ['-e', 'console.log(process.env.CLAUDE_PLUGIN_DATA || process.env.CODEX_PLUGIN_DATA || "clean")'],
+      { cwd: os.tmpdir(), timeout: 15000 },
+    );
+    assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout.trim(), 'clean', 'worker 子进程不应看到插件数据目录变量');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+});
 
 test('runCommand 抛异常:信号置 null,errors 记录,整体不炸', async () => {
   const dir = makeGitRepo();

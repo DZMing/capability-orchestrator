@@ -19,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -5",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && gh pr create --base master --head codex/patrol-env-isolation --title \"fix(patrol): worker 子进程剔除插件环境变量，防被测项目污染插件数据目录\" --body \"$(cat <<'EOF'\n## 问题\n\n巡逻 worker 由 hook spawn，环境里带着 `CLAUDE_PLUGIN_DATA` 等插件变量。`defaultRunCommand` 直传 `process.env` 给被测项目的子进程，导致被测项目的测试读写插件**真实数据目录** — 实测污染 route-log / scan-cache 并造成误报红。\n\n## 修复\n\n- `scripts/lib/scan-heavy.cjs`：新增 `projectEnv()`，子进程环境剔除 6 个插件变量（`CLAUDE/CODEX_PLUGIN_DATA`、`CLAUDE/CODEX_USER_DIR`、`CAPABILITY_ORCHESTRATOR_HOOK`、`CAPABILITY_PLATFORM`）\n- `tests/scan-heavy.test.cjs`：新增防污染回归测试（注入假变量 → 断言子进程看到 clean）\n- `tests/integration.test.cjs`：golden 测试与 Codex 平台测试同样隔离开发机环境变量，防真实日志混进 golden 对比\n\n## 验证\n\n`npm test`：516 pass / 0 fail\n\n## 备注\n\n替代分支 `codex/patrol-wiring-fixes`（其头部 commit 被自动提交工具混入 .omc 状态杂项，该分支可废弃）。\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\nEOF\n)\"",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
