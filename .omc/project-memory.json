@@ -19,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "git -C /Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator log --oneline -3 && npm test 2>&1 | grep -E \"^ℹ (pass|fail)\"",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -5",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -204,6 +204,12 @@
       "type": "file"
     },
     {
+      "path": "scripts/scan-environment.cjs",
+      "accessCount": 7,
+      "lastAccessed": 1781070163256,
+      "type": "file"
+    },
+    {
       "path": "tests/route-keywords.test.cjs",
       "accessCount": 6,
       "lastAccessed": 1778809502148,
@@ -219,12 +225,6 @@
       "path": "scripts/lib/route-scoring.cjs",
       "accessCount": 6,
       "lastAccessed": 1781047070046,
-      "type": "file"
-    },
-    {
-      "path": "scripts/scan-environment.cjs",
-      "accessCount": 6,
-      "lastAccessed": 1781051390753,
       "type": "file"
     },
     {
