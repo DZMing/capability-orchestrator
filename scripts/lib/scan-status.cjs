@@ -24,6 +24,9 @@ const GIT_TIMEOUT_MS = 800;
 const UNFINISHED_MAX_AGE_DAYS = 7;
 const DEFAULT_MAX_CHARS = 1500;
 
+// A 类(scan-status)与 B 类(scan-heavy)报告共用的处理分档指引
+const PATROL_FOOTER = '[PATROL] 处理分档:查/统计/报告类直接做;可逆操作(提交、切分支、同步缓存)做完报备;删除、推主干、发布、付费必须先问用户。';
+
 // 运行时状态目录的改动不算"人工干到一半的活"
 const DEFAULT_NOISE_PREFIXES = ['.omc/', '.claude/', '.planning/', '.codex/'];
 
@@ -198,7 +201,7 @@ function renderStatusReport(signals, { maxChars = DEFAULT_MAX_CHARS } = {}) {
   const lines = [
     `🔍 状态巡逻(${items.length} 件值得注意):`,
     ...items.map((t, i) => `${i + 1}. ❓ ${t}`),
-    '[PATROL] 处理分档:查/统计/报告类直接做;可逆操作(提交、切分支、同步缓存)做完报备;删除、推主干、发布、付费必须先问用户。',
+    PATROL_FOOTER,
   ];
   const text = lines.join('\n');
   return text.length > maxChars ? text.slice(0, maxChars) : text;
@@ -207,4 +210,5 @@ function renderStatusReport(signals, { maxChars = DEFAULT_MAX_CHARS } = {}) {
 module.exports = {
   collectStatusSignals,
   renderStatusReport,
+  PATROL_FOOTER,
 };

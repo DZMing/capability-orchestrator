@@ -36,16 +36,24 @@ cp scripts/lib/*.cjs ~/.claude/plugins/cache/capability-orchestrator/scripts/lib
 
 ## 架构
 
-两个 hook 面，两个核心脚本：
+三个 hook 面，四个核心脚本：
 
 ```
 SessionStart hook
   → scan-environment.cjs --mode=awareness
   → 输出：能力清单 + <MANDATORY> 路由规则 → 注入会话上下文
+  → scan-status.cjs（A 类秒级巡逻：脏文件/未推送/停错分支/中断现场/日总结/stash）
+  → scan-heavy.cjs（B 类重型巡逻：读上次后台体检报告 + spawn detached worker 刷新；
+     B1 npm test / B3 check:sync 仅信任清单内项目执行，B4 TODO 计数只读无条件，
+     B2 npm audit 因联网默认关 CO_PATROL_AUDIT=1 开）
 
 UserPromptSubmit hook
   → route-matcher.cjs（从 stdin 读 JSON）
   → 输出：[AUTO-ROUTE] 纯文本（匹配时）或 {"continue":true} JSON（放行时）
+
+Stop hook
+  → stop-patrol.cjs（会话收尾检查：发现真实烂尾 block 一次让模型按授权收尾；
+     stop_hook_active=true 必放行防死循环，CO_STOP_PATROL=off 一键关）
 ```
 
 ### scan-environment.cjs
@@ -97,23 +105,26 @@ UserPromptSubmit hook
 
 ### 测试文件对应关系
 
-| 文件                        | 覆盖内容                                                                  |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `scan.test.cjs`             | scan-environment.cjs 全部导出函数                                         |
-| `route-matcher.test.cjs`    | route-matcher.cjs、stemming、synonym、MCP 路由、literal 匹配              |
-| `route-logger.test.cjs`     | route-logger.cjs 日志写入、轮转、统计、性能、安全                         |
-| `fuzz.test.cjs`             | sanitize/extractKeywords/passThrough/findBestMatch 随机输入 property 测试 |
-| `stress.test.cjs`           | 大规模 skills、超长 prompt、畸形 SKILL.md、MCP JSON 边界                  |
-| `integration.test.cjs`      | 完整 hook 流程 E2E + golden snapshot + 安装卸载循环 + 日志写入验证        |
-| `skill-contract.test.cjs`   | skills/ 合约 + Claude/Codex plugin manifest 版本一致性                    |
-| `scan-render.test.cjs`      | buildRoutingHint 边界路径 + renderSnapshot 基础输出                       |
-| `route-regression.test.cjs` | 历史误推用例（备份数据库不得推 mvp-scaffold、MCP E.1 修复回归）           |
-| `route-invariants.test.cjs` | 算法不变量（确定性、顺序无关、tiebreaker 稳定、env var 可调）             |
+| 文件                        | 覆盖内容                                                                    |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `scan.test.cjs`             | scan-environment.cjs 全部导出函数                                           |
+| `route-matcher.test.cjs`    | route-matcher.cjs、stemming、synonym、MCP 路由、literal 匹配                |
+| `route-logger.test.cjs`     | route-logger.cjs 日志写入、轮转、统计、性能、安全                           |
+| `fuzz.test.cjs`             | sanitize/extractKeywords/passThrough/findBestMatch 随机输入 property 测试   |
+| `stress.test.cjs`           | 大规模 skills、超长 prompt、畸形 SKILL.md、MCP JSON 边界                    |
+| `integration.test.cjs`      | 完整 hook 流程 E2E + golden snapshot + 安装卸载循环 + 日志写入验证          |
+| `skill-contract.test.cjs`   | skills/ 合约 + Claude/Codex plugin manifest 版本一致性                      |
+| `scan-render.test.cjs`      | buildRoutingHint 边界路径 + renderSnapshot 基础输出                         |
+| `route-regression.test.cjs` | 历史误推用例（备份数据库不得推 mvp-scaffold、MCP E.1 修复回归）             |
+| `route-invariants.test.cjs` | 算法不变量（确定性、顺序无关、tiebreaker 稳定、env var 可调）               |
+| `scan-heavy.test.cjs`       | B 类重型巡逻：信任清单门禁、4 信号采集、结果落盘、lock 并发、渲染、入口集成 |
+| `stop-patrol.test.cjs`      | Stop hook 收尾：防死循环放行、烂尾 block、噪音过滤、开关、故障开放          |
 
 ## 关键约束
 
 - **零外部依赖**：只用 Node.js 18+ stdlib，不能引入任何 npm 包
-- **只读**：脚本只读文件系统（唯一例外：`route-logger.cjs` 写 `route-log.jsonl` 到 `CLAUDE_PLUGIN_DATA`），不联网，不修改权限
+- **只读**：脚本只读文件系统（例外仅限写 `CLAUDE_PLUGIN_DATA`：`route-logger.cjs` 写 `route-log.jsonl`，`scan-heavy.cjs` 写 `patrol-heavy-*.json` 体检结果与 lock），不联网（`npm audit` 默认关闭），不修改权限
+- **巡逻安全模型**：B1/B2/B3 执行项目 npm scripts = 执行仓库代码；信任清单 `patrol-trust.json` 存插件数据目录（仓库外不可伪造），不在清单内的项目只跑 B4 只读统计，防"克隆恶意仓库一开会话即被执行"
 - **Token 预算**：awareness 输出上限默认 12000 字符（约 3000 tokens），`CO_AWARENESS_MAX_CHARS` 可调；desc 是路由信号，预算宁松勿紧
 - **CJK 感知**：中文用 bigram 分词，单字 + 相邻双字组合；bigram 覆盖的单字从评分中去重
 - **IDF 加权**：出现在多个 skill desc 里的高频词权重降低，防止"代码"之类通用词误匹配

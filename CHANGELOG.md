@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- Added `scripts/scan-status.cjs` SessionStart patrol (stage 1): six fast signals
+  (dirty worktree, unpushed commits, wrong branch, unfinished work markers,
+  missing daily summary, stashes) rendered with tiered action guidance.
+- Added `scripts/scan-heavy.cjs` background patrol (stage 2): detached worker
+  collects npm test status, plugin cache sync, and TODO/FIXME deltas; results
+  land in `CLAUDE_PLUGIN_DATA` and surface at the next session start. Running
+  project scripts requires the project to be listed in `patrol-trust.json`
+  (stored outside the repository); `npm audit` stays off unless
+  `CO_PATROL_AUDIT=1` because it performs network calls.
+- Added `scripts/stop-patrol.cjs` Stop hook: blocks once when a session is
+  about to end with real loose ends (dirty files, unpushed commits, wrong
+  branch) and instructs the model to wrap up within existing authorization;
+  `stop_hook_active` always passes through to prevent loops.
+
 ## [2.1.0] - 2026-06-09
 
 ### Added

@@ -39,7 +39,9 @@ function withTmpData(fn) {
 
 test('scan-cache: computeFingerprint 同输入同输出（确定性）', () => {
   const { computeFingerprint } = require('../scripts/lib/scan-cache.cjs');
-  const dirs = [os.tmpdir(), path.join(os.homedir(), '.claude')];
+  // 必须用测试私有目录:os.tmpdir()/~/.claude 是共享可变目录,并行测试进程
+  // 的 mkdtemp 会改其 mtime,恰好插进两次计算之间就 flaky(实测踩坑)
+  const dirs = [makeTmpDir('co-cache-fp-a-'), makeTmpDir('co-cache-fp-b-')];
   const a = computeFingerprint(dirs);
   const b = computeFingerprint(dirs);
   assert.equal(a, b, 'fingerprint 应当确定性相同');
