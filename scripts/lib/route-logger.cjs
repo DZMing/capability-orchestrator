@@ -4,12 +4,21 @@ const fs = require('fs');
 const path = require('path');
 const { debugError } = require('./debug-log.cjs');
 
+// 版本号：模块加载时读一次
+function _readPluginVersion() {
+  try {
+    const p = path.join(__dirname, '..', '..', 'package.json');
+    return JSON.parse(fs.readFileSync(p, 'utf8')).version || '';
+  } catch { return ''; }
+}
+const PLUGIN_VERSION = _readPluginVersion();
+
 const MAX_LOG_SIZE = 1 * 1024 * 1024; // 1MB
 const MAX_FEEDBACK_SIZE = 256 * 1024; // 256KB（够 30s 窗口用，避免高频会话膨胀）
 const MAX_LOG_FILES = 3;
 const LOW_CONFIDENCE_ROUTE = 0.45;
 const LOG_FIELDS = [
-  'ts', 'action', 'reason', 'targetType', 'targetName',
+  'ts', 'version', 'action', 'reason', 'targetType', 'targetName',
   'confidence', 'matchedKeywords', 'cwd', 'userDirSource',
   'promptType', 'host', 'source', 'scope', 'surfaceType', 'invocation',
   'transport', 'authRequired', 'mayWrite', 'externalAccess',
@@ -73,9 +82,9 @@ function rotateFeedbackIfNeeded(fbPath) {
 }
 
 function normalizeLogEntry(explain) {
-  const entry = { ts: new Date().toISOString() };
+  const entry = { ts: new Date().toISOString(), version: PLUGIN_VERSION };
   for (const field of LOG_FIELDS) {
-    if (field === 'ts') continue;
+    if (field === 'ts' || field === 'version') continue;
     if (explain && Object.prototype.hasOwnProperty.call(explain, field)) {
       entry[field] = explain[field];
     }

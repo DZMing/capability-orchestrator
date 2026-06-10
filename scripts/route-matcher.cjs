@@ -35,6 +35,7 @@ const {
   getUserAgentsPaths,
 } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
+const { getCachedSkills, buildFingerprintDirs } = require('./lib/scan-cache.cjs');
 const { debugError } = require('./lib/debug-log.cjs');
 const { resolveIntentRoute } = require('./lib/intent-router.cjs');
 const {
@@ -317,7 +318,8 @@ function buildExplainResult({ action, reason, targetType = null, targetName = nu
 // 具体能力匹配：字面量优先，语义匹配需过最低置信度阈值；
 // top scorer 置信度不足时 fallback 搜索次优有信心的候选（避免低置信度噪音阻断合法路由）
 function resolveCapabilityMatch(prompt, projectDir, userDir) {
-  const skills = collectAllSkills(projectDir, userDir);
+  const dirs = buildFingerprintDirs(projectDir, userDir);
+  const skills = getCachedSkills(dirs, () => collectAllSkills(projectDir, userDir));
   const literal = findLiteralMatch(prompt, skills);
   if (literal) return { ...literal, _literal: true };
   const bestSkill = findBestMatch(prompt, skills);

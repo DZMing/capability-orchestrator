@@ -77,6 +77,17 @@ else {
       process.stderr.write(`扫描部分失败:\n${errs.map(e => '  ' + e).join('\n')}\n`);
     }
     process.stdout.write(text + '\n');
+    // 预热 route-matcher 缓存（仅 awareness / SessionStart 模式，fire-and-forget）
+    if (mode === 'awareness') {
+      setImmediate(() => {
+        try {
+          const { collectAllSkills } = require('./route-matcher.cjs');
+          const { buildFingerprintDirs, getCachedSkills } = require('./lib/scan-cache.cjs');
+          const dirs = buildFingerprintDirs(projectDir, userDir);
+          getCachedSkills(dirs, () => collectAllSkills(projectDir, userDir));
+        } catch { /* 预热失败不影响主流程 */ }
+      });
+    }
   })().catch(err => {
     process.stderr.write(`致命错误: ${err.message}\n${err.stack}\n`);
     process.stdout.write('[扫描失败，详见 stderr]\n');

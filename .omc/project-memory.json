@@ -17,7 +17,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && sed -n 115,150p tests/skill-contract.test.cjs && npm test 2>&1 | grep -B2 -A6 \"输出更紧凑\" | head -25",
+    "testCommand": "npm test 2>&1 | tail -30",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -124,27 +124,27 @@
   },
   "hotPaths": [
     {
-      "path": "scripts/lib/route-logger.cjs",
-      "accessCount": 17,
-      "lastAccessed": 1778809294641,
+      "path": "scripts/lib/scan-render.cjs",
+      "accessCount": 21,
+      "lastAccessed": 1781051354966,
       "type": "file"
     },
     {
-      "path": "scripts/lib/scan-render.cjs",
-      "accessCount": 17,
-      "lastAccessed": 1781043684633,
+      "path": "scripts/lib/route-logger.cjs",
+      "accessCount": 21,
+      "lastAccessed": 1781051368483,
+      "type": "file"
+    },
+    {
+      "path": "scripts/route-matcher.cjs",
+      "accessCount": 14,
+      "lastAccessed": 1781051350422,
       "type": "file"
     },
     {
       "path": "CLAUDE.md",
       "accessCount": 12,
       "lastAccessed": 1781043949556,
-      "type": "file"
-    },
-    {
-      "path": "scripts/route-matcher.cjs",
-      "accessCount": 11,
-      "lastAccessed": 1781043239039,
       "type": "file"
     },
     {
@@ -167,8 +167,8 @@
     },
     {
       "path": "scripts/install-hooks.cjs",
-      "accessCount": 8,
-      "lastAccessed": 1778809377990,
+      "accessCount": 9,
+      "lastAccessed": 1781046940207,
       "type": "file"
     },
     {
@@ -179,8 +179,32 @@
     },
     {
       "path": "scripts/post-tool-feedback.cjs",
-      "accessCount": 5,
-      "lastAccessed": 1778809317053,
+      "accessCount": 6,
+      "lastAccessed": 1781046979505,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/route-scoring.cjs",
+      "accessCount": 6,
+      "lastAccessed": 1781047070046,
+      "type": "file"
+    },
+    {
+      "path": "install.sh",
+      "accessCount": 6,
+      "lastAccessed": 1781047080466,
+      "type": "file"
+    },
+    {
+      "path": "scripts/scan-environment.cjs",
+      "accessCount": 6,
+      "lastAccessed": 1781051390753,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 6,
+      "lastAccessed": 1781051404572,
       "type": "file"
     },
     {
@@ -190,21 +214,9 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/route-scoring.cjs",
-      "accessCount": 5,
-      "lastAccessed": 1778810613956,
-      "type": "file"
-    },
-    {
-      "path": "install.sh",
-      "accessCount": 4,
-      "lastAccessed": 1778805373433,
-      "type": "file"
-    },
-    {
       "path": "scripts/route-stats.cjs",
-      "accessCount": 4,
-      "lastAccessed": 1778809415276,
+      "accessCount": 5,
+      "lastAccessed": 1781046956393,
       "type": "file"
     },
     {
@@ -220,39 +232,27 @@
       "type": "file"
     },
     {
-      "path": "tests/install-hooks.test.cjs",
-      "accessCount": 3,
-      "lastAccessed": 1778805427279,
-      "type": "file"
-    },
-    {
-      "path": "scripts/scan-environment.cjs",
-      "accessCount": 3,
-      "lastAccessed": 1778809761593,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 3,
-      "lastAccessed": 1778810257422,
-      "type": "file"
-    },
-    {
       "path": "scripts/lib/safety-gate.cjs",
-      "accessCount": 3,
-      "lastAccessed": 1781043019974,
+      "accessCount": 4,
+      "lastAccessed": 1781046947340,
       "type": "file"
     },
     {
       "path": "scripts/lib/route-output.cjs",
-      "accessCount": 3,
-      "lastAccessed": 1781043700066,
+      "accessCount": 4,
+      "lastAccessed": 1781046955959,
+      "type": "file"
+    },
+    {
+      "path": "tests/install-hooks.test.cjs",
+      "accessCount": 4,
+      "lastAccessed": 1781046973291,
       "type": "file"
     },
     {
       "path": "tests/route-corpus.test.cjs",
-      "accessCount": 2,
-      "lastAccessed": 1778809992891,
+      "accessCount": 3,
+      "lastAccessed": 1781047006106,
       "type": "file"
     },
     {
@@ -265,6 +265,36 @@
       "path": "scripts/lib/scan-text.cjs",
       "accessCount": 2,
       "lastAccessed": 1781043709165,
+      "type": "file"
+    },
+    {
+      "path": "tests/route-regression.test.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781046990261,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/intent-router.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781047022058,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/platform.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781051033299,
+      "type": "file"
+    },
+    {
+      "path": "tests/sync-install.test.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781051276900,
+      "type": "file"
+    },
+    {
+      "path": "tests/scan-cache.test.cjs",
+      "accessCount": 2,
+      "lastAccessed": 1781051459674,
       "type": "file"
     },
     {
@@ -298,21 +328,9 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/intent-router.cjs",
-      "accessCount": 1,
-      "lastAccessed": 1778810016920,
-      "type": "file"
-    },
-    {
       "path": "scripts/lib/intent-classifier.cjs",
       "accessCount": 1,
       "lastAccessed": 1778810024850,
-      "type": "file"
-    },
-    {
-      "path": "tests/route-regression.test.cjs",
-      "accessCount": 1,
-      "lastAccessed": 1778810176631,
       "type": "file"
     },
     {
@@ -325,6 +343,36 @@
       "path": "scripts/route-explain.cjs",
       "accessCount": 1,
       "lastAccessed": 1778810377711,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/scan-core.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781046947020,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/user-dir.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781046996660,
+      "type": "file"
+    },
+    {
+      "path": "tests/integration.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781047051264,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/scan-cache.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781051301884,
+      "type": "file"
+    },
+    {
+      "path": "scripts/sync-install.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781051326493,
       "type": "file"
     }
   ],

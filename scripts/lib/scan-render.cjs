@@ -2,6 +2,15 @@
 
 const { truncate } = require('./scan-core.cjs');
 
+// 版本号：模块加载时读一次 package.json，避免运行时重复 IO
+function _readPluginVersion() {
+  try {
+    const p = require('path').join(__dirname, '..', '..', 'package.json');
+    return JSON.parse(require('fs').readFileSync(p, 'utf8')).version || '';
+  } catch { return ''; }
+}
+const PLUGIN_VERSION = _readPluginVersion();
+
 // P1 预算放开：desc 携带触发词 = 路由信号，截太狠会让模型不知道能力何时可用。
 // 默认 12000 字符（约 3000 tokens）；env 运行时可调，便于低预算环境收紧。
 const DEFAULT_MAX_TOTAL_CHARS = 12000;
@@ -97,6 +106,7 @@ function renderAwareness(snapshot) {
 
   const parts = ['## 环境能力感知\n'];
   const counts = [];
+  if (PLUGIN_VERSION) counts.push(`capability-orchestrator v${PLUGIN_VERSION}`);
   if (skillCount > 0) counts.push(`${skillCount} skills`);
   if (agentCount > 0) counts.push(`${agentCount} subagents`);
   if (plugins.length > 0) counts.push(`${plugins.length} plugins`);
