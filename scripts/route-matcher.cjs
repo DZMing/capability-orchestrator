@@ -500,8 +500,63 @@ function _resolveRouteDecisionInner(input) {
   };
 }
 
+// P2-5: 判断 filePath 是否来自可信源
+// userDir 本身就是 ~/.claude，其 skills 子目录为 userDir/skills
+// project skills 目录为 projectDir/.claude/skills
+// 插件 cache（plugins/cache/）不视为可信源
+function isTrustedSkillPath(filePath, userDir, projectDir) {
+  if (!filePath || typeof filePath !== 'string') return false;
+  const normalized = filePath.replace(/\\/g, '/');
+  // 必须不在 plugins/cache 路径下
+  if (normalized.includes('/plugins/cache/')) return false;
+  const pp = getPlatformPaths(detectPlatform());
+  const trustedRoots = [];
+  // userDir/skills（例如 ~/.claude/skills）
+  if (userDir) {
+    for (const rel of (pp.userSkillsDirs || ['skills'])) {
+      trustedRoots.push(path.join(userDir, rel).replace(/\\/g, '/'));
+    }
+  }
+  // projectDir/.claude/skills
+  if (projectDir && pp.projectSkillsDir) {
+    trustedRoots.push(path.join(projectDir, pp.projectSkillsDir).replace(/\\/g, '/'));
+  }
+  return trustedRoots.some(root => normalized.startsWith(root + '/') || normalized === root);
+}
+
+// P2-5: 去 frontmatter（移除 --- ... --- 块）
+function stripFrontmatter(content) {
+  if (!content) return '';
+  return content.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/, '').trim();
+}
+
+// P2-5: 为字面量命中的可信 skill 解析展开内容
+// 返回 string（展开后正文）或 undefined（不展开）
+function resolveExpandedContent(match, userDir, projectDir) {
+  if (!match || !match._literal) return undefined;
+  if (process.env.CO_AUTO_EXPAND === 'off') return undefined;
+  if (!isTrustedSkillPath(match.filePath, userDir, projectDir)) return undefined;
+  try {
+    const raw = fs.readFileSync(match.filePath, 'utf8');
+    const body = stripFrontmatter(raw);
+    if (!body) return undefined;
+    const maxChars = envNum('CO_EXPAND_MAX_CHARS', 4000);
+    return body.length > maxChars ? body.slice(0, maxChars) : body;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveRouteDecision(input) {
   const decision = _resolveRouteDecisionInner(input);
+  // P2-5: 字面量命中可信源时附加展开内容
+  if (decision.match && decision.targetType === 'skill' && decision.match._literal) {
+    const { dir: inferredUserDir } = resolveUserDirWithSource();
+    const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || process.env.CODEX_USER_DIR || inferredUserDir;
+    const stdinCwd = extractCwd(input);
+    const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
+    decision.expandedContent = resolveExpandedContent(decision.match, userDir, projectDir);
+  }
   // 追加路由日志（fire-and-forget，失败不影响路由）
   appendRouteLog(decision.explain);
   return decision;
@@ -517,6 +572,8 @@ module.exports = {
   classifyPromptType, pickExplainMeta,
   _tokenizeStemmed,
   STOP_WORDS, ESCAPE_PATTERNS, MIN_CONFIDENCE,
+  // P2-5
+  resolveExpandedContent, isTrustedSkillPath, stripFrontmatter,
 };
 
 if (require.main !== module) { /* 被 require 时不执行 */ }
@@ -534,7 +591,7 @@ else {
       if (decision.targetType === 'command') return createCommandOutput(decision.match);
       if (decision.targetType === 'mcp') return createMcpOutput(decision.match);
       if (decision.targetType === 'subagent') return createSubagentOutput(decision.match);
-      return createOutput(decision.match);
+      return createOutput(decision.match, { expandedContent: decision.expandedContent });
     } catch (err) {
       process.stderr.write('route-matcher error: ' + err.message + '\n');
       if (explainMode) {

@@ -5,7 +5,7 @@ const { detectPlatform, formatInvocation } = require('./platform.cjs');
 
 const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
-function createOutput(match) {
+function createOutput(match, opts) {
   const platform = detectPlatform();
   const skillInvocation = formatInvocation(match.name, platform, match.surfaceType || 'skill');
   const safeDesc = sanitize(match.desc || '');
@@ -34,6 +34,11 @@ function createOutput(match) {
     lines.push('仅当该 skill 与任务明显不符时，改用备选：' + rendered.join('、'));
   }
   lines.push('', callLine);
+  // P2-5: 高置信字面量命中时展开 skill 正文
+  const expandedContent = opts && opts.expandedContent;
+  if (expandedContent) {
+    lines.push('', '[SKILL EXPANDED]', expandedContent);
+  }
   process.stdout.write(lines.join('\n') + '\n');
 }
 
