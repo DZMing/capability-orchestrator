@@ -118,6 +118,20 @@ function hasPackageJson(cwd) {
   return fs.existsSync(path.join(cwd, 'package.json'));
 }
 
+// 子进程环境剔除插件自身变量:worker 由 hook 带 CLAUDE_PLUGIN_DATA 等 spawn,
+// 直传会让被测项目的测试读写插件真实数据目录(实测污染 route-log/scan-cache 并误报红)。
+function projectEnv() {
+  const env = { ...process.env };
+  for (const key of [
+    'CLAUDE_PLUGIN_DATA', 'CODEX_PLUGIN_DATA',
+    'CLAUDE_USER_DIR', 'CODEX_USER_DIR',
+    'CAPABILITY_ORCHESTRATOR_HOOK', 'CAPABILITY_PLATFORM',
+  ]) {
+    delete env[key];
+  }
+  return env;
+}
+
 // 默认命令执行器:非零退出不抛(返回 status+输出),真错误(超时/找不到命令)才抛。
 // Windows 上 npm 是 npm.cmd,新版 Node 对 .cmd 强制要求 shell(CVE-2024-27980)。
 function defaultRunCommand(cmd, args, { cwd, timeout }) {
@@ -131,6 +145,7 @@ function defaultRunCommand(cmd, args, { cwd, timeout }) {
       maxBuffer: 10 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: isWin,
+      env: projectEnv(),
     });
     return { status: 0, stdout };
   } catch (err) {

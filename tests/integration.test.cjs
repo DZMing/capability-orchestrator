@@ -31,20 +31,35 @@ function ensureGoldenDir() {
 
 test('golden: awareness output matches snapshot', () => {
   ensureGoldenDir();
-  const snap = collectSnapshot(
-    path.join(__dirname, 'fixtures', 'project'),
-    path.join(__dirname, 'fixtures', 'user'),
-  );
-  const { text } = renderSnapshot(snap, 'awareness');
-  const goldenFile = path.join(GOLDEN_DIR, 'awareness.txt');
+  // 渲染会读 CLAUDE_PLUGIN_DATA 下的 route-log 生成统计段;
+  // 清掉防止开发机真实日志混进 golden 对比(实测踩坑)
+  const saved = {
+    CLAUDE_PLUGIN_DATA: process.env.CLAUDE_PLUGIN_DATA,
+    CODEX_PLUGIN_DATA: process.env.CODEX_PLUGIN_DATA,
+  };
+  delete process.env.CLAUDE_PLUGIN_DATA;
+  delete process.env.CODEX_PLUGIN_DATA;
+  try {
+    const snap = collectSnapshot(
+      path.join(__dirname, 'fixtures', 'project'),
+      path.join(__dirname, 'fixtures', 'user'),
+    );
+    const { text } = renderSnapshot(snap, 'awareness');
+    const goldenFile = path.join(GOLDEN_DIR, 'awareness.txt');
 
-  if (!fs.existsSync(goldenFile)) {
-    fs.writeFileSync(goldenFile, text);
-    assert.ok(true, 'golden file created (first run)');
-    return;
+    if (!fs.existsSync(goldenFile)) {
+      fs.writeFileSync(goldenFile, text);
+      assert.ok(true, 'golden file created (first run)');
+      return;
+    }
+    const expected = fs.readFileSync(goldenFile, 'utf8').replace(/\n$/, '');
+    assert.equal(text, expected, 'awareness output changed — update golden file if intentional');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
-  const expected = fs.readFileSync(goldenFile, 'utf8').replace(/\n$/, '');
-  assert.equal(text, expected, 'awareness output changed — update golden file if intentional');
 });
 
 // ─── 6b: renderSection level 0-4 golden snapshots ───────────────────────────
@@ -507,6 +522,9 @@ test('integration: Codex platform uses CODEX_PLUGIN_DATA for log dir', () => {
       CAPABILITY_PLATFORM: 'codex',
       CODEX_PLUGIN_DATA: tmpData,
       CODEX_USER_DIR: path.join(__dirname, 'fixtures', 'user'),
+      // CLAUDE_PLUGIN_DATA 优先级高于 CODEX,继承自开发机环境会把日志写去真实目录
+      CLAUDE_PLUGIN_DATA: undefined,
+      CLAUDE_USER_DIR: undefined,
     },
   }).trim();
 
