@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.1.0] - 2026-06-09
+
+### Added
+
+- Added `hooks/hooks.json` native hooks manifest with SessionStart, UserPromptSubmit, PostToolUse, and PreToolUse (Bash matcher) entries.
+- Added `tests/plugin-hooks.test.cjs` to verify hooks.json structure, script existence, and version consistency across all manifests.
+
 ## [2.0.1] - 2026-05-07
 
 ### Added

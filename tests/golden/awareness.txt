@@ -1,6 +1,6 @@
 ## 环境能力感知
 
-capability-orchestrator v2.0.1、2 skills、1 subagents、4 plugins、2 MCP servers。
+capability-orchestrator v2.1.0、2 skills、1 subagents、4 plugins、2 MCP servers。
 
 ### MCP Servers
 - test-server: 项目级
