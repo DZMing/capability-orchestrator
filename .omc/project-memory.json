@@ -192,6 +192,12 @@
       "type": "file"
     },
     {
+      "path": "install.sh",
+      "accessCount": 8,
+      "lastAccessed": 1781055187796,
+      "type": "file"
+    },
+    {
       "path": "scripts/lib/safety-gate.cjs",
       "accessCount": 7,
       "lastAccessed": 1781052600322,
@@ -213,12 +219,6 @@
       "path": "scripts/lib/route-scoring.cjs",
       "accessCount": 6,
       "lastAccessed": 1781047070046,
-      "type": "file"
-    },
-    {
-      "path": "install.sh",
-      "accessCount": 6,
-      "lastAccessed": 1781047080466,
       "type": "file"
     },
     {
