@@ -7,7 +7,7 @@ set -euo pipefail
 REPO="DZMing/capability-orchestrator"
 REPO_URL="${CAPABILITY_INSTALL_REPO_URL:-https://github.com/DZMing/capability-orchestrator.git}"
 PLUGIN_NAME="capability-orchestrator"
-VERSION_FALLBACK="2.0.1"
+VERSION_FALLBACK="2.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd || true)"
 VERSION="$VERSION_FALLBACK"
 if [[ -n "${SCRIPT_DIR:-}" ]]; then
@@ -435,6 +435,7 @@ fi
 # 确保脚本可执行
 chmod +x "$STAGED_INSTALL_DIR/scripts/scan-environment.cjs"
 chmod +x "$STAGED_INSTALL_DIR/scripts/route-matcher.cjs"
+[[ -f "$STAGED_INSTALL_DIR/scripts/post-tool-feedback.cjs" ]] && chmod +x "$STAGED_INSTALL_DIR/scripts/post-tool-feedback.cjs"
 
 if [[ -L "$INSTALL_DIR" || -d "$INSTALL_DIR" ]]; then
   BACKUP_PATH="$PLUGINS_DIR/.cap-orch-backup-$(date +%s)-$$"
@@ -450,20 +451,23 @@ if [[ "$PLATFORM" == "codex" ]]; then
   # Codex: 写入 hooks.json
   SCAN_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
   ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  POST_TOOL_CMD="CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/post-tool-feedback.cjs")"
   HELPER_SCRIPT="$(resolve_helper_script)"
 
   yellow "正在注册 Codex hooks..."
-  node "$HELPER_SCRIPT" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD"
+  node "$HELPER_SCRIPT" --mode codex-install --file "$HOOKS_FILE" --scan-cmd "$SCAN_CMD" --route-cmd "$ROUTE_CMD" --post-tool-cmd "$POST_TOOL_CMD"
   echo "Codex hooks 已注册"
 elif [[ "$PLATFORM" == "claude" ]]; then
   # Claude Code: 写入 settings.json
   SETTINGS_FILE="$CONFIG_DIR/settings.json"
   HOOK_CMD="CAPABILITY_ORCHESTRATOR_HOOK=session-start $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/scan-environment.cjs") --mode=awareness"
   ROUTE_CMD="CAPABILITY_ORCHESTRATOR_HOOK=user-prompt-submit $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/route-matcher.cjs")"
+  POST_TOOL_CMD="CAPABILITY_ORCHESTRATOR_HOOK=post-tool-use $CONFIG_DIR_ENV=$(shell_quote "$CONFIG_DIR") $PLUGIN_DATA_ENV=$(shell_quote "$INSTALL_DIR/data") node $(shell_quote "$INSTALL_DIR/scripts/post-tool-feedback.cjs")"
   HELPER_SCRIPT="$(resolve_helper_script)"
-  CLAUDE_INSTALL_JSON=$(node "$HELPER_SCRIPT" --mode claude-install --file "$SETTINGS_FILE" --scan-cmd "$HOOK_CMD" --route-cmd "$ROUTE_CMD")
+  CLAUDE_INSTALL_JSON=$(node "$HELPER_SCRIPT" --mode claude-install --file "$SETTINGS_FILE" --scan-cmd "$HOOK_CMD" --route-cmd "$ROUTE_CMD" --post-tool-cmd "$POST_TOOL_CMD")
   SESSION_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.sessionStatus)")
   ROUTE_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.routeStatus)")
+  POST_TOOL_STATUS=$(printf '%s' "$CLAUDE_INSTALL_JSON" | node -e "const data=JSON.parse(require('fs').readFileSync(0,'utf8')); process.stdout.write(data.postToolStatus || 'skipped')")
 
   yellow "正在注册 SessionStart hook..."
   echo "$SESSION_STATUS"
@@ -471,6 +475,10 @@ elif [[ "$PLATFORM" == "claude" ]]; then
   # ── 注册 UserPromptSubmit hook ───────────────────────────────────────────────
   yellow "正在注册 UserPromptSubmit hook..."
   echo "$ROUTE_STATUS"
+
+  # ── 注册 PostToolUse hook（采纳率反馈）─────────────────────────────────────
+  yellow "正在注册 PostToolUse hook..."
+  echo "$POST_TOOL_STATUS"
 elif [[ "$PLATFORM" == "hermes" ]]; then
   install_hermes_host
 fi
@@ -480,6 +488,7 @@ green "✓ 安装完成：$INSTALL_DIR (平台: $PLATFORM)"
 if [[ "$PLATFORM" == "claude" || "$PLATFORM" == "codex" ]]; then
   green "✓ SessionStart hook 已注册（每次新会话自动注入能力摘要）"
   green "✓ UserPromptSubmit hook 已注册（每条消息自动路由能力并拦截高风险动作）"
+  green "✓ PostToolUse hook 已注册（自动统计路由采纳率）"
 elif [[ "$PLATFORM" == "hermes" ]]; then
   green "✓ Hermes adapter 已安装（实验宿主路径）"
 fi

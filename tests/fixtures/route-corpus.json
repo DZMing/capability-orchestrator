@@ -96,5 +96,69 @@
     "name": "no match",
     "prompt": "tell me a tiny local joke",
     "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "pure noise: polite filler only",
+    "prompt": "麻烦帮我看看这个问题",
+    "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "escape: 直接做",
+    "prompt": "直接做，列出目录",
+    "expected": { "action": "pass", "reason": "escaped" }
+  },
+  {
+    "name": "no match: unrecognized CJK verb phrase",
+    "prompt": "撤销刚才的操作",
+    "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "no match: english affirmation without intent keyword",
+    "prompt": "yes proceed",
+    "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "no match: meta-question about agent actions",
+    "prompt": "what did you just do?",
+    "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "short prompt below MIN_PROMPT_LEN",
+    "prompt": "ok",
+    "expected": { "action": "pass" }
+  },
+  {
+    "name": "mcp match: database query",
+    "prompt": "run a database query analytics",
+    "expected": {
+      "action": "route",
+      "reason": "matched-mcp",
+      "targetType": "mcp",
+      "targetName": "data-tool"
+    }
+  },
+  {
+    "name": "command: literal slash with high-risk words triggers safety gate",
+    "prompt": "/ship-it release now",
+    "expected": {
+      "action": "route",
+      "reason": "confirmation-required",
+      "targetType": "intent"
+    }
+  },
+  {
+    "name": "chinese question mark: short CJK question passes through",
+    "prompt": "怎么办？",
+    "expected": { "action": "pass", "reason": "escaped" }
+  },
+  {
+    "name": "no match: generic chat",
+    "prompt": "how are you doing today",
+    "expected": { "action": "pass", "reason": "no-match" }
+  },
+  {
+    "name": "no match: pure english noise",
+    "prompt": "please help me",
+    "expected": { "action": "pass" }
   }
 ]

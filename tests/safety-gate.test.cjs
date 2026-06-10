@@ -78,3 +78,59 @@ test('evaluateSafety: execution against production still requires confirmation',
     assert.equal(result.confirmationRequired, true, prompt);
   }
 });
+
+// —— 实战误判回归（来自 route-log 真实样本）：提及 ≠ 要执行 ——
+
+test('evaluateSafety: LLM token cost talk is not a credential action', () => {
+  for (const prompt of ['我不怕浪费token，多用点没关系', 'how many tokens does this prompt use', '帮我统计 token 用量']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: push-notification feature work is not a git remote action', () => {
+  for (const prompt of ['推送通知功能怎么做', 'add push notification support to the app', '消息推送服务选型']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: code-internal deletions are ordinary edits', () => {
+  for (const prompt of ['删除这个函数里的注释', 'delete the unused import statements', '清除多余的 console.log']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: question-form risky topics stay safe without explicit execution', () => {
+  for (const prompt of ['怎么部署到生产环境？', 'how do I rotate api keys safely', '为什么 git push 会被拒绝']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: frontend work touching pricing page is not a product decision', () => {
+  for (const prompt of ['change the pricing page layout', '调整价格页面的按钮样式']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'safe_auto', prompt);
+    assert.equal(result.confirmationRequired, false, prompt);
+  }
+});
+
+test('evaluateSafety: deleting directories or files still requires confirmation', () => {
+  for (const prompt of ['帮我删除这个目录', 'delete this file', '清空数据库表']) {
+    const result = evaluateSafety({ prompt, intent: 'unknown' });
+    assert.equal(result.decision, 'confirmation_required', prompt);
+    assert.equal(result.confirmationRequired, true, prompt);
+  }
+});
+
+test('evaluateSafety: explicit execution overrides question form', () => {
+  const result = evaluateSafety({ prompt: '直接部署到生产吧？', intent: 'execute_plan' });
+  assert.equal(result.decision, 'confirmation_required');
+  assert.equal(result.confirmationRequired, true);
+});

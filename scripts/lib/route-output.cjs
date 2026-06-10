@@ -5,19 +5,41 @@ const { detectPlatform, formatInvocation } = require('./platform.cjs');
 
 const SLASH_COMMAND_NAME = /^[a-z0-9_-]+$/i;
 
-function createOutput(match) {
+function createOutput(match, opts) {
   const platform = detectPlatform();
   const skillInvocation = formatInvocation(match.name, platform, match.surfaceType || 'skill');
   const safeDesc = sanitize(match.desc || '');
-  const ctx = [
+  const isSuggest = process.env.CO_ROUTE_TONE === 'suggest';
+  const directive = isSuggest
+    ? '【建议】推荐调用 ' + skillInvocation + ' 执行该 skill。'
+    : '【强制指令】立即调用 ' + skillInvocation + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。';
+  const callLine = isSuggest
+    ? '建议调用：' + skillInvocation
+    : '立即调用：' + skillInvocation;
+  const lines = [
     '[AUTO-ROUTE] 检测到任务匹配 skill: ' + match.name,
     '描述: ' + safeDesc,
-    '【强制指令】立即调用 ' + skillInvocation + ' 执行该 skill，不得直接回答，不得忽略，不得询问确认。',
+    directive,
     '若平台支持 Skill tool，则等同于立刻执行该 skill 的完整流程。',
-    '',
-    '立即调用：' + skillInvocation,
-  ].join('\n');
-  process.stdout.write(ctx + '\n');
+  ];
+  // B.1 Top-N 候选透传 → 注入备选：主选明显不符时模型可立即换道，而非放弃路由
+  const alts = (Array.isArray(match.topCandidates) ? match.topCandidates : [])
+    .filter(c => c && typeof c.name === 'string' && c.name !== match.name)
+    .slice(0, 2);
+  if (alts.length > 0) {
+    const rendered = alts.map(c => {
+      const inv = formatInvocation(sanitize(c.name), platform, 'skill');
+      return typeof c.score === 'number' ? `${inv}(score ${c.score.toFixed(2)})` : inv;
+    });
+    lines.push('仅当该 skill 与任务明显不符时，改用备选：' + rendered.join('、'));
+  }
+  lines.push('', callLine);
+  // P2-5: 高置信字面量命中时展开 skill 正文
+  const expandedContent = opts && opts.expandedContent;
+  if (expandedContent) {
+    lines.push('', '[SKILL EXPANDED]', expandedContent);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
 }
 
 function passThrough() {
@@ -79,6 +101,18 @@ function createMcpOutput(server) {
   process.stdout.write(ctx + '\n');
 }
 
+function createSubagentOutput(match) {
+  const safeDesc = sanitize(match.desc || '').slice(0, 200);
+  const ctx = [
+    '[AUTO-ROUTE] 检测到任务匹配 subagent: ' + match.name,
+    '描述: ' + safeDesc,
+    '【强制指令】立即用 Agent tool 调用，subagent_type="' + match.name + '"，不得直接回答，不得询问确认。',
+    '',
+    '立即调用：Agent(subagent_type="' + match.name + '")',
+  ].join('\n');
+  process.stdout.write(ctx + '\n');
+}
+
 function createIntentOutput(intentRoute) {
   process.stdout.write(String(intentRoute.output || '').trim() + '\n');
 }
@@ -90,5 +124,6 @@ module.exports = {
   getCommandExplainReason,
   createCommandOutput,
   createMcpOutput,
+  createSubagentOutput,
   createIntentOutput,
 };

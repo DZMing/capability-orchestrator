@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const {
   scanSkills,
+  scanAgents,
   sanitize,
   scanInstalledPlugins,
   scanCommands,
@@ -31,8 +32,11 @@ const {
   getPlatformPaths,
   getUserSkillsPaths,
   getUserCommandsPaths,
+  getUserAgentsPaths,
 } = require('./lib/platform.cjs');
 const { appendRouteLog } = require('./lib/route-logger.cjs');
+const { getCachedSkills, buildFingerprintDirs } = require('./lib/scan-cache.cjs');
+const { debugError } = require('./lib/debug-log.cjs');
 const { resolveIntentRoute } = require('./lib/intent-router.cjs');
 const {
   extractKeywords,
@@ -49,18 +53,26 @@ const {
   passThrough,
   createCommandOutput,
   createMcpOutput,
+  createSubagentOutput,
   createIntentOutput,
   canInvokeAsSlashCommand,
   getCommandExplainReason,
 } = require('./lib/route-output.cjs');
 
 const STDIN_TIMEOUT = 3000;
-const MIN_PROMPT_LEN = 5;
+function envNum(name, def) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return def;
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 ? v : def;
+}
+const MIN_PROMPT_LEN = envNum('CO_MIN_PROMPT_LEN', 5);
 
 const ESCAPE_PATTERNS = ['直接做', '直接执行', '直接回答', '不要用skill', '不用skill', 'skip'];
 const EXPLAIN_META_FIELDS = [
   'host', 'source', 'scope', 'surfaceType', 'invocation',
   'transport', 'authRequired', 'mayWrite', 'externalAccess',
+  'topCandidates', 'unmatchedTopicKw',
 ];
 
 function resolveUserDir() {
@@ -127,7 +139,17 @@ function isEscaped(prompt) {
   const lower = prompt.toLowerCase().replace(/\s+/g, '');
   if (ESCAPE_PATTERNS.some(p => lower.includes(p.replace(/\s+/g, '')))) return true;
   if (prompt.trimEnd().endsWith('?') && prompt.length < 15 && !/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(prompt)) return true;
+  // E.4: \u4e2d\u6587\u77ed\u95ee\u53e5 \u22648 \u5b57\u7b26 + \u7591\u95ee\u8bcd \u2192 \u4fe1\u53f7\u592a\u5f31\uff0c\u76f4\u63a5\u653e\u884c
+  if (prompt.length <= 8 && /[\uff1f\u5417\u5462]/.test(prompt) && /[\u4e00-\u9fff]/.test(prompt)) return true;
   return false;
+}
+
+// 解析 desc 中显式声明的触发词（如"触发词：xxx、yyy"或"Trigger words: xxx, yyy"）
+function parseTriggerWords(desc) {
+  if (!desc) return [];
+  const m = desc.match(/(?:触发词[：:]\s*|[Tt]rigger(?:\s+[Ww]ords?)?[：:]\s*)([^\n.。]+)/);
+  if (!m) return [];
+  return m[1].split(/[、,，\/]+/).map(w => w.trim().toLowerCase()).filter(w => w.length >= 2);
 }
 
 // 改进2：命令名直接命中 — 用户说 "/commit" 或 "commit" 开头时跳过语义匹配
@@ -146,6 +168,16 @@ function findLiteralMatch(prompt, skills) {
     for (const w of words) {
       const found = skills.find(s => s.name.toLowerCase() === w);
       if (found) return { ...found, confidence: 1, matchedKeywords: [w] };
+    }
+  }
+  // 触发词整词命中（confidence=0.9，低于 name 严格相等）
+  const lower = trimmed.toLowerCase();
+  for (const s of skills) {
+    if (!s.triggerWords || s.triggerWords.length === 0) continue;
+    for (const tw of s.triggerWords) {
+      if (lower.includes(tw)) {
+        return { ...s, confidence: 0.9, matchedKeywords: [tw] };
+      }
     }
   }
   return null;
@@ -197,7 +229,7 @@ function collectAllSkills(projectDir, userDir) {
     for (const p of scanInstalledPlugins(activeUserDir, [])) {
       for (const s of (p.skillItems || [])) pluginSkills.push(s);
     }
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('scanInstalledPlugins', e); }
 
   // Legacy /commands — 有描述才纳入匹配池，优先级低于 skills
   const legacyCmds = [];
@@ -218,15 +250,31 @@ function collectAllSkills(projectDir, userDir) {
         if (c.desc) legacyCmds.push({ ...c, type: 'command' });
       }
     }
-  } catch { /* fault-open */ }
+  } catch (e) { debugError('scanCommands', e); }
+
+  // Subagents — 纳入路由候选池，优先级低于 skills，高于 legacy commands
+  const subagents = [];
+  try {
+    if (pp.projectAgentsDir) {
+      for (const s of scanAgents(path.join(projectDir, pp.projectAgentsDir), [], {
+        ...baseMeta, source: 'project', scope: 'project',
+      })) subagents.push({ ...s, type: 'subagent' });
+    }
+    for (const dir of getUserAgentsPaths(activeUserDir, platform)) {
+      for (const s of scanAgents(dir, [], {
+        ...baseMeta, source: 'user', scope: 'user',
+      })) subagents.push({ ...s, type: 'subagent' });
+    }
+  } catch (e) { debugError('scanAgents', e); }
 
   const seen = new Set();
   const deduped = [];
-  // Skills 优先，legacy commands 最低优先
-  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...openClawSkills, ...hermesSkills, ...legacyCmds]) {
+  // Skills 优先，subagents 其次，legacy commands 最低优先
+  for (const s of [...projSkills, ...userSkills, ...pluginSkills, ...openClawSkills, ...hermesSkills, ...subagents, ...legacyCmds]) {
     if (!seen.has(s.name)) {
       seen.add(s.name);
-      deduped.push(s);
+      // 预解析触发词，供 findLiteralMatch 第二轮使用
+      deduped.push({ ...s, triggerWords: parseTriggerWords(s.desc) });
     }
   }
   return deduped;
@@ -251,6 +299,7 @@ function pickExplainMeta(match) {
 }
 
 function buildExplainResult({ action, reason, targetType = null, targetName = null, confidence = 0, matchedKeywords = [], cwd = '', userDirSource = '', prompt = '', match = null }) {
+  const promptText = String(prompt || '');
   return {
     action,
     reason,
@@ -260,9 +309,26 @@ function buildExplainResult({ action, reason, targetType = null, targetName = nu
     matchedKeywords,
     cwd,
     userDirSource,
-    promptType: classifyPromptType(prompt, reason),
+    promptType: classifyPromptType(promptText, reason),
+    promptPreview: promptText.slice(0, 200),
     ...pickExplainMeta(match),
   };
+}
+
+// 具体能力匹配：字面量优先，语义匹配需过最低置信度阈值；
+// top scorer 置信度不足时 fallback 搜索次优有信心的候选（避免低置信度噪音阻断合法路由）
+function resolveCapabilityMatch(prompt, projectDir, userDir) {
+  const dirs = buildFingerprintDirs(projectDir, userDir);
+  const skills = getCachedSkills(dirs, () => collectAllSkills(projectDir, userDir));
+  const literal = findLiteralMatch(prompt, skills);
+  if (literal) return { ...literal, _literal: true };
+  const bestSkill = findBestMatch(prompt, skills);
+  if (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE) return bestSkill;
+  if (bestSkill) {
+    const alt = findBestMatch(prompt, skills.filter(s => s.name !== bestSkill.name));
+    if (alt && alt.confidence >= MIN_CONFIDENCE) return alt;
+  }
+  return null;
 }
 
 function _resolveRouteDecisionInner(input) {
@@ -317,7 +383,13 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  if (intentRoute) {
+  // 优先级：具体能力（skill/command/subagent）> 通用意图兜底。
+  // intent 是泛化执行契约，skill 才是环境里的具体能力——两者同时命中时 skill 赢
+  const match = prompt.length >= MIN_PROMPT_LEN
+    ? resolveCapabilityMatch(prompt, projectDir, userDir)
+    : null;
+  const literalMatched = !!(match && match._literal);
+  if (!match && intentRoute) {
     return {
       intentRoute,
       targetType: 'intent',
@@ -335,7 +407,7 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  if (prompt.length < MIN_PROMPT_LEN) {
+  if (!match && prompt.length < MIN_PROMPT_LEN) {
     return {
       explain: buildExplainResult({
         action: 'pass',
@@ -347,20 +419,17 @@ function _resolveRouteDecisionInner(input) {
     };
   }
 
-  const skills = collectAllSkills(projectDir, userDir);
-  const literal = findLiteralMatch(prompt, skills);
-  const literalMatched = !!literal;
-  const bestSkill = findBestMatch(prompt, skills);
-  // 语义匹配低于最低置信度阈值视为噪音，不路由（字面量匹配不受限制）
-  const match = literal || (bestSkill && bestSkill.confidence >= MIN_CONFIDENCE ? bestSkill : null);
   if (match) {
     const isCommandLike = match.type === 'command'
       || match.surfaceType === 'slash_command'
       || match.surfaceType === 'plugin_command'
       || match.surfaceType === 'cli_subcommand';
-    const targetType = isCommandLike ? 'command' : 'skill';
+    const isSubagentLike = match.type === 'subagent' || match.surfaceType === 'agent';
+    const targetType = isCommandLike ? 'command' : isSubagentLike ? 'subagent' : 'skill';
     const reason = targetType === 'command'
       ? getCommandExplainReason(match, literalMatched)
+      : targetType === 'subagent'
+      ? 'matched-subagent'
       : 'matched-skill';
     return {
       match,
@@ -418,7 +487,7 @@ function _resolveRouteDecisionInner(input) {
         }),
       };
     }
-  } catch { /* fault-open: mcp explain falls through to no-match */ }
+  } catch (e) { debugError('mcpExplain', e); }
 
   return {
     explain: buildExplainResult({
@@ -431,8 +500,63 @@ function _resolveRouteDecisionInner(input) {
   };
 }
 
+// P2-5: 判断 filePath 是否来自可信源
+// userDir 本身就是 ~/.claude，其 skills 子目录为 userDir/skills
+// project skills 目录为 projectDir/.claude/skills
+// 插件 cache（plugins/cache/）不视为可信源
+function isTrustedSkillPath(filePath, userDir, projectDir) {
+  if (!filePath || typeof filePath !== 'string') return false;
+  const normalized = filePath.replace(/\\/g, '/');
+  // 必须不在 plugins/cache 路径下
+  if (normalized.includes('/plugins/cache/')) return false;
+  const pp = getPlatformPaths(detectPlatform());
+  const trustedRoots = [];
+  // userDir/skills（例如 ~/.claude/skills）
+  if (userDir) {
+    for (const rel of (pp.userSkillsDirs || ['skills'])) {
+      trustedRoots.push(path.join(userDir, rel).replace(/\\/g, '/'));
+    }
+  }
+  // projectDir/.claude/skills
+  if (projectDir && pp.projectSkillsDir) {
+    trustedRoots.push(path.join(projectDir, pp.projectSkillsDir).replace(/\\/g, '/'));
+  }
+  return trustedRoots.some(root => normalized.startsWith(root + '/') || normalized === root);
+}
+
+// P2-5: 去 frontmatter（移除 --- ... --- 块）
+function stripFrontmatter(content) {
+  if (!content) return '';
+  return content.replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/, '').trim();
+}
+
+// P2-5: 为字面量命中的可信 skill 解析展开内容
+// 返回 string（展开后正文）或 undefined（不展开）
+function resolveExpandedContent(match, userDir, projectDir) {
+  if (!match || !match._literal) return undefined;
+  if (process.env.CO_AUTO_EXPAND === 'off') return undefined;
+  if (!isTrustedSkillPath(match.filePath, userDir, projectDir)) return undefined;
+  try {
+    const raw = fs.readFileSync(match.filePath, 'utf8');
+    const body = stripFrontmatter(raw);
+    if (!body) return undefined;
+    const maxChars = envNum('CO_EXPAND_MAX_CHARS', 4000);
+    return body.length > maxChars ? body.slice(0, maxChars) : body;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveRouteDecision(input) {
   const decision = _resolveRouteDecisionInner(input);
+  // P2-5: 字面量命中可信源时附加展开内容
+  if (decision.match && decision.targetType === 'skill' && decision.match._literal) {
+    const { dir: inferredUserDir } = resolveUserDirWithSource();
+    const userDir = process.env.CAPABILITY_USER_DIR || process.env.CLAUDE_USER_DIR || process.env.CODEX_USER_DIR || inferredUserDir;
+    const stdinCwd = extractCwd(input);
+    const projectDir = stdinCwd || process.env.CAPABILITY_PROJECT_DIR || process.cwd();
+    decision.expandedContent = resolveExpandedContent(decision.match, userDir, projectDir);
+  }
   // 追加路由日志（fire-and-forget，失败不影响路由）
   appendRouteLog(decision.explain);
   return decision;
@@ -440,14 +564,16 @@ function resolveRouteDecision(input) {
 
 module.exports = {
   readStdin, extractPrompt, extractCwd, extractKeywords, isEscaped,
-  findBestMatch, findBestMcpMatch, findLiteralMatch,
-  createOutput, createMcpOutput, createCommandOutput,
+  findBestMatch, findBestMcpMatch, findLiteralMatch, parseTriggerWords,
+  createOutput, createMcpOutput, createCommandOutput, createSubagentOutput,
   createIntentOutput,
   canInvokeAsSlashCommand, getCommandExplainReason,
   passThrough, collectAllSkills, buildExplainResult, resolveRouteDecision,
   classifyPromptType, pickExplainMeta,
   _tokenizeStemmed,
   STOP_WORDS, ESCAPE_PATTERNS, MIN_CONFIDENCE,
+  // P2-5
+  resolveExpandedContent, isTrustedSkillPath, stripFrontmatter,
 };
 
 if (require.main !== module) { /* 被 require 时不执行 */ }
@@ -464,7 +590,8 @@ else {
       if (!decision.match) return passThrough();
       if (decision.targetType === 'command') return createCommandOutput(decision.match);
       if (decision.targetType === 'mcp') return createMcpOutput(decision.match);
-      return createOutput(decision.match);
+      if (decision.targetType === 'subagent') return createSubagentOutput(decision.match);
+      return createOutput(decision.match, { expandedContent: decision.expandedContent });
     } catch (err) {
       process.stderr.write('route-matcher error: ' + err.message + '\n');
       if (explainMode) {

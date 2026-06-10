@@ -3,7 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const MAX_DESC = 100;
+// desc 同时供 awareness 注入和 route-matcher 关键词提取使用——
+// SKILL.md 模板把触发词放在 description 末尾，100 字符常把触发词截掉，故放宽到 200
+const MAX_DESC = 200;
 const HEAD_BYTES = 2048;
 const UNSAFE_UNICODE = /[\u200B\u200C\u200D\uFEFF\u00AD\u2060\u180E\u200E\u200F\u202A-\u202E\u2066-\u2069\u061C\u2061-\u2064\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFF9-\uFFFB]/g;
 

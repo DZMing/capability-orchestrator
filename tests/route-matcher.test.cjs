@@ -128,6 +128,53 @@ test('resolveRouteDecision: short continuation prompt routes through Intent Rout
   }
 });
 
+test('resolveRouteDecision: specific skill match outranks generic intent fallback', () => {
+  const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-route-priority-'));
+  const project = path.join(root, 'project');
+  const userDir = path.join(root, 'user');
+  const dataDir = path.join(root, 'data');
+  fs.mkdirSync(path.join(project, '.claude', 'skills', 'artifact-review'), { recursive: true });
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(project, 'AGENTS.md'), 'Verify before claiming completion.\n');
+  fs.writeFileSync(path.join(project, '.claude', 'skills', 'artifact-review', 'SKILL.md'), [
+    '---',
+    'name: artifact-review',
+    'description: artifact review helper for evidence and quality review',
+    '---',
+    '',
+  ].join('\n'));
+
+  const previous = {
+    CAPABILITY_USER_DIR: process.env.CAPABILITY_USER_DIR,
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CLAUDE_PLUGIN_DATA: process.env.CLAUDE_PLUGIN_DATA,
+  };
+  process.env.CAPABILITY_USER_DIR = userDir;
+  process.env.CLAUDE_USER_DIR = userDir;
+  process.env.CLAUDE_PLUGIN_DATA = dataDir;
+
+  try {
+    // "继续" 命中 continue_work 意图，但 prompt 同时强匹配具体 skill——
+    // 具体能力应胜过通用意图兜底
+    const decision = resolveRouteDecision(JSON.stringify({
+      prompt: '继续 artifact review helper 的 evidence quality 检查',
+      cwd: project,
+    }));
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.reason, 'matched-skill');
+    assert.equal(decision.explain.targetType, 'skill');
+    assert.equal(decision.explain.targetName, 'artifact-review');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('resolveRouteDecision: risky publish prompt routes to confirmation gate', () => {
   const { resolveRouteDecision } = require('../scripts/route-matcher.cjs');
   const decision = resolveRouteDecision(JSON.stringify({
@@ -945,6 +992,170 @@ test('resolveRouteDecision: confidence at documented threshold still routes', ()
     else process.env.CLAUDE_USER_DIR = savedUserDir;
     if (savedPlatform === undefined) delete process.env.CAPABILITY_PLATFORM;
     else process.env.CAPABILITY_PLATFORM = savedPlatform;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
+// ─── parseTriggerWords unit tests ────────────────────────────────────────────
+
+const { parseTriggerWords } = require('../scripts/route-matcher.cjs');
+
+test('parseTriggerWords: extracts CJK trigger words from 触发词 field', () => {
+  const result = parseTriggerWords('Some skill desc. 触发词：亚马逊、Amazon、选品、FBA');
+  assert.ok(result.includes('亚马逊'), 'should include 亚马逊');
+  assert.ok(result.includes('amazon'), 'should include amazon (lowercased)');
+  assert.ok(result.includes('选品'), 'should include 选品');
+  assert.ok(result.includes('fba'), 'should include fba (lowercased)');
+});
+
+test('parseTriggerWords: returns empty array when no trigger word field', () => {
+  assert.deepEqual(parseTriggerWords('A skill that does things.'), []);
+  assert.deepEqual(parseTriggerWords(''), []);
+});
+
+test('parseTriggerWords: handles English Trigger: format', () => {
+  const result = parseTriggerWords('Skill description. Trigger: deploy, release, ship');
+  assert.ok(result.includes('deploy'));
+  assert.ok(result.includes('release'));
+  assert.ok(result.includes('ship'));
+});
+
+// ─── findLiteralMatch: trigger word hit ──────────────────────────────────────
+
+test('findLiteralMatch: trigger word hit returns confidence 0.9', () => {
+  const desc = '亚马逊跨境电商运营 agent。触发词：亚马逊、Amazon、选品、FBA';
+  const skills = [
+    { name: 'amazon-ops', desc, triggerWords: parseTriggerWords(desc) },
+    { name: 'other-skill', desc: 'some other stuff', triggerWords: [] },
+  ];
+  const match = findLiteralMatch('亚马逊选品调研帮我做', skills);
+  assert.ok(match !== null, 'should match via trigger word');
+  assert.equal(match.name, 'amazon-ops');
+  assert.equal(match.confidence, 0.9);
+  assert.ok(match.matchedKeywords.length > 0);
+});
+
+test('findLiteralMatch: trigger word does not fire when prompt is too short to include it', () => {
+  const desc = '触发词：ultraspecificword';
+  const skills = [{ name: 'alpha', desc, triggerWords: parseTriggerWords(desc) }];
+  const match = findLiteralMatch('something unrelated', skills);
+  assert.equal(match, null);
+});
+
+// ─── Subagent routing ────────────────────────────────────────────────────────
+
+function makeIsolatedAgentEnv(agentFiles) {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-subagent-'));
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-subagent-proj-'));
+  const agentsDir = path.join(tmpHome, 'agents');
+  fs.mkdirSync(agentsDir, { recursive: true });
+  for (const [filename, content] of Object.entries(agentFiles)) {
+    fs.writeFileSync(path.join(agentsDir, filename), content);
+  }
+  return { tmpHome, tmpProj };
+}
+
+function withIsolatedEnv(tmpHome, fn) {
+  const saved = {
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CAPABILITY_PLATFORM: process.env.CAPABILITY_PLATFORM,
+    OPENCLAW_USER_DIR: process.env.OPENCLAW_USER_DIR,
+    HERMES_USER_DIR: process.env.HERMES_USER_DIR,
+  };
+  process.env.CLAUDE_USER_DIR = tmpHome;
+  process.env.CAPABILITY_PLATFORM = 'claude';
+  process.env.OPENCLAW_USER_DIR = path.join(tmpHome, 'openclaw-empty');
+  process.env.HERMES_USER_DIR = path.join(tmpHome, 'hermes-empty');
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+test('resolveRouteDecision: subagent routing — 写测试 → tester', () => {
+  const { tmpHome, tmpProj } = makeIsolatedAgentEnv({
+    'tester.md': '---\nname: tester\ndescription: 写测试 补测试 测试覆盖 TDD testing unit-test\n---\n',
+  });
+  try {
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = withIsolatedEnv(tmpHome, () =>
+      rrd(JSON.stringify({ prompt: '帮我写单元测试', cwd: tmpProj }))
+    );
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.targetType, 'subagent');
+    assert.equal(decision.explain.targetName, 'tester');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
+test('resolveRouteDecision: subagent routing — 做架构设计 → architect', () => {
+  const { tmpHome, tmpProj } = makeIsolatedAgentEnv({
+    'architect.md': '---\nname: architect\ndescription: 高层设计 架构设计 写 spec 出 plan 分析需求 architecture design system\n---\n',
+  });
+  try {
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = withIsolatedEnv(tmpHome, () =>
+      rrd(JSON.stringify({ prompt: '做架构设计', cwd: tmpProj }))
+    );
+    assert.equal(decision.explain.action, 'route');
+    assert.equal(decision.explain.targetType, 'subagent');
+    assert.equal(decision.explain.targetName, 'architect');
+  } finally {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(tmpProj, { recursive: true, force: true });
+  }
+});
+
+// ─── 回归：备份数据库 不误推 mvp-scaffold ──────────────────────────────────────
+
+// 回归：当环境中存在专门的运维 agent 时，备份/迁移类 prompt 应路由到 ops 而非 mvp-scaffold
+// 注：若环境中没有 ops 类 skill，"备份数据库" 可能仍会因 数据库 bigram 碰撞而命中 mvp-scaffold
+// 这是当前算法的已知局限，需要 ops 类 skill 提供 备份/backup 正向信号才能覆盖
+test('resolveRouteDecision: 备份数据库 routes to ops-agent over mvp-scaffold when ops agent exists', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-regression-backup-'));
+  const tmpProj = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-regression-backup-proj-'));
+  const savedVars = {
+    CLAUDE_USER_DIR: process.env.CLAUDE_USER_DIR,
+    CAPABILITY_PLATFORM: process.env.CAPABILITY_PLATFORM,
+    OPENCLAW_USER_DIR: process.env.OPENCLAW_USER_DIR,
+    HERMES_USER_DIR: process.env.HERMES_USER_DIR,
+  };
+  try {
+    // mvp-scaffold: 使用真实中文描述（含"数据库"，会产生 bigram 碰撞）
+    const scaffoldDir = path.join(tmpHome, 'skills', 'mvp-scaffold');
+    fs.mkdirSync(scaffoldDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(scaffoldDir, 'SKILL.md'),
+      '---\nname: mvp-scaffold\ndescription: Next.js MVP 脚手架一键初始化：App Router + Supabase + Stripe，含数据库 schema\n---\n'
+    );
+    // ops-agent: 明确包含 备份 关键词，提供正向信号盖过 mvp-scaffold 的数据库 bigram
+    const agentsDir = path.join(tmpHome, 'agents');
+    fs.mkdirSync(agentsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(agentsDir, 'ops.md'),
+      '---\nname: ops\ndescription: 运维 agent。备份、迁移、回滚、监控、部署、CI/CD。触发词：备份、迁移、回滚、deploy。\n---\n'
+    );
+    process.env.CLAUDE_USER_DIR = tmpHome;
+    process.env.CAPABILITY_PLATFORM = 'claude';
+    process.env.OPENCLAW_USER_DIR = path.join(tmpHome, 'openclaw-empty');
+    process.env.HERMES_USER_DIR = path.join(tmpHome, 'hermes-empty');
+    const { resolveRouteDecision: rrd } = require('../scripts/route-matcher.cjs');
+    const decision = rrd(JSON.stringify({ prompt: '备份数据库', cwd: tmpProj }));
+    assert.equal(decision.explain.action, 'route', 'should route (ops agent exists)');
+    assert.notEqual(decision.explain.targetName, 'mvp-scaffold', 'must not match mvp-scaffold');
+    assert.equal(decision.explain.targetName, 'ops', 'should match ops subagent');
+  } finally {
+    for (const [k, v] of Object.entries(savedVars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
     fs.rmSync(tmpHome, { recursive: true, force: true });
     fs.rmSync(tmpProj, { recursive: true, force: true });
   }
