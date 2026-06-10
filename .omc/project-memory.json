@@ -19,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "git push -u origin codex/proactive-status-scan 2>&1 | tail -2 && gh pr create --title \"feat(patrol): SessionStart 状态巡逻 — 主动 Agent 第一阶段(秒级信号)\" --body \"## 改了什么\n\n新增 **状态巡逻** 能力:SessionStart 时主动扫描项目状态,发现\\\"值得处理的待办信号\\\"并注入会话上下文,让 agent 从\\\"你说才动\\\"走向\\\"开场就发现活儿\\\"。\n\n- \\`scripts/lib/scan-status.cjs\\` — 6 个秒级信号采集 + 渲染(约 200 行)\n  - A1 工作区未提交文件(noise 路径过滤,\\`CO_STATUS_NOISE\\` 可调)\n  - A2 本地领先 upstream 提交数\n  - A3 活已干完却停在非主分支\n  - A4 近 7 天中断现场(\\`.planning/STATE.md\\` / \\`HANDOFF.json\\`)\n  - A5 日总结流程存在但今日缺文件\n  - A6 stash 暂存堆积\n- \\`scripts/scan-status.cjs\\` — CLI 入口(stdin 1s 超时,无信号零输出,异常恒 exit 0)\n- \\`hooks/hooks.json\\` — SessionStart 追加第二条命令(10s 超时),与 awareness 扫描解耦\n- 输出尾部带 \\`[PATROL]\\` 三档执行指引(零风险直接做 / 可逆做完报备 / 不可逆先问)\n\n## 为什么\n\n设计文档(仓库顶层 \\`.planning/proactive-agent-design.md\\`)定义的主动 Agent 第一阶段。人工试跑该清单 60 秒即发现 3 件被遗漏的真实待办(残留 PR、停错分支、日总结断更 24 天),证明信号有效。\n\n## 实测驱动的取舍\n\n- **不监控** \\`.omc/state/mission-state.json\\` 与 \\`last-tool-error.json\\`:OMC 运行时高频刷新,mtime 恒新 → 信号恒真无区分度(真机实测确认)\n- 修复 porcelain 解析 bug:整段 \\`trim()\\` 会剃掉首行前导状态列空格导致路径切歪(\\`.claude/x\\` → \\`claude/x\\`),改 raw 模式解析,并补样本内容断言防回归\n\n## 验证\n\n- 新增单测 19 项全过:\\`node --test tests/scan-status.test.cjs\\`\n- 全量 \\`npm test\\`:**487 通过 0 失败**(零回归;新测试已登记进 package.json test 列表)\n- 真机验证:本仓库实跑 CLI,输出 4 条真实信号,噪音路径全部过滤,exit 0\n\n## 风险与边界\n\n- 巡逻只读,不执行任何修复动作;执行决策由主会话模型按 [PATROL] 分档做\n- 故障开放:任何信号失败静默降级,绝不阻塞会话启动\n- 本轮仅 Claude 侧接线;Codex 侧接线留下一阶段\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\" 2>&1 | tail -2",
+    "testCommand": "cd \"/Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator\" && npm test 2>&1 | tail -5",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
