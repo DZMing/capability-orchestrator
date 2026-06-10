@@ -8,7 +8,9 @@
         "name": "JavaScript/TypeScript",
         "version": ">=18",
         "confidence": "high",
-        "markers": ["package.json"]
+        "markers": [
+          "package.json"
+        ]
       }
     ],
     "frameworks": [],
@@ -17,7 +19,7 @@
   },
   "build": {
     "buildCommand": null,
-    "testCommand": "npm test 2>&1 | tail -30",
+    "testCommand": "git -C /Users/zhimingdeng/Documents/自动命令插件/capability-orchestrator log --oneline -3 && npm test 2>&1 | grep -E \"^ℹ (pass|fail)\"",
     "lintCommand": null,
     "devCommand": null,
     "scripts": {
@@ -44,7 +46,11 @@
   "structure": {
     "isMonorepo": false,
     "workspaces": [],
-    "mainDirectories": ["docs", "scripts", "tests"],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "tests"
+    ],
     "gitBranches": {
       "defaultBranch": "master",
       "branchingStrategy": null
@@ -64,7 +70,9 @@
       "purpose": "Documentation",
       "fileCount": 1,
       "lastAccessed": 1781043456962,
-      "keyFiles": ["host-contract-hermes.md"]
+      "keyFiles": [
+        "host-contract-hermes.md"
+      ]
     },
     "scripts": {
       "path": "scripts",
@@ -124,15 +132,21 @@
   },
   "hotPaths": [
     {
+      "path": "scripts/lib/route-logger.cjs",
+      "accessCount": 23,
+      "lastAccessed": 1781052644355,
+      "type": "file"
+    },
+    {
       "path": "scripts/lib/scan-render.cjs",
       "accessCount": 21,
       "lastAccessed": 1781051354966,
       "type": "file"
     },
     {
-      "path": "scripts/lib/route-logger.cjs",
-      "accessCount": 21,
-      "lastAccessed": 1781051368483,
+      "path": "scripts/install-hooks.cjs",
+      "accessCount": 16,
+      "lastAccessed": 1781052589633,
       "type": "file"
     },
     {
@@ -166,9 +180,21 @@
       "type": "file"
     },
     {
-      "path": "scripts/install-hooks.cjs",
+      "path": "tests/install-hooks.test.cjs",
       "accessCount": 9,
-      "lastAccessed": 1781046940207,
+      "lastAccessed": 1781052638089,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 8,
+      "lastAccessed": 1781052531350,
+      "type": "file"
+    },
+    {
+      "path": "scripts/lib/safety-gate.cjs",
+      "accessCount": 7,
+      "lastAccessed": 1781052600322,
       "type": "file"
     },
     {
@@ -202,9 +228,9 @@
       "type": "file"
     },
     {
-      "path": "package.json",
+      "path": "scripts/lib/route-output.cjs",
       "accessCount": 6,
-      "lastAccessed": 1781051404572,
+      "lastAccessed": 1781052662705,
       "type": "file"
     },
     {
@@ -232,33 +258,15 @@
       "type": "file"
     },
     {
-      "path": "scripts/lib/safety-gate.cjs",
+      "path": "tests/route-output.test.cjs",
       "accessCount": 4,
-      "lastAccessed": 1781046947340,
-      "type": "file"
-    },
-    {
-      "path": "scripts/lib/route-output.cjs",
-      "accessCount": 4,
-      "lastAccessed": 1781046955959,
-      "type": "file"
-    },
-    {
-      "path": "tests/install-hooks.test.cjs",
-      "accessCount": 4,
-      "lastAccessed": 1781046973291,
+      "lastAccessed": 1781052675449,
       "type": "file"
     },
     {
       "path": "tests/route-corpus.test.cjs",
       "accessCount": 3,
       "lastAccessed": 1781047006106,
-      "type": "file"
-    },
-    {
-      "path": "tests/route-output.test.cjs",
-      "accessCount": 2,
-      "lastAccessed": 1781043628475,
       "type": "file"
     },
     {
@@ -373,6 +381,54 @@
       "path": "scripts/sync-install.cjs",
       "accessCount": 1,
       "lastAccessed": 1781051326493,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a7eae0528db5220ff/package.json",
+      "accessCount": 1,
+      "lastAccessed": 1781052406920,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a0b7f2ea8411531a4/package.json",
+      "accessCount": 1,
+      "lastAccessed": 1781052407147,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a7eae0528db5220ff/scripts/install-hooks.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052412846,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a7eae0528db5220ff/scripts/lib/safety-gate.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052417909,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a7eae0528db5220ff/tests/install-hooks.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052419117,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a0b7f2ea8411531a4/scripts/lib/route-logger.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052424145,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a0b7f2ea8411531a4/scripts/lib/route-output.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052429088,
+      "type": "file"
+    },
+    {
+      "path": ".claude/worktrees/agent-a0b7f2ea8411531a4/tests/route-output.test.cjs",
+      "accessCount": 1,
+      "lastAccessed": 1781052430195,
       "type": "file"
     }
   ],
