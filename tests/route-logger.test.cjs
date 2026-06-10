@@ -401,10 +401,11 @@ test('security: logged entry does not contain raw user prompt', () => {
 
     // 只允许的元数据字段
     const allowedFields = new Set([
-      'ts', 'action', 'reason', 'targetType', 'targetName',
+      'ts', 'version', 'action', 'reason', 'targetType', 'targetName',
       'confidence', 'matchedKeywords', 'cwd', 'userDirSource',
       'promptType', 'host', 'source', 'scope', 'surfaceType', 'invocation',
       'transport', 'authRequired', 'mayWrite', 'externalAccess',
+      'topCandidates', 'unmatchedTopicKw', 'adopted', 'promptPreview',
     ]);
     for (const key of Object.keys(entry)) {
       assert.ok(allowedFields.has(key), `unexpected field: ${key}`);
